@@ -19,7 +19,7 @@ Giải pháp:
   + Cung cấp khả năng xử lý job bằng script, python, sql ở local hoặc ở remate ở phía hệ thống
   + Theo dõi, thông báo quá trình thực hiện job.
 
-HCA [https://app.diagrams.net/#G1k5ToGOQWsM0aLEsPHOlle5e0VQ891jGN]
+HLA [https://app.diagrams.net/#G1k5ToGOQWsM0aLEsPHOlle5e0VQ891jGN]
 Cấu trúc file yaml
 
 ```yaml
@@ -51,5 +51,12 @@ none,scheduled,queue,running,success,shutdown,restarting,failed,skipped,upstream
 * Tìm hiểu về cách push, pull file, quản lý file
 * Cách chạy python, sql, bash.
 * Orchestration container
-* Tiến hành xây dựng pub/sub. (Doing)
+* Tiến hành xây dựng pub/sub. (Doing) 
 * Xây dựng local.
+
+! Architure [https://app.diagrams.net/#G1R8daJ3zLMSx6yj71d1LvGmNoEuXHV-wU]
+! Tạo db,xây dựng http server cơ chế xác thực.
+
+## Tham khảo
+https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
+https://github.com/alist-org/alist
