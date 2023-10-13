@@ -52,12 +52,20 @@ none,scheduled,queue,running,success,shutdown,restarting,failed,skipped,upstream
 * Tìm hiểu về cách push, pull file, quản lý file
 * Cách chạy python, sql, bash.
 * Orchestration container
-* Tiến hành xây dựng pub/sub. (Doing) 
+* Tiến hành xây dựng pub/sub. (Doing) 1
 * Xây dựng local.
 
 ! Architure [https://app.diagrams.net/#G1R8daJ3zLMSx6yj71d1LvGmNoEuXHV-wU]
 ! Tạo db,xây dựng http server cơ chế xác thực.
 
+1. Tiến hành xây dựng pub/sub.
+Xây dựng oauth
+Nghiên cứu
+https://github.com/distribworks/dkron
+
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
 https://github.com/alist-org/alist
+https://github.com/mjpclab/go-http-file-server
+https://github.com/appleboy/gorush
+
