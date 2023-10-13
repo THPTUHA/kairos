@@ -11,11 +11,12 @@ Quá trình train này lặp đi lặp lại, cần thiết lập crawl dữ li�
 - Các công việc ETL(Extract, Transform, Load) cần thực hiện định kỳ, lấy dữ liệu đâu đó và biến đổi xử lý, và lưu lại kết quả. Cần xây dựng một công cụ có thể lập lịch, xử lý, theo dõi.
 - Khi mà cần thực hiện nhiều công việc định kỳ, chạy ngầm, có thể viết nhiều script cornjob để chạy.Dẫn đến phát sinh vấn đề quản lý log, chạy lại job fail, giám sát quá trình thực hiện của job. Cũng cần chia nhỏ các task để dễ kiểm soát.
 - Các công việc liên quan đến devops. Cần tạo ra các task thực hiện định kỳ thu gom rác hệ thống, deploy, restart server...
+- Cần gửi mail định kì, đăng quảng cáo, làm các công việc định kỳ mà không muốn tự xây dựng server hay viết script.
 
 Giải pháp:
 - Xây dựng hệ thống có khả năng:
   + Truyền data(message) từ pubscriber cho các subscriber ở một thời điểm cụ thể.
-  + Xử lý được batch task, các task có rằng buộc thứ tự (song song, đồng thời).
+  + Xử lý được batch task, các task có rằng buộc thứ tự (song song, đồng thời), quan hệ phức tạp
   + Cung cấp khả năng xử lý job bằng script, python, sql ở local hoặc ở remate ở phía hệ thống
   + Theo dõi, thông báo quá trình thực hiện job.
 
@@ -32,7 +33,7 @@ Cấu trúc file yaml
         [task_name]:
             key:
             triggertime:
-            executor: [file_url]
+            executor: [path_file_code]
             timeout:
             retries:
     workflow:
