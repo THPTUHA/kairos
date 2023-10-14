@@ -1,4 +1,0 @@
-serverhttp:
-  port: 8001
-auth:
-  hmacsecret: kairosauth
