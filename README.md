@@ -62,6 +62,7 @@ none,scheduled,queue,running,success,shutdown,restarting,failed,skipped,upstream
 Xây dựng oauth
 Nghiên cứu
 https://github.com/distribworks/dkron
+=> Chuyển mô hình master-worker sang agent + kv database
 
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
