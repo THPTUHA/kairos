@@ -8,5 +8,6 @@ import (
 func Auth(ginApp *gin.RouterGroup) {
 	routeGroup := ginApp.Group("/auth")
 
+	routeGroup.POST("/register", controllers.Register)
 	routeGroup.POST("/login", controllers.Login)
 }

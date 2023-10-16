@@ -34,3 +34,8 @@ func Login(c *gin.Context) {
 
 	c.JSON(http.StatusOK, token)
 }
+
+func Register(c *gin.Context) {
+
+	c.JSON(http.StatusOK, "Resigter success")
+}

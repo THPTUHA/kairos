@@ -7,7 +7,7 @@ import (
 )
 
 func initialize(ginApp *gin.Engine) {
-	routeGroup := ginApp.Group("/v1")
+	routeGroup := ginApp.Group("/apis/v1")
 
 	v1.Auth(routeGroup)
 }
