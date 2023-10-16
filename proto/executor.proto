@@ -1,0 +1,18 @@
+// protoc -I proto/ --go_out=plugin/types --go_opt=paths=source_relative --go-grpc_out=plugin/types --go-grpc_opt=paths=source_relative executor.proto
+syntax = "proto3";
+
+package proto;
+option go_package = "github.com/THPTUHA/kairos/server/plugin/proto";
+
+message ExecuteRequest {
+    uint32 job_id = 1;
+    string job_name = 2;
+    map<string, string> config = 3;
+    uint32 status_server = 4;
+  }
+  
+  message ExecuteResponse {
+      bytes output = 1;
+      string error = 2;
+  }
+  

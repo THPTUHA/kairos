@@ -64,6 +64,10 @@ Nghiên cứu
 https://github.com/distribworks/dkron
 => Chuyển mô hình master-worker sang agent + kv database
 
+- Xác thực bằng google
+- Cố gắng hoàn thành pub/sub.
+- Tạo log debug
+
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
 https://github.com/alist-org/alist
