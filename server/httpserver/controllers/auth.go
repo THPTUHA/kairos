@@ -1,41 +1,28 @@
 package controllers
 
 import (
-	"fmt"
-	"net/http"
+	"crypto/rand"
+	"encoding/base64"
+	"log"
 
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
-	"github.com/THPTUHA/kairos/server/storage/models"
-	"github.com/THPTUHA/kairos/server/storage/repos"
+	"github.com/THPTUHA/kairos/server/httpserver/helper"
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
 
-var tokenManager = auth.TokenManager{}
-
-func Login(c *gin.Context) {
-	var u models.User
-	if err := c.ShouldBindJSON(&u); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, "Invalid json provided")
-		return
+func randToken() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("[Gin-OAuth] Failed to read rand: %v", err)
 	}
-
-	fmt.Print(u)
-	user, _ := repos.UserRepo.FindByUserName(u.Username)
-
-	ts, err := tokenManager.CreateToken(fmt.Sprint(user.ID), user.Username)
-	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, err.Error())
-		return
-	}
-
-	token := map[string]string{
-		"access_token": ts.AccessToken,
-	}
-
-	c.JSON(http.StatusOK, token)
+	return base64.StdEncoding.EncodeToString(b)
 }
 
-func Register(c *gin.Context) {
-
-	c.JSON(http.StatusOK, "Resigter success")
+func Login(c *gin.Context) {
+	stateValue := randToken()
+	session := sessions.Default(c)
+	session.Set(auth.StateKey, stateValue)
+	session.Save()
+	c.Writer.Write([]byte(helper.AutoRedirctUrl(auth.GetLoginURL(stateValue))))
 }
