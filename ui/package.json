@@ -19,6 +19,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "prebuild-x": "del -f ../server/httpserver/routes/ui/dist",
+    "postbuild": "mv ./build ../server/ui/dist",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
