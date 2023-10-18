@@ -62,6 +62,10 @@ message AgentRunRequest {
     Execution execution = 2;
 }
 
+service ClusterAgent {
+
+}
+
 service Agent {
     rpc AgentRun (AgentRunRequest) returns (stream AgentRunStream);
   }

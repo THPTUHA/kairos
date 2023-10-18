@@ -2,18 +2,18 @@ package agent
 
 import "google.golang.org/grpc"
 
-// KairosGRPCClient defines the interface that any gRPC client for
+// AgentGRPCClient defines the interface that any gRPC client for
 // kairos should implement.
-type KairosGRPCClient interface {
+type AgentGRPCClient interface {
 }
 
-// GRPCClient is the local implementation of the KairosGRPCClient interface.
+// GRPCClient is the local implementation of the AgentGRPCClient interface.
 type GRPCClient struct {
 	dialOpt []grpc.DialOption
 	agent   *Agent
 }
 
-func NewGRPCClient(dialOpt grpc.DialOption, agent *Agent) KairosGRPCClient {
+func NewGRPCClient(dialOpt grpc.DialOption, agent *Agent) AgentGRPCClient {
 	if dialOpt == nil {
 		dialOpt = grpc.WithInsecure()
 	}

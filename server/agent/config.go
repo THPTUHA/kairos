@@ -39,6 +39,11 @@ type AgentConfig struct {
 	// DevMode is used for development purposes only and limits the
 	// use of persistence or state.
 	DevMode bool
+	// ReconcileInterval controls how often we reconcile the strongly
+	// consistent store with the Serf info. This is used to handle nodes
+	// that are force removed, as well as intermittent unavailability during
+	// leader election.
+	ReconcileInterval time.Duration
 
 	Server bool
 	// LogLevel is the log verbosity level used.
@@ -100,6 +105,13 @@ type AgentConfig struct {
 	// RPCPort is the gRPC port used by Agent. This should be reachable
 	// by the other servers and clients.
 	RPCPort int `mapstructure:"rpc-port"`
+
+	// RaftMultiplier An integer multiplier used by Dkron servers to scale key
+	// Raft timing parameters.
+	RaftMultiplier int `mapstructure:"raft-multiplier"`
+
+	// DataDir is the directory to store our state in
+	DataDir string `mapstructure:"data-dir"`
 }
 
 var ErrResolvingHost = errors.New("error resolving hostname")
@@ -126,8 +138,11 @@ func DefaultConfig() *AgentConfig {
 		LogLevel:             "info",
 		RPCPort:              DefaultRPCPort,
 		Tags:                 tags,
+		DataDir:              "dkron.data",
 		Datacenter:           "dc1",
 		Region:               "global",
+		ReconcileInterval:    60 * time.Second,
+		RaftMultiplier:       1,
 		SerfReconnectTimeout: "24h",
 	}
 }
