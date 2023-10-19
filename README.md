@@ -71,6 +71,8 @@ https://github.com/distribworks/dkron
 Xây dựng song song realtime-messaging server
 https://github.com/centrifugal/centrifugo
 
+Hoàn thành hơn hoàn hảo
+
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
 https://github.com/alist-org/alist
