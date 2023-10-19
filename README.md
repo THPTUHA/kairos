@@ -68,6 +68,9 @@ https://github.com/distribworks/dkron
 - Cố gắng hoàn thành pub/sub.
 - Tạo log debug
 
+Xây dựng song song realtime-messaging server
+https://github.com/centrifugal/centrifugo
+
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
 https://github.com/alist-org/alist
