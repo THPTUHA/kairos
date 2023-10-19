@@ -8,6 +8,7 @@ import (
 	"github.com/THPTUHA/kairos/pkg/extcron"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -15,21 +16,23 @@ var (
 	schedulerStarted = expvar.NewInt("scheduler_started")
 )
 
-// Scheduler represents a agent scheduler instance, it stores the cron engine
+// Scheduler represents a dkron scheduler instance, it stores the cron engine
 // and the related parameters.
 type Scheduler struct {
 	// mu is to prevent concurrent edits to Cron and Started
 	mu      sync.RWMutex
 	Cron    *cron.Cron
 	started bool
+	logger  *logrus.Entry
 }
 
 // NewScheduler creates a new Scheduler instance
-func NewScheduler() *Scheduler {
+func NewScheduler(logger *logrus.Entry) *Scheduler {
 	schedulerStarted.Set(0)
 	return &Scheduler{
 		Cron:    cron.New(cron.WithParser(extcron.NewParser())),
 		started: false,
+		logger:  logger,
 	}
 }
 

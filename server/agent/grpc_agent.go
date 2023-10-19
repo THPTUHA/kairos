@@ -1,14 +1,21 @@
 package agent
 
-import "github.com/THPTUHA/kairos/server/plugin/proto"
+import (
+	"github.com/THPTUHA/kairos/server/plugin/proto"
+	"github.com/sirupsen/logrus"
+)
 
+// GRPCAgentServer is the local implementation of the gRPC server interface.
 type AgentServer struct {
 	proto.AgentServer
-	agent *Agent
+	agent  *Agent
+	logger *logrus.Entry
 }
 
-func NewAgentServer(agent *Agent) proto.AgentServer {
+// NewServer creates and returns an instance of a DkronGRPCServer implementation
+func NewAgentServer(agent *Agent, logger *logrus.Entry) proto.AgentServer {
 	return &AgentServer{
-		agent: agent,
+		agent:  agent,
+		logger: logger,
 	}
 }

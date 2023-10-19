@@ -7,18 +7,28 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
+	"github.com/sirupsen/logrus"
 )
 
 // RaftLayer is the network layer for internode communications.
 type RaftLayer struct {
 	TLSConfig *tls.Config
 
-	ln net.Listener
+	ln     net.Listener
+	logger *logrus.Entry
+}
+
+// NewTLSRaftLayer returns an initialized TLS-encrypted RaftLayer.
+func NewTLSRaftLayer(tlsConfig *tls.Config, logger *logrus.Entry) *RaftLayer {
+	return &RaftLayer{
+		TLSConfig: tlsConfig,
+		logger:    logger,
+	}
 }
 
 // NewRaftLayer returns an initialized unencrypted RaftLayer.
-func NewRaftLayer() *RaftLayer {
-	return &RaftLayer{}
+func NewRaftLayer(logger *logrus.Entry) *RaftLayer {
+	return &RaftLayer{logger: logger}
 }
 
 // Open opens the RaftLayer, binding to the supplied address.

@@ -20,50 +20,50 @@ const _ = grpc.SupportPackageIsVersion7
 
 const ()
 
-// ClusterAgentClient is the client API for ClusterAgent service.
+// KairosClient is the client API for Kairos service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type ClusterAgentClient interface {
+type KairosClient interface {
 }
 
-type clusterAgentClient struct {
+type kairosClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewClusterAgentClient(cc grpc.ClientConnInterface) ClusterAgentClient {
-	return &clusterAgentClient{cc}
+func NewKairosClient(cc grpc.ClientConnInterface) KairosClient {
+	return &kairosClient{cc}
 }
 
-// ClusterAgentServer is the server API for ClusterAgent service.
-// All implementations must embed UnimplementedClusterAgentServer
+// KairosServer is the server API for Kairos service.
+// All implementations must embed UnimplementedKairosServer
 // for forward compatibility
-type ClusterAgentServer interface {
-	mustEmbedUnimplementedClusterAgentServer()
+type KairosServer interface {
+	mustEmbedUnimplementedKairosServer()
 }
 
-// UnimplementedClusterAgentServer must be embedded to have forward compatible implementations.
-type UnimplementedClusterAgentServer struct {
+// UnimplementedKairosServer must be embedded to have forward compatible implementations.
+type UnimplementedKairosServer struct {
 }
 
-func (UnimplementedClusterAgentServer) mustEmbedUnimplementedClusterAgentServer() {}
+func (UnimplementedKairosServer) mustEmbedUnimplementedKairosServer() {}
 
-// UnsafeClusterAgentServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ClusterAgentServer will
+// UnsafeKairosServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to KairosServer will
 // result in compilation errors.
-type UnsafeClusterAgentServer interface {
-	mustEmbedUnimplementedClusterAgentServer()
+type UnsafeKairosServer interface {
+	mustEmbedUnimplementedKairosServer()
 }
 
-func RegisterClusterAgentServer(s grpc.ServiceRegistrar, srv ClusterAgentServer) {
-	s.RegisterService(&ClusterAgent_ServiceDesc, srv)
+func RegisterKairosServer(s grpc.ServiceRegistrar, srv KairosServer) {
+	s.RegisterService(&Kairos_ServiceDesc, srv)
 }
 
-// ClusterAgent_ServiceDesc is the grpc.ServiceDesc for ClusterAgent service.
+// Kairos_ServiceDesc is the grpc.ServiceDesc for Kairos service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var ClusterAgent_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.ClusterAgent",
-	HandlerType: (*ClusterAgentServer)(nil),
+var Kairos_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.Kairos",
+	HandlerType: (*KairosServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams:     []grpc.StreamDesc{},
 	Metadata:    "proto/kairos.proto",

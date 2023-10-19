@@ -62,7 +62,7 @@ message AgentRunRequest {
     Execution execution = 2;
 }
 
-service ClusterAgent {
+service Kairos {
 
 }
 
