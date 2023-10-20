@@ -4,6 +4,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
 )
 
@@ -13,7 +14,9 @@ type Store struct {
 
 }
 
-func NewStore() (*Store, error) {
+// TODO
+// NewStore creates a new Storage instance.
+func NewStore(logger *logrus.Entry) (*Store, error) {
 	db, err := buntdb.Open(":memory:")
 	if err != nil {
 		return nil, err
