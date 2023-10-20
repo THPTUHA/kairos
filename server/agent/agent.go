@@ -5,16 +5,22 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/hashicorp/memberlist"
 	"github.com/hashicorp/raft"
+	raftboltdb "github.com/hashicorp/raft-boltdb"
 	"github.com/hashicorp/serf/serf"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -34,6 +40,7 @@ type Agent struct {
 	serf            *serf.Serf
 	retryJoinCh     chan error
 	ready           bool
+	shutdownCh      chan struct{}
 
 	// peers is used to track the known Agent servers. This is
 	// used for region forwarding and clustering.
@@ -48,14 +55,52 @@ type Agent struct {
 	TLSConfig *tls.Config
 
 	// GRPCClient interface for setting the GRPC client
-	GRPCClient KairosGRPCClient
+	GRPCClient AgentGRPCClient
+
+	// GRPCServer interface for setting the GRPC server
+	GRPCServer ClusterAgentGRPCServer
 
 	// Store interface to set the storage engine
 	Store Storage
+
+	// raftLayer provides network layering of the raft RPC along with
+	// the Dkron gRPC transport layer.
+	raftLayer     *RaftLayer
+	raftInmem     *raft.InmemStore
+	raftTransport *raft.NetworkTransport
+
+	// The raft instance is used among Dkron nodes within the
+	// region to protect operations that require strong consistency
+	leaderCh <-chan bool
+	raft     *raft.Raft
+
+	// reconcileCh is used to pass events from the serf handler
+	// into the leader manager. Mostly used to handle when servers
+	// join/leave from the region.
+	reconcileCh chan serf.Member
+	raftStore   RaftStore
+
+	ProAppliers        LogAppliers
+	MemberEventHandler func(serf.Event)
 }
 
+type RaftStore interface {
+	raft.StableStore
+	raft.LogStore
+	Close() error
+}
+
+const (
+	minRaftProtocol = 3
+	// raftLogCacheSize is the maximum number of logs to cache in-memory.
+	// This is used to reduce disk I/O for the recently committed entries.
+	raftLogCacheSize = 512
+	raftTimeout      = 30 * time.Second
+)
+
 var (
-	expNode = expvar.NewString("node")
+	expNode           = expvar.NewString("node")
+	runningExecutions sync.Map
 )
 
 var agent *Agent
@@ -84,7 +129,6 @@ func WithPlugins(plugins Plugins) AgentOption {
 	}
 }
 
-// TODO
 func (a *Agent) StartServer() {
 	if a.Store == nil {
 		s, err := NewStore()
@@ -95,6 +139,166 @@ func (a *Agent) StartServer() {
 	}
 
 	a.sched = NewScheduler()
+
+	// Create a cmux object.
+	tcpm := cmux.New(a.listener)
+	var grpcl, raftl net.Listener
+
+	// Declare a plain RaftLayer
+	a.raftLayer = NewRaftLayer()
+
+	// Declare the match for gRPC
+	grpcl = tcpm.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+
+	// Declare the match for raft RPC
+	raftl = tcpm.Match(cmux.Any())
+
+	if a.GRPCServer == nil {
+		a.GRPCServer = NewGRPCServer(a)
+	}
+
+	if err := a.GRPCServer.Serve(grpcl); err != nil {
+		log.Fatalln("agent: RPC server failed to start")
+	}
+
+	if err := a.raftLayer.Open(raftl); err != nil {
+		log.Fatalln(err)
+	}
+
+	if err := a.setupRaft(); err != nil {
+		log.Fatal("agent: Raft layer failed to start", err)
+	}
+
+	// Start serving everything
+	go func() {
+		if err := tcpm.Serve(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	go a.monitorLeadership()
+
+}
+
+func (a *Agent) setupRaft() error {
+	if a.config.BootstrapExpect > 0 {
+		if a.config.BootstrapExpect == 1 {
+			a.config.Bootstrap = true
+		}
+	}
+	logger := ioutil.Discard
+
+	transport := raft.NewNetworkTransport(a.raftLayer, 3, raftTimeout, logger)
+	a.raftTransport = transport
+
+	config := raft.DefaultConfig()
+
+	// Raft performance
+	raftMultiplier := a.config.RaftMultiplier
+	if raftMultiplier < 1 || raftMultiplier > 10 {
+		return fmt.Errorf("raft-multiplier cannot be %d. Must be between 1 and 10", raftMultiplier)
+	}
+
+	config.HeartbeatTimeout = config.HeartbeatTimeout * time.Duration(raftMultiplier)
+	config.ElectionTimeout = config.ElectionTimeout * time.Duration(raftMultiplier)
+	config.LeaderLeaseTimeout = config.LeaderLeaseTimeout * time.Duration(a.config.RaftMultiplier)
+
+	config.LogOutput = logger
+	config.LocalID = raft.ServerID(a.config.NodeName)
+
+	// Build an all in-memory setup for dev mode, otherwise prepare a full
+	// disk-based setup.
+	var logStore raft.LogStore
+	var stableStore raft.StableStore
+	var snapshots raft.SnapshotStore
+
+	if a.config.DevMode {
+		store := raft.NewInmemStore()
+		a.raftInmem = store
+		stableStore = store
+		logStore = store
+		snapshots = raft.NewDiscardSnapshotStore()
+	} else {
+		var err error
+		// Create the snapshot store. This allows the Raft to truncate the log to
+		// mitigate the issue of having an unbounded replicated log.
+		snapshots, err = raft.NewFileSnapshotStore(filepath.Join(a.config.DataDir, "raft"), 3, logger)
+		if err != nil {
+			return fmt.Errorf("file snapshot store: %s", err)
+		}
+
+		// Create the BoltDB backend
+		if a.raftStore == nil {
+			s, err := raftboltdb.NewBoltStore(filepath.Join(a.config.DataDir, "raft", "raft.db"))
+			if err != nil {
+				return fmt.Errorf("error creating new raft store: %s", err)
+			}
+			a.raftStore = s
+		}
+		stableStore = a.raftStore
+		// Wrap the store in a LogCache to improve performance
+		cacheStore, err := raft.NewLogCache(raftLogCacheSize, a.raftStore)
+		if err != nil {
+			a.raftStore.Close()
+			return err
+		}
+		logStore = cacheStore
+		// Check for peers.json file for recovery
+		peersFile := filepath.Join(a.config.DataDir, "raft", "peers.json")
+		if _, err := os.Stat(peersFile); err == nil {
+			fmt.Println("found peers.json file, recovering Raft configuration...")
+			var configuration raft.Configuration
+			configuration, err = raft.ReadConfigJSON(peersFile)
+			if err != nil {
+				return fmt.Errorf("recovery failed to parse peers.json: %v", err)
+			}
+			store, err := NewStore()
+			if err != nil {
+				log.Fatalln("agent: Error initializing store")
+			}
+			tmpFsm := newFSM(store, nil)
+			if err := raft.RecoverCluster(config, tmpFsm,
+				logStore, stableStore, snapshots, transport, configuration); err != nil {
+				return fmt.Errorf("recovery failed: %v", err)
+			}
+			if err := os.Remove(peersFile); err != nil {
+				return fmt.Errorf("recovery failed to delete peers.json, please delete manually (see peers.info for details): %v", err)
+			}
+			fmt.Println("deleted peers.json file after successful recovery")
+		}
+	}
+
+	// If we are in bootstrap or dev mode and the state is clean then we can
+	// bootstrap now.
+	if a.config.Bootstrap || a.config.DevMode {
+		hasState, err := raft.HasExistingState(logStore, stableStore, snapshots)
+		if err != nil {
+			return err
+		}
+		if !hasState {
+			configuration := raft.Configuration{
+				Servers: []raft.Server{
+					{
+						ID:      config.LocalID,
+						Address: transport.LocalAddr(),
+					},
+				},
+			}
+			if err := raft.BootstrapCluster(config, logStore, stableStore, snapshots, transport, configuration); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Instantiate the Raft systems. The second parameter is a finite state machine
+	// which stores the actual kv pairs and is operated upon through Apply().
+	fsm := newFSM(a.Store, a.ProAppliers)
+	rft, err := raft.NewRaft(config, fsm, logStore, stableStore, snapshots, transport)
+	if err != nil {
+		return fmt.Errorf("new raft: %s", err)
+	}
+	a.leaderCh = rft.LeaderCh()
+	a.raft = rft
+	return nil
 }
 
 // setupSerf is used to create the agent we use
@@ -293,19 +497,55 @@ func (a *Agent) RetryJoinCh() <-chan error {
 }
 
 // UpdateTags updates the tag configuration for this agent
-// TODO
 func (a *Agent) UpdateTags(tags map[string]string) {
+	// Preserve reserved tags
+	currentTags := a.serf.LocalMember().Tags
+	for _, tagName := range []string{"role", "version", "server", "bootstrap", "expect", "port", "rpc_addr"} {
+		if val, exists := currentTags[tagName]; exists {
+			tags[tagName] = val
+		}
+	}
+	tags["dc"] = a.config.Datacenter
+	tags["region"] = a.config.Region
 
+	// Set new collection of tags
+	err := a.serf.SetTags(tags)
+	if err != nil {
+		fmt.Println("Setting tags unsuccessful")
+	}
 }
 
-// TODO
 func (a *Agent) Stop() error {
+	if a.config.Server {
+		if a.sched.Started() {
+			<-a.sched.Stop().Done()
+		}
+
+		_ = a.raft.Shutdown()
+
+		if err := a.Store.Shutdown(); err != nil {
+			return err
+		}
+	}
+
+	if err := a.serf.Leave(); err != nil {
+		return err
+	}
+
+	if err := a.serf.Shutdown(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
-// TODO
 func (a *Agent) GetRunningJobs() int {
-	return 0
+	job := 0
+	runningExecutions.Range(func(k, v interface{}) bool {
+		job = job + 1
+		return true
+	})
+	return job
 }
 
 // Get bind address for RPC
@@ -316,5 +556,36 @@ func (a *Agent) bindRPCAddr() string {
 
 // Listens to events from Serf and handle the event.
 func (a *Agent) eventLoop() {
-
+	serfShutdownCh := a.serf.ShutdownCh()
+	fmt.Println("agent: Listen for events")
+	for {
+		select {
+		case e := <-a.eventCh:
+			fmt.Println("agent: Received even")
+			// Log all member events
+			if me, ok := e.(serf.MemberEvent); ok {
+				if a.MemberEventHandler != nil {
+					a.MemberEventHandler(e)
+				}
+				fmt.Println("agent: Event ", e.EventType())
+				// serfEventHandler is used to handle events from the serf cluster
+				switch e.EventType() {
+				case serf.EventMemberJoin:
+					a.nodeJoin(me)
+					a.localMemberEvent(me)
+				case serf.EventMemberLeave, serf.EventMemberFailed:
+					a.nodeFailed(me)
+					a.localMemberEvent(me)
+				case serf.EventMemberReap:
+					a.localMemberEvent(me)
+				case serf.EventMemberUpdate, serf.EventUser, serf.EventQuery: // Ignore
+				default:
+					fmt.Println("agent: Unhandled serf event")
+				}
+			}
+		case <-serfShutdownCh:
+			fmt.Println("agent: Serf shutdown detected, quitting")
+			return
+		}
+	}
 }

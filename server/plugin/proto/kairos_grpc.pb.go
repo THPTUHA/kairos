@@ -18,6 +18,57 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const ()
+
+// ClusterAgentClient is the client API for ClusterAgent service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ClusterAgentClient interface {
+}
+
+type clusterAgentClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewClusterAgentClient(cc grpc.ClientConnInterface) ClusterAgentClient {
+	return &clusterAgentClient{cc}
+}
+
+// ClusterAgentServer is the server API for ClusterAgent service.
+// All implementations must embed UnimplementedClusterAgentServer
+// for forward compatibility
+type ClusterAgentServer interface {
+	mustEmbedUnimplementedClusterAgentServer()
+}
+
+// UnimplementedClusterAgentServer must be embedded to have forward compatible implementations.
+type UnimplementedClusterAgentServer struct {
+}
+
+func (UnimplementedClusterAgentServer) mustEmbedUnimplementedClusterAgentServer() {}
+
+// UnsafeClusterAgentServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ClusterAgentServer will
+// result in compilation errors.
+type UnsafeClusterAgentServer interface {
+	mustEmbedUnimplementedClusterAgentServer()
+}
+
+func RegisterClusterAgentServer(s grpc.ServiceRegistrar, srv ClusterAgentServer) {
+	s.RegisterService(&ClusterAgent_ServiceDesc, srv)
+}
+
+// ClusterAgent_ServiceDesc is the grpc.ServiceDesc for ClusterAgent service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ClusterAgent_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "proto.ClusterAgent",
+	HandlerType: (*ClusterAgentServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams:     []grpc.StreamDesc{},
+	Metadata:    "proto/kairos.proto",
+}
+
 const (
 	Agent_AgentRun_FullMethodName = "/proto.Agent/AgentRun"
 )
