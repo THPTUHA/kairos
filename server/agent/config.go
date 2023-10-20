@@ -61,9 +61,7 @@ type AgentConfig struct {
 
 	// EncryptKey is the secret key to use for encrypting communication
 	// traffic for Serf. The secret key must be exactly 32-bytes, base64
-	// encoded. The easiest way to do this on Unix machines is this command:
-	// "head -c32 /dev/urandom | base64" or use "dkron keygen". If this is
-	// not specified, the traffic will not be encrypted.
+	// encoded.
 	EncryptKey string `mapstructure:"encrypt"`
 
 	// Bootstrap mode is used to bring up the first Agent server.  It is
@@ -122,7 +120,6 @@ const (
 )
 
 func DefaultConfig() *AgentConfig {
-	// TODO
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Panic(err)

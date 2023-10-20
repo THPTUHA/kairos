@@ -72,6 +72,7 @@ Xây dựng song song realtime-messaging server
 https://github.com/centrifugal/centrifugo
 
 Hoàn thành hơn hoàn hảo
+Simple hoàn thành => upgrade
 
 ## Tham khảo
 https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practicearhitecture_pattern_for/
