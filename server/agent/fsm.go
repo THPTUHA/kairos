@@ -3,8 +3,10 @@ package agent
 import (
 	"io"
 
+	kproto "github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/hashicorp/raft"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 )
 
 // MessageType is the type to encode FSM commands.
@@ -48,10 +50,53 @@ func newFSM(store Storage, logAppliers LogAppliers, logger *logrus.Entry) *kairo
 	}
 }
 
-// TODO
 // Apply applies a Raft log entry to the key-value store.
 func (d *kairosFSM) Apply(l *raft.Log) interface{} {
+	buf := l.Data
+	msgType := MessageType(buf[0])
+	d.logger.WithField("command", msgType).Debug("fsm: received command")
+
+	switch msgType {
+	case SetJobType:
+		return d.applySetJob(buf[1:])
+	case DeleteJobType:
+		return d.applyDeleteJob(buf[1:])
+	case ExecutionDoneType:
+		return d.applyExecutionDone(buf[1:])
+	case SetExecutionType:
+		return d.applySetExecution(buf[1:])
+	}
+
+	// Check enterprise only message types.
+	if applier, ok := d.proAppliers[msgType]; ok {
+		return applier(buf[1:], l.Index)
+	}
+
 	return nil
+}
+
+func (d *kairosFSM) applySetJob(buf []byte) interface{} {
+	var pj kproto.Job
+	if err := proto.Unmarshal(buf, &pj); err != nil {
+		return err
+	}
+	job := NewJobFromProto(&pj, d.logger)
+	if err := d.store.SetJob(job, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (d *kairosFSM) applyDeleteJob(buf []byte) interface{} {
+	var djr kproto.DeleteJobRequest
+	if err := proto.Unmarshal(buf, &djr); err != nil {
+		return err
+	}
+	job, err := d.store.DeleteJob(djr.GetJobName())
+	if err != nil {
+		return err
+	}
+	return job
 }
 
 // Snapshot returns a snapshot of the key-value store. We wrap
@@ -69,17 +114,16 @@ func (d *kairosFSM) Restore(r io.ReadCloser) error {
 	return d.store.Restore(r)
 }
 
-type clusteragentSnapshot struct {
+type agentSnapshot struct {
 	store Storage
 }
 
-func (d *clusteragentSnapshot) Persist(sink raft.SnapshotSink) error {
+func (d *agentSnapshot) Persist(sink raft.SnapshotSink) error {
 	if err := d.store.Snapshot(sink); err != nil {
 		_ = sink.Cancel()
 		return err
 	}
 
-	// Close the sink.
 	if err := sink.Close(); err != nil {
 		return err
 	}
@@ -87,4 +131,4 @@ func (d *clusteragentSnapshot) Persist(sink raft.SnapshotSink) error {
 	return nil
 }
 
-func (d *clusteragentSnapshot) Release() {}
+func (d *agentSnapshot) Release() {}

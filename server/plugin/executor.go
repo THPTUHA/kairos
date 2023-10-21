@@ -10,3 +10,6 @@ type StatusHelper interface {
 type Executor interface {
 	Execute(args *proto.ExecuteRequest, cb StatusHelper) (*proto.ExecuteResponse, error)
 }
+
+// ExecutorPluginConfig is the plugin config
+type ExecutorPluginConfig map[string]string
