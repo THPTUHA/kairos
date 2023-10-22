@@ -75,6 +75,19 @@ func (d *kairosFSM) Apply(l *raft.Log) interface{} {
 	return nil
 }
 
+func (d *kairosFSM) applySetExecution(buf []byte) interface{} {
+	var pbex kproto.Execution
+	if err := proto.Unmarshal(buf, &pbex); err != nil {
+		return err
+	}
+	execution := NewExecutionFromProto(&pbex)
+	key, err := d.store.SetExecution(execution)
+	if err != nil {
+		return err
+	}
+	return key
+}
+
 func (d *kairosFSM) applySetJob(buf []byte) interface{} {
 	var pj kproto.Job
 	if err := proto.Unmarshal(buf, &pj); err != nil {
@@ -99,13 +112,19 @@ func (d *kairosFSM) applyDeleteJob(buf []byte) interface{} {
 	return job
 }
 
-// Snapshot returns a snapshot of the key-value store. We wrap
-// the things we need in dkronSnapshot and then send that over to Persist.
-// Persist encodes the needed data from dkronSnapshot and transport it to
-// Restore where the necessary data is replicated into the finite state machine.
-// This allows the consensus algorithm to truncate the replicated log.
-func (d *kairosFSM) Snapshot() (raft.FSMSnapshot, error) {
-	return &clusteragentSnapshot{store: d.store}, nil
+func (d *kairosFSM) applyExecutionDone(buf []byte) interface{} {
+	var execDoneReq kproto.ExecutionDoneRequest
+	if err := proto.Unmarshal(buf, &execDoneReq); err != nil {
+		return err
+	}
+	execution := NewExecutionFromProto(execDoneReq.Execution)
+
+	d.logger.WithField("execution", execution.Key()).
+		WithField("output", string(execution.Output)).
+		Debug("fsm: Setting execution")
+	_, err := d.store.SetExecutionDone(execution)
+
+	return err
 }
 
 // Restore stores the key-value store to a previous state.
@@ -116,6 +135,15 @@ func (d *kairosFSM) Restore(r io.ReadCloser) error {
 
 type agentSnapshot struct {
 	store Storage
+}
+
+// Snapshot returns a snapshot of the key-value store. We wrap
+// the things we need in dkronSnapshot and then send that over to Persist.
+// Persist encodes the needed data from dkronSnapshot and transport it to
+// Restore where the necessary data is replicated into the finite state machine.
+// This allows the consensus algorithm to truncate the replicated log.
+func (d *kairosFSM) Snapshot() (raft.FSMSnapshot, error) {
+	return &agentSnapshot{store: d.store}, nil
 }
 
 func (d *agentSnapshot) Persist(sink raft.SnapshotSink) error {

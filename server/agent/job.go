@@ -3,13 +3,16 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
+	"github.com/THPTUHA/kairos/pkg/extcron"
 	"github.com/THPTUHA/kairos/server/agent/ntime"
 	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -23,8 +26,22 @@ var (
 	ErrNoParent = errors.New("the job doesn't have a parent job set")
 	// ErrNoCommand is returned when attempting to store a job that has no command.
 	ErrNoCommand = errors.New("unspecified command for job")
-	// ErrWrongConcurrency is returned when Concurrency is set to a non existing setting.
-	ErrWrongConcurrency = errors.New("invalid concurrency policy value, use \"allow\" or \"forbid\"")
+)
+
+const (
+	// StatusNotSet is the initial job status.
+	StatusNotSet = ""
+	// StatusSuccess is status of a job whose last run was a success.
+	StatusSuccess = "success"
+	// StatusRunning is status of a job whose last run has not finished.
+	StatusRunning = "running"
+	// StatusFailed is status of a job whose last run was not successful on any nodes.
+	StatusFailed = "failed"
+	// StatusPartiallyFailed is status of a job whose last run was successful on only some nodes.
+	StatusPartiallyFailed = "partially_failed"
+
+	// ConcurrencyForbid forbids a job from executing concurrency.
+	ConcurrencyForbid = "forbid"
 )
 
 // Job describes a scheduled Job.
@@ -165,6 +182,77 @@ func NewJobFromProto(in *proto.Job, logger *logrus.Entry) *Job {
 	return job
 }
 
+func (j *Job) isRunnable(logger *logrus.Entry) bool {
+	if j.Disabled || (j.ExpiresAt.HasValue() && time.Now().After(j.ExpiresAt.Get())) {
+		logger.WithField("job", j.Name).
+			Debug("job: Skipping execution because job is disabled or expired")
+		return false
+	}
+
+	if j.Agent.GlobalLock {
+		logger.WithField("job", j.Name).
+			Warning("job: Skipping execution because active global lock")
+		return false
+	}
+
+	if j.Concurrency == ConcurrencyForbid {
+		exs, err := j.Agent.GetActiveExecutions()
+		if err != nil {
+			logger.WithError(err).Error("job: Error quering for running executions")
+			return false
+		}
+
+		for _, e := range exs {
+			if e.JobName == j.Name {
+				logger.WithFields(logrus.Fields{
+					"job":         j.Name,
+					"concurrency": j.Concurrency,
+					"job_status":  j.Status,
+				}).Info("job: Skipping concurrent execution")
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// Run the job
+func (j *Job) Run() {
+	// As this function should comply with the Job interface of the cron package we will use
+	// the agent property on execution, this is why it need to check if it's set and otherwise fail.
+	if j.Agent == nil {
+		j.logger.Fatal("job: agent not set")
+	}
+
+	// Check if it's runnable
+	if j.isRunnable(j.logger) {
+		j.logger.WithFields(logrus.Fields{
+			"job":      j.Name,
+			"schedule": j.Schedule,
+		}).Debug("job: Run job")
+
+		cronInspect.Set(j.Name, j)
+
+		// Simple execution wrapper
+		ex := NewExecution(j.Name)
+
+		if _, err := j.Agent.Run(j.Name, ex); err != nil {
+			j.logger.WithError(err).Error("job: Error running job")
+		}
+	}
+}
+
+// isSlug determines whether the given string is a proper value to be used as
+// key in the backend store (a "slug"). If false, the 2nd return value
+// will contain the first illegal character found.
+func isSlug(candidate string) (bool, string) {
+	// Allow only lower case letters (unicode), digits, underscore and dash.
+	illegalCharPattern, _ := regexp.Compile(`[^\p{Ll}0-9_-]`)
+	whyNot := illegalCharPattern.FindString(candidate)
+	return whyNot == "", whyNot
+}
+
 // Validate validates whether all values in the job are acceptable.
 func (j *Job) Validate() error {
 	if j.Name == "" {
@@ -184,10 +272,6 @@ func (j *Job) Validate() error {
 		if _, err := extcron.Parse(j.Schedule); err != nil {
 			return fmt.Errorf("%s: %s", ErrScheduleParse.Error(), err)
 		}
-	}
-
-	if j.Concurrency != ConcurrencyAllow && j.Concurrency != ConcurrencyForbid && j.Concurrency != "" {
-		return ErrWrongConcurrency
 	}
 
 	// An empty string is a valid timezone for LoadLocation
@@ -225,4 +309,78 @@ func (j *Job) GetParent(store *Store) (*Job, error) {
 	}
 
 	return parentJob, nil
+}
+
+// GetNext returns the job's next schedule from now
+func (j *Job) GetNext() (time.Time, error) {
+	if j.Schedule != "" {
+		s, err := extcron.Parse(j.Schedule)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return s.Next(time.Now()), nil
+	}
+
+	return time.Time{}, nil
+}
+
+// Friendly format a job
+func (j *Job) String() string {
+	return fmt.Sprintf("\"Job: %s, scheduled at: %s, tags:%v\"", j.Name, j.Schedule, j.Tags)
+}
+
+// ToProto return the corresponding representation of this Job in proto struct
+func (j *Job) ToProto() *proto.Job {
+	lastSuccess := &proto.Job_NullableTime{
+		HasValue: j.LastSuccess.HasValue(),
+	}
+	if j.LastSuccess.HasValue() {
+		lastSuccess.Time = timestamppb.New(j.LastSuccess.Get())
+	}
+	lastError := &proto.Job_NullableTime{
+		HasValue: j.LastError.HasValue(),
+	}
+	if j.LastError.HasValue() {
+		lastError.Time = timestamppb.New(j.LastError.Get())
+	}
+
+	next := timestamppb.New(j.Next)
+
+	expiresAt := &proto.Job_NullableTime{
+		HasValue: j.ExpiresAt.HasValue(),
+	}
+	if j.ExpiresAt.HasValue() {
+		expiresAt.Time = timestamppb.New(j.ExpiresAt.Get())
+	}
+
+	processors := make(map[string]*proto.PluginConfig)
+	for k, v := range j.Processors {
+		processors[k] = &proto.PluginConfig{Config: v}
+	}
+	return &proto.Job{
+		Name:           j.Name,
+		Displayname:    j.DisplayName,
+		Timezone:       j.Timezone,
+		Schedule:       j.Schedule,
+		Owner:          j.Owner,
+		OwnerEmail:     j.OwnerEmail,
+		SuccessCount:   int32(j.SuccessCount),
+		ErrorCount:     int32(j.ErrorCount),
+		Disabled:       j.Disabled,
+		Tags:           j.Tags,
+		Retries:        uint32(j.Retries),
+		DependentJobs:  j.DependentJobs,
+		ParentJob:      j.ParentJob,
+		Concurrency:    j.Concurrency,
+		Processors:     processors,
+		Executor:       j.Executor,
+		ExecutorConfig: j.ExecutorConfig,
+		Status:         j.Status,
+		Metadata:       j.Metadata,
+		LastSuccess:    lastSuccess,
+		LastError:      lastError,
+		Next:           next,
+		Ephemeral:      j.Ephemeral,
+		ExpiresAt:      expiresAt,
+	}
 }

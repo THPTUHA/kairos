@@ -833,21 +833,21 @@ func (a *Agent) GetRunningJobs() int {
 	return job
 }
 
-// // GetActiveExecutions returns running executions globally
-// func (a *Agent) GetActiveExecutions() ([]*proto.Execution, error) {
-// 	var executions []*proto.Execution
+// GetActiveExecutions returns running executions globally
+func (a *Agent) GetActiveExecutions() ([]*proto.Execution, error) {
+	var executions []*proto.Execution
 
-// 	for _, s := range a.LocalServers() {
-// 		exs, err := a.GRPCClient.GetActiveExecutions(s.RPCAddr.String())
-// 		if err != nil {
-// 			return nil, err
-// 		}
+	for _, s := range a.LocalServers() {
+		exs, err := a.GRPCClient.GetActiveExecutions(s.RPCAddr.String())
+		if err != nil {
+			return nil, err
+		}
 
-// 		executions = append(executions, exs...)
-// 	}
+		executions = append(executions, exs...)
+	}
 
-// 	return executions, nil
-// }
+	return executions, nil
+}
 
 // func (a *Agent) recursiveSetJob(jobs []*Job) []string {
 // 	result := make([]string, 0)

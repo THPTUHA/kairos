@@ -9,7 +9,7 @@ package proto
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	_ "google.golang.org/protobuf/types/known/emptypb"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -300,6 +300,288 @@ func (x *PluginConfig) GetConfig() map[string]string {
 	return nil
 }
 
+type SetJobRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *SetJobRequest) Reset() {
+	*x = SetJobRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetJobRequest) ProtoMessage() {}
+
+func (x *SetJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetJobRequest.ProtoReflect.Descriptor instead.
+func (*SetJobRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SetJobRequest) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type SetJobResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *SetJobResponse) Reset() {
+	*x = SetJobResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *SetJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetJobResponse) ProtoMessage() {}
+
+func (x *SetJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetJobResponse.ProtoReflect.Descriptor instead.
+func (*SetJobResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *SetJobResponse) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type DeleteJobRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JobName string `protobuf:"bytes,1,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
+}
+
+func (x *DeleteJobRequest) Reset() {
+	*x = DeleteJobRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DeleteJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteJobRequest) ProtoMessage() {}
+
+func (x *DeleteJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteJobRequest.ProtoReflect.Descriptor instead.
+func (*DeleteJobRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *DeleteJobRequest) GetJobName() string {
+	if x != nil {
+		return x.JobName
+	}
+	return ""
+}
+
+type DeleteJobResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *DeleteJobResponse) Reset() {
+	*x = DeleteJobResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[5]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *DeleteJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteJobResponse) ProtoMessage() {}
+
+func (x *DeleteJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[5]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteJobResponse.ProtoReflect.Descriptor instead.
+func (*DeleteJobResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DeleteJobResponse) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type GetJobRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JobName string `protobuf:"bytes,1,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
+}
+
+func (x *GetJobRequest) Reset() {
+	*x = GetJobRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[6]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobRequest) ProtoMessage() {}
+
+func (x *GetJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[6]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobRequest.ProtoReflect.Descriptor instead.
+func (*GetJobRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GetJobRequest) GetJobName() string {
+	if x != nil {
+		return x.JobName
+	}
+	return ""
+}
+
+type GetJobResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *GetJobResponse) Reset() {
+	*x = GetJobResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[7]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetJobResponse) ProtoMessage() {}
+
+func (x *GetJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[7]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetJobResponse.ProtoReflect.Descriptor instead.
+func (*GetJobResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetJobResponse) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
 type Execution struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -318,7 +600,7 @@ type Execution struct {
 func (x *Execution) Reset() {
 	*x = Execution{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_kairos_proto_msgTypes[2]
+		mi := &file_proto_kairos_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -331,7 +613,7 @@ func (x *Execution) String() string {
 func (*Execution) ProtoMessage() {}
 
 func (x *Execution) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kairos_proto_msgTypes[2]
+	mi := &file_proto_kairos_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +626,7 @@ func (x *Execution) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Execution.ProtoReflect.Descriptor instead.
 func (*Execution) Descriptor() ([]byte, []int) {
-	return file_proto_kairos_proto_rawDescGZIP(), []int{2}
+	return file_proto_kairos_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Execution) GetJobName() string {
@@ -403,6 +685,485 @@ func (x *Execution) GetFinishedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+type ExecutionDoneRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Execution *Execution `protobuf:"bytes,1,opt,name=execution,proto3" json:"execution,omitempty"`
+}
+
+func (x *ExecutionDoneRequest) Reset() {
+	*x = ExecutionDoneRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[9]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ExecutionDoneRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionDoneRequest) ProtoMessage() {}
+
+func (x *ExecutionDoneRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[9]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionDoneRequest.ProtoReflect.Descriptor instead.
+func (*ExecutionDoneRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *ExecutionDoneRequest) GetExecution() *Execution {
+	if x != nil {
+		return x.Execution
+	}
+	return nil
+}
+
+type ExecutionDoneResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	From    string `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+}
+
+func (x *ExecutionDoneResponse) Reset() {
+	*x = ExecutionDoneResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ExecutionDoneResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExecutionDoneResponse) ProtoMessage() {}
+
+func (x *ExecutionDoneResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExecutionDoneResponse.ProtoReflect.Descriptor instead.
+func (*ExecutionDoneResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ExecutionDoneResponse) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *ExecutionDoneResponse) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+type RunJobRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JobName string `protobuf:"bytes,1,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
+}
+
+func (x *RunJobRequest) Reset() {
+	*x = RunJobRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[11]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RunJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunJobRequest) ProtoMessage() {}
+
+func (x *RunJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[11]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunJobRequest.ProtoReflect.Descriptor instead.
+func (*RunJobRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *RunJobRequest) GetJobName() string {
+	if x != nil {
+		return x.JobName
+	}
+	return ""
+}
+
+type RunJobResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *RunJobResponse) Reset() {
+	*x = RunJobResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[12]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RunJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RunJobResponse) ProtoMessage() {}
+
+func (x *RunJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[12]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RunJobResponse.ProtoReflect.Descriptor instead.
+func (*RunJobResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *RunJobResponse) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type ToggleJobRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	JobName string `protobuf:"bytes,1,opt,name=job_name,json=jobName,proto3" json:"job_name,omitempty"`
+}
+
+func (x *ToggleJobRequest) Reset() {
+	*x = ToggleJobRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[13]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ToggleJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToggleJobRequest) ProtoMessage() {}
+
+func (x *ToggleJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[13]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToggleJobRequest.ProtoReflect.Descriptor instead.
+func (*ToggleJobRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ToggleJobRequest) GetJobName() string {
+	if x != nil {
+		return x.JobName
+	}
+	return ""
+}
+
+type ToggleJobResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Job *Job `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"`
+}
+
+func (x *ToggleJobResponse) Reset() {
+	*x = ToggleJobResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[14]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ToggleJobResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ToggleJobResponse) ProtoMessage() {}
+
+func (x *ToggleJobResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[14]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ToggleJobResponse.ProtoReflect.Descriptor instead.
+func (*ToggleJobResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ToggleJobResponse) GetJob() *Job {
+	if x != nil {
+		return x.Job
+	}
+	return nil
+}
+
+type RaftServer struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id           string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Node         string `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	Address      string `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	Leader       bool   `protobuf:"varint,4,opt,name=leader,proto3" json:"leader,omitempty"`
+	Voter        bool   `protobuf:"varint,5,opt,name=voter,proto3" json:"voter,omitempty"`
+	RaftProtocol string `protobuf:"bytes,6,opt,name=raft_protocol,json=raftProtocol,proto3" json:"raft_protocol,omitempty"`
+}
+
+func (x *RaftServer) Reset() {
+	*x = RaftServer{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[15]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RaftServer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaftServer) ProtoMessage() {}
+
+func (x *RaftServer) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[15]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaftServer.ProtoReflect.Descriptor instead.
+func (*RaftServer) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *RaftServer) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *RaftServer) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *RaftServer) GetAddress() string {
+	if x != nil {
+		return x.Address
+	}
+	return ""
+}
+
+func (x *RaftServer) GetLeader() bool {
+	if x != nil {
+		return x.Leader
+	}
+	return false
+}
+
+func (x *RaftServer) GetVoter() bool {
+	if x != nil {
+		return x.Voter
+	}
+	return false
+}
+
+func (x *RaftServer) GetRaftProtocol() string {
+	if x != nil {
+		return x.RaftProtocol
+	}
+	return ""
+}
+
+type RaftGetConfigurationResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Servers []*RaftServer `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
+	Index   uint64        `protobuf:"varint,2,opt,name=index,proto3" json:"index,omitempty"`
+}
+
+func (x *RaftGetConfigurationResponse) Reset() {
+	*x = RaftGetConfigurationResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[16]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RaftGetConfigurationResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaftGetConfigurationResponse) ProtoMessage() {}
+
+func (x *RaftGetConfigurationResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[16]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaftGetConfigurationResponse.ProtoReflect.Descriptor instead.
+func (*RaftGetConfigurationResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *RaftGetConfigurationResponse) GetServers() []*RaftServer {
+	if x != nil {
+		return x.Servers
+	}
+	return nil
+}
+
+func (x *RaftGetConfigurationResponse) GetIndex() uint64 {
+	if x != nil {
+		return x.Index
+	}
+	return 0
+}
+
+type RaftRemovePeerByIDRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+}
+
+func (x *RaftRemovePeerByIDRequest) Reset() {
+	*x = RaftRemovePeerByIDRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[17]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RaftRemovePeerByIDRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaftRemovePeerByIDRequest) ProtoMessage() {}
+
+func (x *RaftRemovePeerByIDRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[17]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaftRemovePeerByIDRequest.ProtoReflect.Descriptor instead.
+func (*RaftRemovePeerByIDRequest) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RaftRemovePeerByIDRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
 type AgentRunStream struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -414,7 +1175,7 @@ type AgentRunStream struct {
 func (x *AgentRunStream) Reset() {
 	*x = AgentRunStream{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_kairos_proto_msgTypes[3]
+		mi := &file_proto_kairos_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -427,7 +1188,7 @@ func (x *AgentRunStream) String() string {
 func (*AgentRunStream) ProtoMessage() {}
 
 func (x *AgentRunStream) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kairos_proto_msgTypes[3]
+	mi := &file_proto_kairos_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -440,12 +1201,114 @@ func (x *AgentRunStream) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunStream.ProtoReflect.Descriptor instead.
 func (*AgentRunStream) Descriptor() ([]byte, []int) {
-	return file_proto_kairos_proto_rawDescGZIP(), []int{3}
+	return file_proto_kairos_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AgentRunStream) GetExecution() *Execution {
 	if x != nil {
 		return x.Execution
+	}
+	return nil
+}
+
+type AgentRunResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	From    string `protobuf:"bytes,1,opt,name=from,proto3" json:"from,omitempty"`
+	Payload []byte `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+}
+
+func (x *AgentRunResponse) Reset() {
+	*x = AgentRunResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[19]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *AgentRunResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AgentRunResponse) ProtoMessage() {}
+
+func (x *AgentRunResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[19]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AgentRunResponse.ProtoReflect.Descriptor instead.
+func (*AgentRunResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *AgentRunResponse) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *AgentRunResponse) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+type GetActiveExecutionsResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Executions []*Execution `protobuf:"bytes,1,rep,name=executions,proto3" json:"executions,omitempty"`
+}
+
+func (x *GetActiveExecutionsResponse) Reset() {
+	*x = GetActiveExecutionsResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_proto_kairos_proto_msgTypes[20]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *GetActiveExecutionsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetActiveExecutionsResponse) ProtoMessage() {}
+
+func (x *GetActiveExecutionsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_kairos_proto_msgTypes[20]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetActiveExecutionsResponse.ProtoReflect.Descriptor instead.
+func (*GetActiveExecutionsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_kairos_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *GetActiveExecutionsResponse) GetExecutions() []*Execution {
+	if x != nil {
+		return x.Executions
 	}
 	return nil
 }
@@ -462,7 +1325,7 @@ type AgentRunRequest struct {
 func (x *AgentRunRequest) Reset() {
 	*x = AgentRunRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_kairos_proto_msgTypes[4]
+		mi := &file_proto_kairos_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -475,7 +1338,7 @@ func (x *AgentRunRequest) String() string {
 func (*AgentRunRequest) ProtoMessage() {}
 
 func (x *AgentRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kairos_proto_msgTypes[4]
+	mi := &file_proto_kairos_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -488,7 +1351,7 @@ func (x *AgentRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentRunRequest.ProtoReflect.Descriptor instead.
 func (*AgentRunRequest) Descriptor() ([]byte, []int) {
-	return file_proto_kairos_proto_rawDescGZIP(), []int{4}
+	return file_proto_kairos_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *AgentRunRequest) GetJob() *Job {
@@ -517,7 +1380,7 @@ type Job_NullableTime struct {
 func (x *Job_NullableTime) Reset() {
 	*x = Job_NullableTime{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_proto_kairos_proto_msgTypes[8]
+		mi := &file_proto_kairos_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -530,7 +1393,7 @@ func (x *Job_NullableTime) String() string {
 func (*Job_NullableTime) ProtoMessage() {}
 
 func (x *Job_NullableTime) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_kairos_proto_msgTypes[8]
+	mi := &file_proto_kairos_proto_msgTypes[25]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,44 +1520,157 @@ var file_proto_kairos_proto_rawDesc = []byte{
 	0x67, 0x1a, 0x39, 0x0a, 0x0b, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x45, 0x6e, 0x74, 0x72, 0x79,
 	0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b,
 	0x65, 0x79, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28,
-	0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x9d, 0x02, 0x0a,
-	0x09, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x19, 0x0a, 0x08, 0x6a, 0x6f,
-	0x62, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6a, 0x6f,
-	0x62, 0x4e, 0x61, 0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x12,
-	0x16, 0x0a, 0x06, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52,
-	0x06, 0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x6e, 0x6f, 0x64, 0x65, 0x5f,
-	0x6e, 0x61, 0x6d, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6e, 0x6f, 0x64, 0x65,
-	0x4e, 0x61, 0x6d, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x18, 0x05, 0x20,
-	0x01, 0x28, 0x03, 0x52, 0x05, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x74,
-	0x74, 0x65, 0x6d, 0x70, 0x74, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x07, 0x61, 0x74, 0x74,
-	0x65, 0x6d, 0x70, 0x74, 0x12, 0x39, 0x0a, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x5f,
-	0x61, 0x74, 0x18, 0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c,
-	0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73,
-	0x74, 0x61, 0x6d, 0x70, 0x52, 0x09, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x41, 0x74, 0x12,
-	0x3b, 0x0a, 0x0b, 0x66, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x08,
-	0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70,
-	0x52, 0x0a, 0x66, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x41, 0x74, 0x22, 0x40, 0x0a, 0x0e,
-	0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x12, 0x2e,
-	0x0a, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28,
-	0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74,
-	0x69, 0x6f, 0x6e, 0x52, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x5f,
-	0x0a, 0x0f, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
-	0x74, 0x12, 0x1c, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x12,
-	0x2e, 0x0a, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01,
-	0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75,
-	0x74, 0x69, 0x6f, 0x6e, 0x52, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x32,
-	0x08, 0x0a, 0x06, 0x4b, 0x61, 0x69, 0x72, 0x6f, 0x73, 0x32, 0x44, 0x0a, 0x05, 0x41, 0x67, 0x65,
-	0x6e, 0x74, 0x12, 0x3b, 0x0a, 0x08, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x12, 0x16,
-	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x52,
-	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41,
-	0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x30, 0x01, 0x42,
-	0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x54, 0x48,
-	0x50, 0x54, 0x55, 0x48, 0x41, 0x2f, 0x64, 0x6b, 0x72, 0x6f, 0x6e, 0x2f, 0x73, 0x65, 0x72, 0x76,
-	0x65, 0x72, 0x2f, 0x70, 0x6c, 0x75, 0x67, 0x69, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62,
-	0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x2d, 0x0a, 0x0d,
+	0x53, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1c, 0x0a,
+	0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x2e, 0x0a, 0x0e, 0x53,
+	0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1c, 0x0a,
+	0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x2d, 0x0a, 0x10, 0x44,
+	0x65, 0x6c, 0x65, 0x74, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x19, 0x0a, 0x08, 0x6a, 0x6f, 0x62, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x07, 0x6a, 0x6f, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x31, 0x0a, 0x11, 0x44, 0x65,
+	0x6c, 0x65, 0x74, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12,
+	0x1c, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x2a, 0x0a,
+	0x0d, 0x47, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x19,
+	0x0a, 0x08, 0x6a, 0x6f, 0x62, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09,
+	0x52, 0x07, 0x6a, 0x6f, 0x62, 0x4e, 0x61, 0x6d, 0x65, 0x22, 0x2e, 0x0a, 0x0e, 0x47, 0x65, 0x74,
+	0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1c, 0x0a, 0x03, 0x6a,
+	0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x9d, 0x02, 0x0a, 0x09, 0x45, 0x78,
+	0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x19, 0x0a, 0x08, 0x6a, 0x6f, 0x62, 0x5f, 0x6e,
+	0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6a, 0x6f, 0x62, 0x4e, 0x61,
+	0x6d, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x07, 0x73, 0x75, 0x63, 0x63, 0x65, 0x73, 0x73, 0x12, 0x16, 0x0a, 0x06,
+	0x6f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x06, 0x6f, 0x75,
+	0x74, 0x70, 0x75, 0x74, 0x12, 0x1b, 0x0a, 0x09, 0x6e, 0x6f, 0x64, 0x65, 0x5f, 0x6e, 0x61, 0x6d,
+	0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6e, 0x6f, 0x64, 0x65, 0x4e, 0x61, 0x6d,
+	0x65, 0x12, 0x14, 0x0a, 0x05, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x18, 0x05, 0x20, 0x01, 0x28, 0x03,
+	0x52, 0x05, 0x67, 0x72, 0x6f, 0x75, 0x70, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x74, 0x74, 0x65, 0x6d,
+	0x70, 0x74, 0x18, 0x06, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x07, 0x61, 0x74, 0x74, 0x65, 0x6d, 0x70,
+	0x74, 0x12, 0x39, 0x0a, 0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18,
+	0x07, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d,
+	0x70, 0x52, 0x09, 0x73, 0x74, 0x61, 0x72, 0x74, 0x65, 0x64, 0x41, 0x74, 0x12, 0x3b, 0x0a, 0x0b,
+	0x66, 0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x5f, 0x61, 0x74, 0x18, 0x08, 0x20, 0x01, 0x28,
+	0x0b, 0x32, 0x1a, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x62, 0x75, 0x66, 0x2e, 0x54, 0x69, 0x6d, 0x65, 0x73, 0x74, 0x61, 0x6d, 0x70, 0x52, 0x0a, 0x66,
+	0x69, 0x6e, 0x69, 0x73, 0x68, 0x65, 0x64, 0x41, 0x74, 0x22, 0x46, 0x0a, 0x14, 0x45, 0x78, 0x65,
+	0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x44, 0x6f, 0x6e, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x2e, 0x0a, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65,
+	0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f,
+	0x6e, 0x22, 0x45, 0x0a, 0x15, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x44, 0x6f,
+	0x6e, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04, 0x66, 0x72,
+	0x6f, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x66, 0x72, 0x6f, 0x6d, 0x12, 0x18,
+	0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0c, 0x52,
+	0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x22, 0x2a, 0x0a, 0x0d, 0x52, 0x75, 0x6e, 0x4a,
+	0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x19, 0x0a, 0x08, 0x6a, 0x6f, 0x62,
+	0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6a, 0x6f, 0x62,
+	0x4e, 0x61, 0x6d, 0x65, 0x22, 0x2e, 0x0a, 0x0e, 0x52, 0x75, 0x6e, 0x4a, 0x6f, 0x62, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1c, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52,
+	0x03, 0x6a, 0x6f, 0x62, 0x22, 0x2d, 0x0a, 0x10, 0x54, 0x6f, 0x67, 0x67, 0x6c, 0x65, 0x4a, 0x6f,
+	0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x19, 0x0a, 0x08, 0x6a, 0x6f, 0x62, 0x5f,
+	0x6e, 0x61, 0x6d, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x6a, 0x6f, 0x62, 0x4e,
+	0x61, 0x6d, 0x65, 0x22, 0x31, 0x0a, 0x11, 0x54, 0x6f, 0x67, 0x67, 0x6c, 0x65, 0x4a, 0x6f, 0x62,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1c, 0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18,
+	0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x4a, 0x6f,
+	0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x22, 0x9d, 0x01, 0x0a, 0x0a, 0x52, 0x61, 0x66, 0x74, 0x53,
+	0x65, 0x72, 0x76, 0x65, 0x72, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x02, 0x69, 0x64, 0x12, 0x12, 0x0a, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x04, 0x6e, 0x6f, 0x64, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x61, 0x64, 0x64,
+	0x72, 0x65, 0x73, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x64, 0x64, 0x72,
+	0x65, 0x73, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x18, 0x04, 0x20,
+	0x01, 0x28, 0x08, 0x52, 0x06, 0x6c, 0x65, 0x61, 0x64, 0x65, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x76,
+	0x6f, 0x74, 0x65, 0x72, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x05, 0x76, 0x6f, 0x74, 0x65,
+	0x72, 0x12, 0x23, 0x0a, 0x0d, 0x72, 0x61, 0x66, 0x74, 0x5f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x63,
+	0x6f, 0x6c, 0x18, 0x06, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0c, 0x72, 0x61, 0x66, 0x74, 0x50, 0x72,
+	0x6f, 0x74, 0x6f, 0x63, 0x6f, 0x6c, 0x22, 0x61, 0x0a, 0x1c, 0x52, 0x61, 0x66, 0x74, 0x47, 0x65,
+	0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x2b, 0x0a, 0x07, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72,
+	0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x11, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x52, 0x61, 0x66, 0x74, 0x53, 0x65, 0x72, 0x76, 0x65, 0x72, 0x52, 0x07, 0x73, 0x65, 0x72, 0x76,
+	0x65, 0x72, 0x73, 0x12, 0x14, 0x0a, 0x05, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x04, 0x52, 0x05, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x22, 0x2b, 0x0a, 0x19, 0x52, 0x61, 0x66,
+	0x74, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x50, 0x65, 0x65, 0x72, 0x42, 0x79, 0x49, 0x44, 0x52,
+	0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x0e, 0x0a, 0x02, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01,
+	0x28, 0x09, 0x52, 0x02, 0x69, 0x64, 0x22, 0x40, 0x0a, 0x0e, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52,
+	0x75, 0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x12, 0x2e, 0x0a, 0x09, 0x65, 0x78, 0x65, 0x63,
+	0x75, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x09, 0x65,
+	0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x22, 0x40, 0x0a, 0x10, 0x41, 0x67, 0x65, 0x6e,
+	0x74, 0x52, 0x75, 0x6e, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x12, 0x0a, 0x04,
+	0x66, 0x72, 0x6f, 0x6d, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x66, 0x72, 0x6f, 0x6d,
+	0x12, 0x18, 0x0a, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28,
+	0x0c, 0x52, 0x07, 0x70, 0x61, 0x79, 0x6c, 0x6f, 0x61, 0x64, 0x22, 0x4f, 0x0a, 0x1b, 0x47, 0x65,
+	0x74, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x30, 0x0a, 0x0a, 0x65, 0x78, 0x65,
+	0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x10, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x52,
+	0x0a, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x22, 0x5f, 0x0a, 0x0f, 0x41,
+	0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1c,
+	0x0a, 0x03, 0x6a, 0x6f, 0x62, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0a, 0x2e, 0x70, 0x72,
+	0x6f, 0x74, 0x6f, 0x2e, 0x4a, 0x6f, 0x62, 0x52, 0x03, 0x6a, 0x6f, 0x62, 0x12, 0x2e, 0x0a, 0x09,
+	0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f,
+	0x6e, 0x52, 0x09, 0x65, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x32, 0xe4, 0x05, 0x0a,
+	0x06, 0x4b, 0x61, 0x69, 0x72, 0x6f, 0x73, 0x12, 0x35, 0x0a, 0x06, 0x47, 0x65, 0x74, 0x4a, 0x6f,
+	0x62, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65, 0x74, 0x4a, 0x6f, 0x62,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x47, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4a,
+	0x0a, 0x0d, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x44, 0x6f, 0x6e, 0x65, 0x12,
+	0x1b, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f,
+	0x6e, 0x44, 0x6f, 0x6e, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1c, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x44, 0x6f,
+	0x6e, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x37, 0x0a, 0x05, 0x4c, 0x65,
+	0x61, 0x76, 0x65, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x16, 0x2e, 0x67, 0x6f,
+	0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d,
+	0x70, 0x74, 0x79, 0x12, 0x35, 0x0a, 0x06, 0x53, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x12, 0x14, 0x2e,
+	0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x74, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x53, 0x65, 0x74, 0x4a,
+	0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x3e, 0x0a, 0x09, 0x44, 0x65,
+	0x6c, 0x65, 0x74, 0x65, 0x4a, 0x6f, 0x62, 0x12, 0x17, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x44, 0x65, 0x6c, 0x65, 0x74, 0x65, 0x4a,
+	0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x35, 0x0a, 0x06, 0x52, 0x75,
+	0x6e, 0x4a, 0x6f, 0x62, 0x12, 0x14, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x75, 0x6e,
+	0x4a, 0x6f, 0x62, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f,
+	0x74, 0x6f, 0x2e, 0x52, 0x75, 0x6e, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x3e, 0x0a, 0x09, 0x54, 0x6f, 0x67, 0x67, 0x6c, 0x65, 0x4a, 0x6f, 0x62, 0x12, 0x17,
+	0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x54, 0x6f, 0x67, 0x67, 0x6c, 0x65, 0x4a, 0x6f, 0x62,
+	0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x18, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e,
+	0x54, 0x6f, 0x67, 0x67, 0x6c, 0x65, 0x4a, 0x6f, 0x62, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x12, 0x53, 0x0a, 0x14, 0x52, 0x61, 0x66, 0x74, 0x47, 0x65, 0x74, 0x43, 0x6f, 0x6e, 0x66,
+	0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x2e, 0x67, 0x6f, 0x6f, 0x67,
+	0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d, 0x70, 0x74,
+	0x79, 0x1a, 0x23, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x61, 0x66, 0x74, 0x47, 0x65,
+	0x74, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x75, 0x72, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x4e, 0x0a, 0x12, 0x52, 0x61, 0x66, 0x74, 0x52, 0x65,
+	0x6d, 0x6f, 0x76, 0x65, 0x50, 0x65, 0x65, 0x72, 0x42, 0x79, 0x49, 0x44, 0x12, 0x20, 0x2e, 0x70,
+	0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x52, 0x61, 0x66, 0x74, 0x52, 0x65, 0x6d, 0x6f, 0x76, 0x65, 0x50,
+	0x65, 0x65, 0x72, 0x42, 0x79, 0x49, 0x44, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x16,
+	0x2e, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66,
+	0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x12, 0x51, 0x0a, 0x13, 0x47, 0x65, 0x74, 0x41, 0x63, 0x74,
+	0x69, 0x76, 0x65, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x73, 0x12, 0x16, 0x2e,
+	0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e,
+	0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x22, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x47, 0x65,
+	0x74, 0x41, 0x63, 0x74, 0x69, 0x76, 0x65, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e,
+	0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x38, 0x0a, 0x0c, 0x53, 0x65, 0x74,
+	0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x12, 0x10, 0x2e, 0x70, 0x72, 0x6f, 0x74,
+	0x6f, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x69, 0x6f, 0x6e, 0x1a, 0x16, 0x2e, 0x67, 0x6f,
+	0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2e, 0x45, 0x6d,
+	0x70, 0x74, 0x79, 0x32, 0x44, 0x0a, 0x05, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x12, 0x3b, 0x0a, 0x08,
+	0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x12, 0x16, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x2e, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
+	0x1a, 0x15, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2e, 0x41, 0x67, 0x65, 0x6e, 0x74, 0x52, 0x75,
+	0x6e, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x30, 0x01, 0x42, 0x2e, 0x5a, 0x2c, 0x67, 0x69, 0x74,
+	0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x54, 0x48, 0x50, 0x54, 0x55, 0x48, 0x41, 0x2f,
+	0x64, 0x6b, 0x72, 0x6f, 0x6e, 0x2f, 0x73, 0x65, 0x72, 0x76, 0x65, 0x72, 0x2f, 0x70, 0x6c, 0x75,
+	0x67, 0x69, 0x6e, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -709,45 +1685,94 @@ func file_proto_kairos_proto_rawDescGZIP() []byte {
 	return file_proto_kairos_proto_rawDescData
 }
 
-var file_proto_kairos_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_kairos_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_kairos_proto_goTypes = []interface{}{
-	(*Job)(nil),                   // 0: proto.Job
-	(*PluginConfig)(nil),          // 1: proto.PluginConfig
-	(*Execution)(nil),             // 2: proto.Execution
-	(*AgentRunStream)(nil),        // 3: proto.AgentRunStream
-	(*AgentRunRequest)(nil),       // 4: proto.AgentRunRequest
-	nil,                           // 5: proto.Job.TagsEntry
-	nil,                           // 6: proto.Job.ExecutorConfigEntry
-	nil,                           // 7: proto.Job.MetadataEntry
-	(*Job_NullableTime)(nil),      // 8: proto.Job.NullableTime
-	nil,                           // 9: proto.Job.ProcessorsEntry
-	nil,                           // 10: proto.PluginConfig.ConfigEntry
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	(*Job)(nil),                          // 0: proto.Job
+	(*PluginConfig)(nil),                 // 1: proto.PluginConfig
+	(*SetJobRequest)(nil),                // 2: proto.SetJobRequest
+	(*SetJobResponse)(nil),               // 3: proto.SetJobResponse
+	(*DeleteJobRequest)(nil),             // 4: proto.DeleteJobRequest
+	(*DeleteJobResponse)(nil),            // 5: proto.DeleteJobResponse
+	(*GetJobRequest)(nil),                // 6: proto.GetJobRequest
+	(*GetJobResponse)(nil),               // 7: proto.GetJobResponse
+	(*Execution)(nil),                    // 8: proto.Execution
+	(*ExecutionDoneRequest)(nil),         // 9: proto.ExecutionDoneRequest
+	(*ExecutionDoneResponse)(nil),        // 10: proto.ExecutionDoneResponse
+	(*RunJobRequest)(nil),                // 11: proto.RunJobRequest
+	(*RunJobResponse)(nil),               // 12: proto.RunJobResponse
+	(*ToggleJobRequest)(nil),             // 13: proto.ToggleJobRequest
+	(*ToggleJobResponse)(nil),            // 14: proto.ToggleJobResponse
+	(*RaftServer)(nil),                   // 15: proto.RaftServer
+	(*RaftGetConfigurationResponse)(nil), // 16: proto.RaftGetConfigurationResponse
+	(*RaftRemovePeerByIDRequest)(nil),    // 17: proto.RaftRemovePeerByIDRequest
+	(*AgentRunStream)(nil),               // 18: proto.AgentRunStream
+	(*AgentRunResponse)(nil),             // 19: proto.AgentRunResponse
+	(*GetActiveExecutionsResponse)(nil),  // 20: proto.GetActiveExecutionsResponse
+	(*AgentRunRequest)(nil),              // 21: proto.AgentRunRequest
+	nil,                                  // 22: proto.Job.TagsEntry
+	nil,                                  // 23: proto.Job.ExecutorConfigEntry
+	nil,                                  // 24: proto.Job.MetadataEntry
+	(*Job_NullableTime)(nil),             // 25: proto.Job.NullableTime
+	nil,                                  // 26: proto.Job.ProcessorsEntry
+	nil,                                  // 27: proto.PluginConfig.ConfigEntry
+	(*timestamppb.Timestamp)(nil),        // 28: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),                // 29: google.protobuf.Empty
 }
 var file_proto_kairos_proto_depIdxs = []int32{
-	5,  // 0: proto.Job.tags:type_name -> proto.Job.TagsEntry
-	6,  // 1: proto.Job.executor_config:type_name -> proto.Job.ExecutorConfigEntry
-	7,  // 2: proto.Job.metadata:type_name -> proto.Job.MetadataEntry
-	8,  // 3: proto.Job.last_success:type_name -> proto.Job.NullableTime
-	8,  // 4: proto.Job.last_error:type_name -> proto.Job.NullableTime
-	11, // 5: proto.Job.next:type_name -> google.protobuf.Timestamp
-	9,  // 6: proto.Job.processors:type_name -> proto.Job.ProcessorsEntry
-	8,  // 7: proto.Job.expires_at:type_name -> proto.Job.NullableTime
-	10, // 8: proto.PluginConfig.config:type_name -> proto.PluginConfig.ConfigEntry
-	11, // 9: proto.Execution.started_at:type_name -> google.protobuf.Timestamp
-	11, // 10: proto.Execution.finished_at:type_name -> google.protobuf.Timestamp
-	2,  // 11: proto.AgentRunStream.execution:type_name -> proto.Execution
-	0,  // 12: proto.AgentRunRequest.job:type_name -> proto.Job
-	2,  // 13: proto.AgentRunRequest.execution:type_name -> proto.Execution
-	11, // 14: proto.Job.NullableTime.time:type_name -> google.protobuf.Timestamp
-	1,  // 15: proto.Job.ProcessorsEntry.value:type_name -> proto.PluginConfig
-	4,  // 16: proto.Agent.AgentRun:input_type -> proto.AgentRunRequest
-	3,  // 17: proto.Agent.AgentRun:output_type -> proto.AgentRunStream
-	17, // [17:18] is the sub-list for method output_type
-	16, // [16:17] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	22, // 0: proto.Job.tags:type_name -> proto.Job.TagsEntry
+	23, // 1: proto.Job.executor_config:type_name -> proto.Job.ExecutorConfigEntry
+	24, // 2: proto.Job.metadata:type_name -> proto.Job.MetadataEntry
+	25, // 3: proto.Job.last_success:type_name -> proto.Job.NullableTime
+	25, // 4: proto.Job.last_error:type_name -> proto.Job.NullableTime
+	28, // 5: proto.Job.next:type_name -> google.protobuf.Timestamp
+	26, // 6: proto.Job.processors:type_name -> proto.Job.ProcessorsEntry
+	25, // 7: proto.Job.expires_at:type_name -> proto.Job.NullableTime
+	27, // 8: proto.PluginConfig.config:type_name -> proto.PluginConfig.ConfigEntry
+	0,  // 9: proto.SetJobRequest.job:type_name -> proto.Job
+	0,  // 10: proto.SetJobResponse.job:type_name -> proto.Job
+	0,  // 11: proto.DeleteJobResponse.job:type_name -> proto.Job
+	0,  // 12: proto.GetJobResponse.job:type_name -> proto.Job
+	28, // 13: proto.Execution.started_at:type_name -> google.protobuf.Timestamp
+	28, // 14: proto.Execution.finished_at:type_name -> google.protobuf.Timestamp
+	8,  // 15: proto.ExecutionDoneRequest.execution:type_name -> proto.Execution
+	0,  // 16: proto.RunJobResponse.job:type_name -> proto.Job
+	0,  // 17: proto.ToggleJobResponse.job:type_name -> proto.Job
+	15, // 18: proto.RaftGetConfigurationResponse.servers:type_name -> proto.RaftServer
+	8,  // 19: proto.AgentRunStream.execution:type_name -> proto.Execution
+	8,  // 20: proto.GetActiveExecutionsResponse.executions:type_name -> proto.Execution
+	0,  // 21: proto.AgentRunRequest.job:type_name -> proto.Job
+	8,  // 22: proto.AgentRunRequest.execution:type_name -> proto.Execution
+	28, // 23: proto.Job.NullableTime.time:type_name -> google.protobuf.Timestamp
+	1,  // 24: proto.Job.ProcessorsEntry.value:type_name -> proto.PluginConfig
+	6,  // 25: proto.Kairos.GetJob:input_type -> proto.GetJobRequest
+	9,  // 26: proto.Kairos.ExecutionDone:input_type -> proto.ExecutionDoneRequest
+	29, // 27: proto.Kairos.Leave:input_type -> google.protobuf.Empty
+	2,  // 28: proto.Kairos.SetJob:input_type -> proto.SetJobRequest
+	4,  // 29: proto.Kairos.DeleteJob:input_type -> proto.DeleteJobRequest
+	11, // 30: proto.Kairos.RunJob:input_type -> proto.RunJobRequest
+	13, // 31: proto.Kairos.ToggleJob:input_type -> proto.ToggleJobRequest
+	29, // 32: proto.Kairos.RaftGetConfiguration:input_type -> google.protobuf.Empty
+	17, // 33: proto.Kairos.RaftRemovePeerByID:input_type -> proto.RaftRemovePeerByIDRequest
+	29, // 34: proto.Kairos.GetActiveExecutions:input_type -> google.protobuf.Empty
+	8,  // 35: proto.Kairos.SetExecution:input_type -> proto.Execution
+	21, // 36: proto.Agent.AgentRun:input_type -> proto.AgentRunRequest
+	7,  // 37: proto.Kairos.GetJob:output_type -> proto.GetJobResponse
+	10, // 38: proto.Kairos.ExecutionDone:output_type -> proto.ExecutionDoneResponse
+	29, // 39: proto.Kairos.Leave:output_type -> google.protobuf.Empty
+	3,  // 40: proto.Kairos.SetJob:output_type -> proto.SetJobResponse
+	5,  // 41: proto.Kairos.DeleteJob:output_type -> proto.DeleteJobResponse
+	12, // 42: proto.Kairos.RunJob:output_type -> proto.RunJobResponse
+	14, // 43: proto.Kairos.ToggleJob:output_type -> proto.ToggleJobResponse
+	16, // 44: proto.Kairos.RaftGetConfiguration:output_type -> proto.RaftGetConfigurationResponse
+	29, // 45: proto.Kairos.RaftRemovePeerByID:output_type -> google.protobuf.Empty
+	20, // 46: proto.Kairos.GetActiveExecutions:output_type -> proto.GetActiveExecutionsResponse
+	29, // 47: proto.Kairos.SetExecution:output_type -> google.protobuf.Empty
+	18, // 48: proto.Agent.AgentRun:output_type -> proto.AgentRunStream
+	37, // [37:49] is the sub-list for method output_type
+	25, // [25:37] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
 func init() { file_proto_kairos_proto_init() }
@@ -781,7 +1806,7 @@ func file_proto_kairos_proto_init() {
 			}
 		}
 		file_proto_kairos_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Execution); i {
+			switch v := v.(*SetJobRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -793,7 +1818,7 @@ func file_proto_kairos_proto_init() {
 			}
 		}
 		file_proto_kairos_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AgentRunStream); i {
+			switch v := v.(*SetJobResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -805,7 +1830,43 @@ func file_proto_kairos_proto_init() {
 			}
 		}
 		file_proto_kairos_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*AgentRunRequest); i {
+			switch v := v.(*DeleteJobRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*DeleteJobResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetJobRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetJobResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -817,6 +1878,174 @@ func file_proto_kairos_proto_init() {
 			}
 		}
 		file_proto_kairos_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Execution); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ExecutionDoneRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ExecutionDoneResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RunJobRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RunJobResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ToggleJobRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ToggleJobResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RaftServer); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RaftGetConfigurationResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RaftRemovePeerByIDRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AgentRunStream); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AgentRunResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GetActiveExecutionsResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*AgentRunRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_proto_kairos_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Job_NullableTime); i {
 			case 0:
 				return &v.state
@@ -835,7 +2064,7 @@ func file_proto_kairos_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_proto_kairos_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
