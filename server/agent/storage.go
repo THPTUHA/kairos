@@ -9,6 +9,7 @@ type Storage interface {
 	SetExecutionDone(execution *Execution) (bool, error)
 	GetJobs(options *JobOptions) ([]*Job, error)
 	GetJob(name string, options *JobOptions) (*Job, error)
+	GetExecutionGroup(execution *Execution, opts *ExecutionOptions) ([]*Execution, error)
 	Snapshot(w io.WriteCloser) error
 	Shutdown() error
 	Restore(r io.ReadCloser) error

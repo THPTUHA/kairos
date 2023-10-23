@@ -583,6 +583,22 @@ func (s *Store) GetExecutions(jobName string, opts *ExecutionOptions) ([]*Execut
 	return s.unmarshalExecutions(kvs, opts.Timezone)
 }
 
+// GetExecutionGroup returns all executions in the same group of a given execution
+func (s *Store) GetExecutionGroup(execution *Execution, opts *ExecutionOptions) ([]*Execution, error) {
+	res, err := s.GetExecutions(execution.JobName, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	var executions []*Execution
+	for _, ex := range res {
+		if ex.Group == execution.Group {
+			executions = append(executions, ex)
+		}
+	}
+	return executions, nil
+}
+
 // SetExecution Save a new execution and returns the key of the new saved item or an error.
 func (s *Store) SetExecution(execution *Execution) (string, error) {
 	pbe := execution.ToProto()

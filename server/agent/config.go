@@ -110,6 +110,27 @@ type AgentConfig struct {
 
 	// DataDir is the directory to store our state in
 	DataDir string `mapstructure:"data-dir"`
+
+	// MailHost is the SMTP server host to use for email notifications.
+	MailHost string `mapstructure:"mail-host"`
+
+	// MailPort is the SMTP server port to use for email notifications.
+	MailPort uint16 `mapstructure:"mail-port"`
+
+	// MailUsername is the SMTP server username to use for email notifications.
+	MailUsername string `mapstructure:"mail-username"`
+
+	// MailPassword is the SMTP server password to use for email notifications.
+	MailPassword string `mapstructure:"mail-password"`
+
+	// MailFrom is the email sender to use for email notifications.
+	MailFrom string `mapstructure:"mail-from"`
+
+	// MailPayload is the email template body to use for email notifications.
+	MailPayload string `mapstructure:"mail-payload"`
+
+	// MailSubjectPrefix is the email subject prefix string to use for email notifications.
+	MailSubjectPrefix string `mapstructure:"mail-subject-prefix"`
 }
 
 var ErrResolvingHost = errors.New("error resolving hostname")
@@ -237,6 +258,12 @@ func ConfigAgentFlagSet() *flag.FlagSet {
 	cmdFlags := flag.NewFlagSet("agent flagset", flag.ContinueOnError)
 	cmdFlags.Bool("server", false,
 		"This node is running in server mode")
+	cmdFlags.Int("bootstrap-expect", 0,
+		`Provides the number of expected servers in the datacenter. Either this value 
+should not be provided or the value must agree with other servers in the 
+cluster. When provided, Dkron waits until the specified number of servers are 
+available and then bootstraps the cluster. This allows an initial leader to be 
+elected automatically. This flag requires server mode.`)
 	return cmdFlags
 }
 

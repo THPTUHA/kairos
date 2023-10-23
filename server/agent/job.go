@@ -39,7 +39,8 @@ const (
 	StatusFailed = "failed"
 	// StatusPartiallyFailed is status of a job whose last run was successful on only some nodes.
 	StatusPartiallyFailed = "partially_failed"
-
+	// ConcurrencyAllow allows a job to execute concurrency.
+	ConcurrencyAllow = "allow"
 	// ConcurrencyForbid forbids a job from executing concurrency.
 	ConcurrencyForbid = "forbid"
 )
@@ -217,7 +218,7 @@ func (j *Job) isRunnable(logger *logrus.Entry) bool {
 	return true
 }
 
-// Run the job
+// Impletation corn
 func (j *Job) Run() {
 	// As this function should comply with the Job interface of the cron package we will use
 	// the agent property on execution, this is why it need to check if it's set and otherwise fail.
@@ -327,6 +328,14 @@ func (j *Job) GetNext() (time.Time, error) {
 // Friendly format a job
 func (j *Job) String() string {
 	return fmt.Sprintf("\"Job: %s, scheduled at: %s, tags:%v\"", j.Name, j.Schedule, j.Tags)
+}
+
+// GetTimeLocation returns the time.Location based on the job's Timezone, or
+// the default (UTC) if none is configured, or
+// nil if an error occurred while creating the timezone from the property
+func (j *Job) GetTimeLocation() *time.Location {
+	loc, _ := time.LoadLocation(j.Timezone)
+	return loc
 }
 
 // ToProto return the corresponding representation of this Job in proto struct

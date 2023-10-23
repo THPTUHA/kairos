@@ -17,6 +17,10 @@ import (
 // KiarosGRPCClient defines the interface that any gRPC client for
 // kairos should implement.
 type KiarosGRPCClient interface {
+	Connect(string) (*grpc.ClientConn, error)
+	ExecutionDone(string, *Execution) error
+	GetJob(string, string) (*Job, error)
+	SetJob(*Job) error
 	GetActiveExecutions(string) ([]*proto.Execution, error)
 	AgentRun(addr string, job *proto.Job, execution *proto.Execution) error
 }
@@ -221,4 +225,64 @@ func (grpcc *GRPCClient) AgentRun(addr string, job *proto.Job, execution *proto.
 		}
 
 	}
+}
+
+func (grpcc *GRPCClient) SetJob(job *Job) error {
+	var conn *grpc.ClientConn
+
+	addr := grpcc.agent.raft.Leader()
+
+	// Initiate a connection with the server
+	conn, err := grpcc.Connect(string(addr))
+	if err != nil {
+		grpcc.logger.WithError(err).WithFields(logrus.Fields{
+			"method":      "SetJob",
+			"server_addr": addr,
+		}).Error("grpc: error dialing.")
+		return err
+	}
+	defer conn.Close()
+
+	// Synchronous call
+	d := proto.NewKairosClient(conn)
+	_, err = d.SetJob(context.Background(), &proto.SetJobRequest{
+		Job: job.ToProto(),
+	})
+	if err != nil {
+		grpcc.logger.WithError(err).WithFields(logrus.Fields{
+			"method":      "SetJob",
+			"server_addr": addr,
+		}).Error("grpc: Error calling gRPC method")
+		return err
+	}
+	return nil
+}
+
+// GetJob calls GetJob gRPC method in the server
+func (grpcc *GRPCClient) GetJob(addr, jobName string) (*Job, error) {
+	var conn *grpc.ClientConn
+
+	// Initiate a connection with the server
+	conn, err := grpcc.Connect(addr)
+	if err != nil {
+		grpcc.logger.WithError(err).WithFields(logrus.Fields{
+			"method":      "GetJob",
+			"server_addr": addr,
+		}).Error("grpc: error dialing.")
+		return nil, err
+	}
+	defer conn.Close()
+
+	// Synchronous call
+	d := proto.NewKairosClient(conn)
+	gjr, err := d.GetJob(context.Background(), &proto.GetJobRequest{JobName: jobName})
+	if err != nil {
+		grpcc.logger.WithError(err).WithFields(logrus.Fields{
+			"method":      "GetJob",
+			"server_addr": addr,
+		}).Error("grpc: Error calling gRPC method")
+		return nil, err
+	}
+
+	return NewJobFromProto(gjr.Job, grpcc.logger), nil
 }
