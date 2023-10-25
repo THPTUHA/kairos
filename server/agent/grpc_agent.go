@@ -2,7 +2,6 @@ package agent
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/circbuf"
@@ -80,7 +79,6 @@ func (as *AgentServer) AgentRun(req *proto.AgentRunRequest, stream proto.Agent_A
 	if jex == "" {
 		return errors.New("grpc_agent: No executor defined, nothing to do")
 	}
-	fmt.Println("jex", jex)
 	// Check if executor exists
 	if executor, ok := as.agent.ExecutorPlugins[jex]; ok {
 		as.logger.WithField("plugin", jex).Debug("grpc_agent: calling executor plugin")
