@@ -16,3 +16,34 @@ Content-Type: application/json
     "password": "pwd",
     "repassword": "pwd"
 }
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "name": "task1",
+  "schedule": "@every 10s",
+  "timezone": "Europe/Berlin",
+  "owner": "Platform Team",
+  "owner_email": "platform@example.com",
+  "disabled": false,
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "concurrency": "allow",
+  "executor": "http",
+  "executor_config": {
+      "method": "GET",
+      "url": "http://example.com",
+      "headers": "[]",
+      "body": "",
+      "timeout": "30",
+      "expectCode": "200",
+      "expectBody": "",
+      "debug": "true"
+  }
+}

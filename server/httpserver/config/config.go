@@ -8,9 +8,14 @@ type Configs struct {
 	HTTPServer struct {
 		Port int `yaml:"port"`
 	}
-	Redis struct {
-		Host     string `yaml:"host"`
-		Port     string `yaml:"port"`
-		Password string `yaml:"pwd"`
+	DB struct {
+		Postgres struct {
+			Username     string `yaml:"username"`
+			Password     string `yaml:"password"`
+			Port         int    `yaml:"port"`
+			URI          string `yaml:"uri"`
+			DatabaseName string `yaml:"databaseName"`
+			Protocol     string `yaml:"protocol"`
+		}
 	}
 }

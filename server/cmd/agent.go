@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/THPTUHA/kairos/server/agent"
+	"github.com/THPTUHA/kairos/agent"
 	"github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -25,7 +25,7 @@ const (
 var agentCmd = &cobra.Command{
 	Use:   "agent",
 	Short: "Start a kairos agent",
-	Long:  `Start a kairos agent that schedules jobs, listens for executions and runs executors.`,
+	Long:  `Start a kairos agent that schedules tasks, listens for executions and runs executors.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return agentRun()
 	},
@@ -47,6 +47,8 @@ func agentRun() error {
 	if err := p.DiscoverPlugins(); err != nil {
 		log.Error().Msg(err.Error())
 	}
+
+	log.Info().Msg(fmt.Sprintf("Executor %+v:", p.Executors))
 
 	plugins := agent.Plugins{
 		Processors: p.Processors,
@@ -102,9 +104,9 @@ WAIT:
 	gracefulCh := make(chan struct{})
 
 	for {
-		log.Info().Msg("Waiting for jobs to finish...")
-		if agentServer.GetRunningJobs() < 1 {
-			log.Info().Msg("No jobs left. Exiting.")
+		log.Info().Msg("Waiting for tasks to finish...")
+		if agentServer.GetRunningTasks() < 1 {
+			log.Info().Msg("No tasks left. Exiting.")
 			break
 		}
 		time.Sleep(1 * time.Second)

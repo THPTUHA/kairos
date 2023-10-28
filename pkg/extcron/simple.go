@@ -14,7 +14,7 @@ func At(date time.Time) SimpleSchedule {
 	}
 }
 
-// Next conforms to the Schedule interface but this kind of jobs
+// Next conforms to the Schedule interface but this kind of tasks
 // doesn't need to be run more than once, so it doesn't return a new date but the existing one.
 func (schedule SimpleSchedule) Next(t time.Time) time.Time {
 	// If the date set is after the reference time return it.

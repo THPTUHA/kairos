@@ -18,8 +18,8 @@ func (r *UserRepository) FindByID(id int) (models.User, error) {
 
 	if id > 0 {
 		return models.User{
-			ID:       1,
-			Username: "abc",
+			ID:    1,
+			Email: "abc",
 		}, nil
 	}
 
@@ -30,8 +30,8 @@ func (r *UserRepository) FindByUserName(username string) (models.User, error) {
 
 	if username != "" {
 		return models.User{
-			ID:       1,
-			Username: "abc",
+			ID:    1,
+			Email: "abc",
 		}, nil
 	}
 

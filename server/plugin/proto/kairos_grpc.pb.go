@@ -20,13 +20,13 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Kairos_GetJob_FullMethodName               = "/proto.Kairos/GetJob"
+	Kairos_GetTask_FullMethodName              = "/proto.Kairos/GetTask"
 	Kairos_ExecutionDone_FullMethodName        = "/proto.Kairos/ExecutionDone"
 	Kairos_Leave_FullMethodName                = "/proto.Kairos/Leave"
-	Kairos_SetJob_FullMethodName               = "/proto.Kairos/SetJob"
-	Kairos_DeleteJob_FullMethodName            = "/proto.Kairos/DeleteJob"
-	Kairos_RunJob_FullMethodName               = "/proto.Kairos/RunJob"
-	Kairos_ToggleJob_FullMethodName            = "/proto.Kairos/ToggleJob"
+	Kairos_SetTask_FullMethodName              = "/proto.Kairos/SetTask"
+	Kairos_DeleteTask_FullMethodName           = "/proto.Kairos/DeleteTask"
+	Kairos_RunTask_FullMethodName              = "/proto.Kairos/RunTask"
+	Kairos_ToggleTask_FullMethodName           = "/proto.Kairos/ToggleTask"
 	Kairos_RaftGetConfiguration_FullMethodName = "/proto.Kairos/RaftGetConfiguration"
 	Kairos_RaftRemovePeerByID_FullMethodName   = "/proto.Kairos/RaftRemovePeerByID"
 	Kairos_GetActiveExecutions_FullMethodName  = "/proto.Kairos/GetActiveExecutions"
@@ -37,13 +37,13 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type KairosClient interface {
-	GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error)
+	GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error)
 	ExecutionDone(ctx context.Context, in *ExecutionDoneRequest, opts ...grpc.CallOption) (*ExecutionDoneResponse, error)
 	Leave(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	SetJob(ctx context.Context, in *SetJobRequest, opts ...grpc.CallOption) (*SetJobResponse, error)
-	DeleteJob(ctx context.Context, in *DeleteJobRequest, opts ...grpc.CallOption) (*DeleteJobResponse, error)
-	RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error)
-	ToggleJob(ctx context.Context, in *ToggleJobRequest, opts ...grpc.CallOption) (*ToggleJobResponse, error)
+	SetTask(ctx context.Context, in *SetTaskRequest, opts ...grpc.CallOption) (*SetTaskResponse, error)
+	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
+	RunTask(ctx context.Context, in *RunTaskRequest, opts ...grpc.CallOption) (*RunTaskResponse, error)
+	ToggleTask(ctx context.Context, in *ToggleTaskRequest, opts ...grpc.CallOption) (*ToggleTaskResponse, error)
 	RaftGetConfiguration(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*RaftGetConfigurationResponse, error)
 	RaftRemovePeerByID(ctx context.Context, in *RaftRemovePeerByIDRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetActiveExecutions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetActiveExecutionsResponse, error)
@@ -58,9 +58,9 @@ func NewKairosClient(cc grpc.ClientConnInterface) KairosClient {
 	return &kairosClient{cc}
 }
 
-func (c *kairosClient) GetJob(ctx context.Context, in *GetJobRequest, opts ...grpc.CallOption) (*GetJobResponse, error) {
-	out := new(GetJobResponse)
-	err := c.cc.Invoke(ctx, Kairos_GetJob_FullMethodName, in, out, opts...)
+func (c *kairosClient) GetTask(ctx context.Context, in *GetTaskRequest, opts ...grpc.CallOption) (*GetTaskResponse, error) {
+	out := new(GetTaskResponse)
+	err := c.cc.Invoke(ctx, Kairos_GetTask_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -85,36 +85,36 @@ func (c *kairosClient) Leave(ctx context.Context, in *emptypb.Empty, opts ...grp
 	return out, nil
 }
 
-func (c *kairosClient) SetJob(ctx context.Context, in *SetJobRequest, opts ...grpc.CallOption) (*SetJobResponse, error) {
-	out := new(SetJobResponse)
-	err := c.cc.Invoke(ctx, Kairos_SetJob_FullMethodName, in, out, opts...)
+func (c *kairosClient) SetTask(ctx context.Context, in *SetTaskRequest, opts ...grpc.CallOption) (*SetTaskResponse, error) {
+	out := new(SetTaskResponse)
+	err := c.cc.Invoke(ctx, Kairos_SetTask_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kairosClient) DeleteJob(ctx context.Context, in *DeleteJobRequest, opts ...grpc.CallOption) (*DeleteJobResponse, error) {
-	out := new(DeleteJobResponse)
-	err := c.cc.Invoke(ctx, Kairos_DeleteJob_FullMethodName, in, out, opts...)
+func (c *kairosClient) DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error) {
+	out := new(DeleteTaskResponse)
+	err := c.cc.Invoke(ctx, Kairos_DeleteTask_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kairosClient) RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error) {
-	out := new(RunJobResponse)
-	err := c.cc.Invoke(ctx, Kairos_RunJob_FullMethodName, in, out, opts...)
+func (c *kairosClient) RunTask(ctx context.Context, in *RunTaskRequest, opts ...grpc.CallOption) (*RunTaskResponse, error) {
+	out := new(RunTaskResponse)
+	err := c.cc.Invoke(ctx, Kairos_RunTask_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *kairosClient) ToggleJob(ctx context.Context, in *ToggleJobRequest, opts ...grpc.CallOption) (*ToggleJobResponse, error) {
-	out := new(ToggleJobResponse)
-	err := c.cc.Invoke(ctx, Kairos_ToggleJob_FullMethodName, in, out, opts...)
+func (c *kairosClient) ToggleTask(ctx context.Context, in *ToggleTaskRequest, opts ...grpc.CallOption) (*ToggleTaskResponse, error) {
+	out := new(ToggleTaskResponse)
+	err := c.cc.Invoke(ctx, Kairos_ToggleTask_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,13 +161,13 @@ func (c *kairosClient) SetExecution(ctx context.Context, in *Execution, opts ...
 // All implementations must embed UnimplementedKairosServer
 // for forward compatibility
 type KairosServer interface {
-	GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error)
+	GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error)
 	ExecutionDone(context.Context, *ExecutionDoneRequest) (*ExecutionDoneResponse, error)
 	Leave(context.Context, *emptypb.Empty) (*emptypb.Empty, error)
-	SetJob(context.Context, *SetJobRequest) (*SetJobResponse, error)
-	DeleteJob(context.Context, *DeleteJobRequest) (*DeleteJobResponse, error)
-	RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error)
-	ToggleJob(context.Context, *ToggleJobRequest) (*ToggleJobResponse, error)
+	SetTask(context.Context, *SetTaskRequest) (*SetTaskResponse, error)
+	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
+	RunTask(context.Context, *RunTaskRequest) (*RunTaskResponse, error)
+	ToggleTask(context.Context, *ToggleTaskRequest) (*ToggleTaskResponse, error)
 	RaftGetConfiguration(context.Context, *emptypb.Empty) (*RaftGetConfigurationResponse, error)
 	RaftRemovePeerByID(context.Context, *RaftRemovePeerByIDRequest) (*emptypb.Empty, error)
 	GetActiveExecutions(context.Context, *emptypb.Empty) (*GetActiveExecutionsResponse, error)
@@ -179,8 +179,8 @@ type KairosServer interface {
 type UnimplementedKairosServer struct {
 }
 
-func (UnimplementedKairosServer) GetJob(context.Context, *GetJobRequest) (*GetJobResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetJob not implemented")
+func (UnimplementedKairosServer) GetTask(context.Context, *GetTaskRequest) (*GetTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTask not implemented")
 }
 func (UnimplementedKairosServer) ExecutionDone(context.Context, *ExecutionDoneRequest) (*ExecutionDoneResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ExecutionDone not implemented")
@@ -188,17 +188,17 @@ func (UnimplementedKairosServer) ExecutionDone(context.Context, *ExecutionDoneRe
 func (UnimplementedKairosServer) Leave(context.Context, *emptypb.Empty) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Leave not implemented")
 }
-func (UnimplementedKairosServer) SetJob(context.Context, *SetJobRequest) (*SetJobResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SetJob not implemented")
+func (UnimplementedKairosServer) SetTask(context.Context, *SetTaskRequest) (*SetTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetTask not implemented")
 }
-func (UnimplementedKairosServer) DeleteJob(context.Context, *DeleteJobRequest) (*DeleteJobResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteJob not implemented")
+func (UnimplementedKairosServer) DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTask not implemented")
 }
-func (UnimplementedKairosServer) RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RunJob not implemented")
+func (UnimplementedKairosServer) RunTask(context.Context, *RunTaskRequest) (*RunTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunTask not implemented")
 }
-func (UnimplementedKairosServer) ToggleJob(context.Context, *ToggleJobRequest) (*ToggleJobResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ToggleJob not implemented")
+func (UnimplementedKairosServer) ToggleTask(context.Context, *ToggleTaskRequest) (*ToggleTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ToggleTask not implemented")
 }
 func (UnimplementedKairosServer) RaftGetConfiguration(context.Context, *emptypb.Empty) (*RaftGetConfigurationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RaftGetConfiguration not implemented")
@@ -225,20 +225,20 @@ func RegisterKairosServer(s grpc.ServiceRegistrar, srv KairosServer) {
 	s.RegisterService(&Kairos_ServiceDesc, srv)
 }
 
-func _Kairos_GetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetJobRequest)
+func _Kairos_GetTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KairosServer).GetJob(ctx, in)
+		return srv.(KairosServer).GetTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Kairos_GetJob_FullMethodName,
+		FullMethod: Kairos_GetTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).GetJob(ctx, req.(*GetJobRequest))
+		return srv.(KairosServer).GetTask(ctx, req.(*GetTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -279,74 +279,74 @@ func _Kairos_Leave_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Kairos_SetJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SetJobRequest)
+func _Kairos_SetTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetTaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KairosServer).SetJob(ctx, in)
+		return srv.(KairosServer).SetTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Kairos_SetJob_FullMethodName,
+		FullMethod: Kairos_SetTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).SetJob(ctx, req.(*SetJobRequest))
+		return srv.(KairosServer).SetTask(ctx, req.(*SetTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Kairos_DeleteJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteJobRequest)
+func _Kairos_DeleteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KairosServer).DeleteJob(ctx, in)
+		return srv.(KairosServer).DeleteTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Kairos_DeleteJob_FullMethodName,
+		FullMethod: Kairos_DeleteTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).DeleteJob(ctx, req.(*DeleteJobRequest))
+		return srv.(KairosServer).DeleteTask(ctx, req.(*DeleteTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Kairos_RunJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RunJobRequest)
+func _Kairos_RunTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RunTaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KairosServer).RunJob(ctx, in)
+		return srv.(KairosServer).RunTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Kairos_RunJob_FullMethodName,
+		FullMethod: Kairos_RunTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).RunJob(ctx, req.(*RunJobRequest))
+		return srv.(KairosServer).RunTask(ctx, req.(*RunTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Kairos_ToggleJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ToggleJobRequest)
+func _Kairos_ToggleTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ToggleTaskRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(KairosServer).ToggleJob(ctx, in)
+		return srv.(KairosServer).ToggleTask(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Kairos_ToggleJob_FullMethodName,
+		FullMethod: Kairos_ToggleTask_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).ToggleJob(ctx, req.(*ToggleJobRequest))
+		return srv.(KairosServer).ToggleTask(ctx, req.(*ToggleTaskRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -431,8 +431,8 @@ var Kairos_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*KairosServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetJob",
-			Handler:    _Kairos_GetJob_Handler,
+			MethodName: "GetTask",
+			Handler:    _Kairos_GetTask_Handler,
 		},
 		{
 			MethodName: "ExecutionDone",
@@ -443,20 +443,20 @@ var Kairos_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Kairos_Leave_Handler,
 		},
 		{
-			MethodName: "SetJob",
-			Handler:    _Kairos_SetJob_Handler,
+			MethodName: "SetTask",
+			Handler:    _Kairos_SetTask_Handler,
 		},
 		{
-			MethodName: "DeleteJob",
-			Handler:    _Kairos_DeleteJob_Handler,
+			MethodName: "DeleteTask",
+			Handler:    _Kairos_DeleteTask_Handler,
 		},
 		{
-			MethodName: "RunJob",
-			Handler:    _Kairos_RunJob_Handler,
+			MethodName: "RunTask",
+			Handler:    _Kairos_RunTask_Handler,
 		},
 		{
-			MethodName: "ToggleJob",
-			Handler:    _Kairos_ToggleJob_Handler,
+			MethodName: "ToggleTask",
+			Handler:    _Kairos_ToggleTask_Handler,
 		},
 		{
 			MethodName: "RaftGetConfiguration",

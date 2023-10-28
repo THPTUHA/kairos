@@ -11,6 +11,7 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
 	"github.com/THPTUHA/kairos/server/httpserver/config"
 	"github.com/THPTUHA/kairos/server/httpserver/routes"
+	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -63,6 +64,15 @@ func main() {
 		log.Error().Msg(err.Error())
 		return
 	}
+
+	storage.Connect(fmt.Sprintf("%s:%s@%s(%s:%d)/%s",
+		config.DB.Postgres.Username,
+		config.DB.Postgres.Password,
+		config.DB.Postgres.Protocol,
+		config.DB.Postgres.URI,
+		config.DB.Postgres.Port,
+		config.DB.Postgres.DatabaseName,
+	))
 
 	auth.Init(config)
 	if err != nil {

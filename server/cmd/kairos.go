@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/THPTUHA/kairos/server/agent"
+	"github.com/THPTUHA/kairos/agent"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -14,7 +14,7 @@ var config = agent.DefaultConfig()
 
 var kairosCmd = &cobra.Command{
 	Use:   "kairos",
-	Short: "Job scheduling system",
+	Short: "Task scheduling system",
 }
 
 func Execute() {

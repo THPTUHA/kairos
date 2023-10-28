@@ -5,7 +5,7 @@ package proto;
 option go_package = "github.com/THPTUHA/kairos/server/plugin/proto";
 
 message ExecuteRequest {
-    string job_name = 1;
+    int64 task_id = 1;
     map<string, string> config = 2;
     uint32 status_server = 3;
 }

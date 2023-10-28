@@ -3,7 +3,11 @@ httpserver:
 auth:
   hmacsecret: kairosauthac
   hmrfsecret: kairosauthrf
-redis: 
-    host: localhost
-    port: 6379
-    password: pwd
+db: 
+  postgres:
+    username: kairos
+    password: kairos
+    uri: "localhost"
+    port: 5432
+    databaseName: kairos
+    protocol: tcp
