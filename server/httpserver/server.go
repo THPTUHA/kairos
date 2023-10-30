@@ -10,6 +10,7 @@ import (
 
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
 	"github.com/THPTUHA/kairos/server/httpserver/config"
+	"github.com/THPTUHA/kairos/server/httpserver/pubsub"
 	"github.com/THPTUHA/kairos/server/httpserver/routes"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/gin-gonic/gin"
@@ -65,12 +66,11 @@ func main() {
 		return
 	}
 
-	storage.Connect(fmt.Sprintf("%s:%s@%s(%s:%d)/%s",
-		config.DB.Postgres.Username,
-		config.DB.Postgres.Password,
-		config.DB.Postgres.Protocol,
+	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.DB.Postgres.URI,
 		config.DB.Postgres.Port,
+		config.DB.Postgres.Username,
+		config.DB.Postgres.Password,
 		config.DB.Postgres.DatabaseName,
 	))
 
@@ -79,7 +79,7 @@ func main() {
 		log.Error().Msg(err.Error())
 		return
 	}
-
+	go pubsub.Start()
 	httpserver := HttpServer{}
 	httpserver.initialize(config)
 	httpserver.start()
