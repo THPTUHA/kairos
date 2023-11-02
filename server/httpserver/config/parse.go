@@ -1,13 +1,23 @@
 package config
 
 import (
+	"errors"
 	"os"
 
 	"gopkg.in/yaml.v2"
 )
 
-func Get(f string) (*Configs, error) {
-	config := &Configs{}
+var config *Configs
+
+func Get() (*Configs, error) {
+	if config == nil {
+		return nil, errors.New("empty config")
+	}
+	return config, nil
+}
+
+func Set(f string) (*Configs, error) {
+	config = &Configs{}
 	file, err := os.ReadFile(f)
 	if err != nil {
 		return nil, err

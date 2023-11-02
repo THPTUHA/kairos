@@ -3,11 +3,11 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
 
 	"github.com/THPTUHA/kairos/agent/ntime"
 	"github.com/THPTUHA/kairos/pkg/extcron"
+	"github.com/THPTUHA/kairos/pkg/helper"
 	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/sirupsen/logrus"
@@ -15,14 +15,8 @@ import (
 )
 
 var (
-	// ErrParentTaskNotFound is returned when the parent task is not found.
-	ErrParentTaskNotFound = errors.New("specified parent task not found")
 	// ErrNoAgent is returned when the task's agent is nil.
 	ErrNoAgent = errors.New("no agent defined")
-	// ErrSameParent is returned when the task's parent is itself.
-	ErrSameParent = errors.New("the task can not have itself as parent")
-	// ErrNoParent is returned when the task has no parent.
-	ErrNoParent = errors.New("the task doesn't have a parent task set")
 	// ErrNoCommand is returned when attempting to store a task that has no command.
 	ErrNoCommand = errors.New("unspecified command for task")
 )
@@ -40,12 +34,10 @@ const (
 	StatusPartiallyFailed = "partially_failed"
 )
 
-// Task describes a scheduled Task.
 type Task struct {
-	ID          int64  `json:"id"`
-	Key         string `json:"key"`
-	WorkflowID  int64
-	DisplayName string `json:"displayname"`
+	ID         int64  `json:"id"`
+	Key        string `json:"key"`
+	WorkflowID int64
 
 	// The timezone where the cron expression will be evaluated in.
 	// Empty means local time.
@@ -113,7 +105,6 @@ func NewTaskFromProto(in *proto.Task, logger *logrus.Entry) *Task {
 	task := &Task{
 		ID:             in.Id,
 		Key:            in.Key,
-		DisplayName:    in.Displayname,
 		Timezone:       in.Timezone,
 		Schedule:       in.Schedule,
 		OwnerEmail:     in.OwnerEmail,
@@ -155,15 +146,15 @@ func NewTaskFromProto(in *proto.Task, logger *logrus.Entry) *Task {
 	return task
 }
 
-func (j *Task) isRunnable(logger *logrus.Entry) bool {
-	if j.Disabled || (j.ExpiresAt.HasValue() && time.Now().After(j.ExpiresAt.Get())) {
-		logger.WithField("task", j.Key).
+func (t *Task) isRunnable(logger *logrus.Entry) bool {
+	if t.Disabled || (t.ExpiresAt.HasValue() && time.Now().After(t.ExpiresAt.Get())) {
+		logger.WithField("task", t.Key).
 			Debug("task: Skipping execution because task is disabled or expired")
 		return false
 	}
 
-	if j.Agent.GlobalLock {
-		logger.WithField("task", j.Key).
+	if t.Agent.GlobalLock {
+		logger.WithField("task", t.Key).
 			Warning("task: Skipping execution because active global lock")
 		return false
 	}
@@ -197,39 +188,29 @@ func (t *Task) Run() {
 	}
 }
 
-// isSlug determines whether the given string is a proper value to be used as
-// key in the backend store (a "slug"). If false, the 2nd return value
-// will contain the first illegal character found.
-func isSlug(candidate string) (bool, string) {
-	// Allow only lower case letters (unicode), digits, underscore and dash.
-	illegalCharPattern, _ := regexp.Compile(`[^\p{Ll}0-9_-]`)
-	whyNot := illegalCharPattern.FindString(candidate)
-	return whyNot == "", whyNot
-}
-
 // Validate validates whether all values in the task are acceptable.
-func (j *Task) Validate() error {
-	if j.Key == "" {
-		return fmt.Errorf("name cannot be empty")
+func (t *Task) Validate() error {
+	if t.Key == "" {
+		return fmt.Errorf("key cannot be empty")
 	}
 
-	if valid, chr := isSlug(j.Key); !valid {
-		return fmt.Errorf("name contains illegal character '%s'", chr)
+	if valid, chr := helper.IsSlug(t.Key); !valid {
+		return fmt.Errorf("key contains illegal character '%s'", chr)
 	}
 
-	if j.Schedule != "" {
-		if _, err := extcron.Parse(j.Schedule); err != nil {
+	if t.Schedule != "" {
+		if _, err := extcron.Parse(t.Schedule); err != nil {
 			return fmt.Errorf("%s: %s", ErrScheduleParse.Error(), err)
 		}
 	}
 
 	// An empty string is a valid timezone for LoadLocation
-	if _, err := time.LoadLocation(j.Timezone); err != nil {
+	if _, err := time.LoadLocation(t.Timezone); err != nil {
 		return err
 	}
 
-	if j.Executor == "shell" && j.ExecutorConfig["timeout"] != "" {
-		_, err := time.ParseDuration(j.ExecutorConfig["timeout"])
+	if t.Executor == "shell" && t.ExecutorConfig["timeout"] != "" {
+		_, err := time.ParseDuration(t.ExecutorConfig["timeout"])
 		if err != nil {
 			return fmt.Errorf("Error parsing task timeout value")
 		}
@@ -239,9 +220,9 @@ func (j *Task) Validate() error {
 }
 
 // GetNext returns the task's next schedule from now
-func (j *Task) GetNext() (time.Time, error) {
-	if j.Schedule != "" {
-		s, err := extcron.Parse(j.Schedule)
+func (t *Task) GetNext() (time.Time, error) {
+	if t.Schedule != "" {
+		s, err := extcron.Parse(t.Schedule)
 		if err != nil {
 			return time.Time{}, err
 		}
@@ -251,63 +232,63 @@ func (j *Task) GetNext() (time.Time, error) {
 	return time.Time{}, nil
 }
 
-func (j *Task) String() string {
-	return fmt.Sprintf("\"Task: %s, scheduled at: %s, tags:%v\"", j.Key, j.Schedule, j.Tags)
+func (t *Task) String() string {
+	return fmt.Sprintf("\"Task: %s, scheduled at: %s, tags:%v\"", t.Key, t.Schedule, t.Tags)
 }
 
-func (j *Task) GetTimeLocation() *time.Location {
-	loc, _ := time.LoadLocation(j.Timezone)
+func (t *Task) GetTimeLocation() *time.Location {
+	loc, _ := time.LoadLocation(t.Timezone)
 	return loc
 }
 
 // ToProto return the corresponding representation of this Task in proto struct
-func (j *Task) ToProto() *proto.Task {
+func (t *Task) ToProto() *proto.Task {
 	lastSuccess := &proto.Task_NullableTime{
-		HasValue: j.LastSuccess.HasValue(),
+		HasValue: t.LastSuccess.HasValue(),
 	}
-	if j.LastSuccess.HasValue() {
-		lastSuccess.Time = timestamppb.New(j.LastSuccess.Get())
+	if t.LastSuccess.HasValue() {
+		lastSuccess.Time = timestamppb.New(t.LastSuccess.Get())
 	}
 	lastError := &proto.Task_NullableTime{
-		HasValue: j.LastError.HasValue(),
+		HasValue: t.LastError.HasValue(),
 	}
-	if j.LastError.HasValue() {
-		lastError.Time = timestamppb.New(j.LastError.Get())
+	if t.LastError.HasValue() {
+		lastError.Time = timestamppb.New(t.LastError.Get())
 	}
 
-	next := timestamppb.New(j.Next)
+	next := timestamppb.New(t.Next)
 
 	expiresAt := &proto.Task_NullableTime{
-		HasValue: j.ExpiresAt.HasValue(),
+		HasValue: t.ExpiresAt.HasValue(),
 	}
-	if j.ExpiresAt.HasValue() {
-		expiresAt.Time = timestamppb.New(j.ExpiresAt.Get())
+	if t.ExpiresAt.HasValue() {
+		expiresAt.Time = timestamppb.New(t.ExpiresAt.Get())
 	}
 
 	processors := make(map[string]*proto.PluginConfig)
-	for k, v := range j.Processors {
+	for k, v := range t.Processors {
 		processors[k] = &proto.PluginConfig{Config: v}
 	}
 	return &proto.Task{
-		Key:            j.Key,
-		Displayname:    j.DisplayName,
-		Timezone:       j.Timezone,
-		Schedule:       j.Schedule,
-		OwnerEmail:     j.OwnerEmail,
-		SuccessCount:   int32(j.SuccessCount),
-		ErrorCount:     int32(j.ErrorCount),
-		Disabled:       j.Disabled,
-		Tags:           j.Tags,
-		Retries:        uint32(j.Retries),
+		Id:             t.ID,
+		Key:            t.Key,
+		Timezone:       t.Timezone,
+		Schedule:       t.Schedule,
+		OwnerEmail:     t.OwnerEmail,
+		SuccessCount:   int32(t.SuccessCount),
+		ErrorCount:     int32(t.ErrorCount),
+		Disabled:       t.Disabled,
+		Tags:           t.Tags,
+		Retries:        uint32(t.Retries),
 		Processors:     processors,
-		Executor:       j.Executor,
-		ExecutorConfig: j.ExecutorConfig,
-		Status:         j.Status,
-		Metadata:       j.Metadata,
+		Executor:       t.Executor,
+		ExecutorConfig: t.ExecutorConfig,
+		Status:         t.Status,
+		Metadata:       t.Metadata,
 		LastSuccess:    lastSuccess,
 		LastError:      lastError,
 		Next:           next,
-		Ephemeral:      j.Ephemeral,
+		Ephemeral:      t.Ephemeral,
 		ExpiresAt:      expiresAt,
 	}
 }

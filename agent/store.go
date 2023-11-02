@@ -63,7 +63,6 @@ func NewStore(logger *logrus.Entry, local bool) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	_ = db.CreateIndex("task_id", tasksPrefix+":*", buntdb.IndexJSON("id"))
 	_ = db.CreateIndex("task_key", tasksPrefix+":*", buntdb.IndexJSON("key"))
 	_ = db.CreateIndex("started_at", executionsPrefix+":*", buntdb.IndexJSON("started_at"))
@@ -87,76 +86,67 @@ func NewStore(logger *logrus.Entry, local bool) (*Store, error) {
 	return store, nil
 }
 
-// for local
-func (s *Store) getWorkflowLastID() int64 {
-	return 0
-}
-
-// for local
-func (s *Store) getTaskLastID() int64 {
-	return 0
-}
-
-func (s *Store) gsStoreIdx(idx *int) func(tx *buntdb.Tx) error {
-	return func(tx *buntdb.Tx) error {
+func (s *Store) gsStoreIdx() func(tx *buntdb.Tx) (int, error) {
+	return func(tx *buntdb.Tx) (int, error) {
 		s.lock.Lock()
-		id, err := tx.Get(fmt.Sprintf("idx"))
+		id, err := tx.Get("idx")
 		var num int
 
 		if err != nil {
 			if err.Error() == ErrNotFound {
 				num = -1
-				idx = &num
 			} else {
 				s.lock.Unlock()
-				return err
+				return -1, err
 			}
-		}
-
-		if id != "" {
+		} else {
 			num, err = strconv.Atoi(id)
 			if err != nil {
 				s.lock.Unlock()
-				return err
+				return -1, err
 			}
-		} else {
-			num = -1
 		}
-		num++
+		num--
 		tx.Set("idx", strconv.Itoa(num), nil)
-		idx = &num
+		s.logger.Debug(fmt.Sprintf("Set Idx db = %d", num))
 		s.lock.Unlock()
-
-		return nil
+		return num, nil
 	}
 }
 
 type CollectionOptions struct {
-	ID    int64
-	Key   string
-	Order string
-	Sort  string
+	ID        int64
+	Path      string
+	Namespace string
+	Username  string
+	Query     string
+	Order     string
+	Sort      string
 }
 
 func (s *Store) GetCollections(options *CollectionOptions) ([]*workflow.Collection, error) {
 	collections := make([]*workflow.Collection, 0)
 	collectionsFn := func(key, item string) bool {
+		fmt.Printf("collection %s\n", key)
 		var c workflow.Collection
-		if err := json.Unmarshal([]byte(item), &c); err != nil {
-			return false
-		}
+		if err := json.Unmarshal([]byte(item), &c); err == nil {
+			if options == nil ||
+				(options.ID == 0 || options.ID == c.ID) &&
+					(options.Path == "" || c.Path == options.Path) &&
+					(options.Namespace == "" || c.Namespace == options.Namespace) &&
+					(options.Query == "" || strings.Contains(c.Namespace, options.Query)) &&
+					(options.Username == "" || c.Username == options.Username) {
 
-		if options == nil ||
-			(options.ID != 0 || options.ID == c.ID) &&
-				(options.Key != "" || strings.Contains(c.Namespace, options.Key)) {
-
-			collections = append(collections, &c)
+				collections = append(collections, &c)
+			}
 		}
 		return true
 	}
 
 	err := s.db.View(func(tx *buntdb.Tx) error {
 		var err error
+		v, err := tx.Get("fuck")
+		fmt.Printf("Value %s\n", v)
 		if options.Order == "DESC" {
 			err = tx.Descend(options.Sort, collectionsFn)
 		} else {
@@ -169,39 +159,95 @@ func (s *Store) GetCollections(options *CollectionOptions) ([]*workflow.Collecti
 
 func (s *Store) setCollectionTxFunc(c *workflow.Collection) func(tx *buntdb.Tx) error {
 	return func(tx *buntdb.Tx) error {
-		var lastIdx int
-		err := s.gsStoreIdx(&lastIdx)(tx)
-		if err != nil {
-			return err
+
+		if c.ID == 0 {
+			lastIdx, err := s.gsStoreIdx()(tx)
+			if err != nil {
+				return err
+			}
+			c.ID = int64(lastIdx)
 		}
+
 		cb, err := json.Marshal(c)
 		if err != nil {
 			return err
 		}
-		fmt.Println("Set collection ", c.Namespace)
-		if _, _, err := tx.Set(fmt.Sprintf("%s:%d", collectionsPrefix, c.ID), string(cb), nil); err != nil {
+		s.logger.Debug(fmt.Sprintf("Set collection path = %s, New id = %d", c.Path, c.ID))
+		if _, _, err := tx.Set(fmt.Sprintf("%s:%s/%s", collectionsPrefix, c.Username, c.Namespace), string(cb), nil); err != nil {
 			return err
 		}
-
 		return nil
 	}
 }
 
+// Save raw data collection
+// lưu lần lượt workflow
 func (s *Store) SetCollection(c *workflow.Collection) error {
-	var options CollectionOptions
-	options.Sort = "id"
+	options := CollectionOptions{
+		Namespace: c.Namespace,
+		Username:  c.Username,
+	}
+	options.Sort = "namespace"
 	cs, err := s.GetCollections(&options)
+
 	if err != nil && err.Error() != ErrNotFound {
 		return err
 	}
+
 	if len(cs) > 0 && cs[0].Status == workflow.Running {
 		return errors.New("Collection is running")
 	}
 
+	if len(cs) == 1 {
+		c.ID = cs[0].ID
+	}
+
 	err = s.db.Update(func(tx *buntdb.Tx) error {
+		workflows := c.Workflows
+		for _, w := range workflows {
+			w.Status = workflow.Pending
+			for _, t := range w.Tasks {
+				t.Status = workflow.Pending
+			}
+		}
+		c.Workflows = make([]*workflow.Workflow, 0)
+
 		if err := s.setCollectionTxFunc(c)(tx); err != nil {
 			return err
 		}
+
+		for _, w := range workflows {
+			w.CollectionID = c.ID
+		}
+
+		_, _, err = tx.Set("fuck", "aa", nil)
+		_, _, err = tx.Set("ddd", "ccc", nil)
+
+		if err != nil {
+			fmt.Printf("ccc %s\n", err.Error())
+		}
+
+		wfIDs := make([]int64, 0)
+		for _, w := range workflows {
+			if w.ID != 0 {
+				wfIDs = append(wfIDs, w.ID)
+			}
+		}
+		// delete old workflow
+		if err := s.deleteWorkflowTxFunc(wfIDs)(tx); err != nil {
+			fmt.Printf("delete %s\n", err.Error())
+			return err
+		}
+
+		for _, w := range workflows {
+			fmt.Printf("workflow %s\n", w.Key)
+			if err := s.setWorkflowTxFunc(w)(tx); err != nil {
+				fmt.Printf("set workflow %s\n", err.Error())
+				return err
+			}
+			break
+		}
+
 		return nil
 	})
 
@@ -209,60 +255,100 @@ func (s *Store) SetCollection(c *workflow.Collection) error {
 }
 
 type WorkflowOptions struct {
-	Sort     string
-	Order    string
-	Query    string
-	Status   string
-	Disabled string
+	ID           int64
+	CollectionID int64
+	Key          string
+	Sort         string
+	Order        string
+	Query        string
+	Status       string
+	Disabled     string
 }
 
-// func (s *Store) getWorkflowTxFunc(id int64, key string, wf *workflow.WfModel) func(tx *buntdb.Tx) error {
-// 	return func(tx *buntdb.Tx) error {
-// 		item, err := tx.Get(fmt.Sprintf("%s:%d:%s", workflowsPrefix, id, key))
-// 		if err != nil {
-// 			return err
-// 		}
+func (s *Store) GetWorkflows(options *WorkflowOptions) ([]*workflow.Workflow, error) {
+	workflows := make([]*workflow.Workflow, 0)
+	workflowsFn := func(key, item string) bool {
+		fmt.Printf("key: %s\n", key)
+		if !strings.Contains(key, workflowsPrefix) {
+			return false
+		}
 
-// 		if err := json.Unmarshal([]byte(item), wf); err != nil {
-// 			return err
-// 		}
+		var wf workflow.Workflow
+		if err := json.Unmarshal([]byte(item), &wf); err != nil {
+			return false
+		}
+		fmt.Printf("Pass unma %+v\n", wf)
+		if options == nil ||
+			(options.ID == 0 || options.ID == wf.ID) &&
+				(options.Key == "" || options.Key == wf.Key) &&
+				(options.CollectionID == 0 || options.CollectionID == wf.CollectionID) &&
+				(options.Query == "" || strings.Contains(wf.Key, options.Query)) {
 
-// 		s.logger.WithFields(logrus.Fields{
-// 			"key": wf.Key,
-// 			"id":  wf.ID,
-// 		}).Debug("store: Retrieved workflow from datastore")
+			workflows = append(workflows, &wf)
+		}
+		return true
+	}
 
-// 		return nil
-// 	}
-// }
+	err := s.db.View(func(tx *buntdb.Tx) error {
+		var err error
+		if options.Order == "DESC" {
+			err = tx.Descend(options.Sort, workflowsFn)
+		} else {
+			err = tx.Ascend(options.Sort, workflowsFn)
+		}
+		return err
+	})
+	return workflows, err
+}
 
-// func (s *Store) GetWorkflow(workflowID int64, workflowKey string) (*workflow.WfModel, error) {
-// 	var wf workflow.WfModel
+func (s *Store) setWorkflowTxFunc(wf *workflow.Workflow) func(tx *buntdb.Tx) error {
+	return func(tx *buntdb.Tx) error {
+		if wf.ID == 0 {
+			lastIdx, err := s.gsStoreIdx()(tx)
+			if err != nil {
+				return err
+			}
+			wf.ID = int64(lastIdx)
+		}
 
-// 	err := s.db.View(s.getWorkflowTxFunc(workflowID, workflowKey, &wf))
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return &wf, nil
-// }
+		workflowID := fmt.Sprintf("%s:%d", workflowsPrefix, wf.ID)
 
-// func (s *Store) setWorkflowTxFunc(wf *workflow.WfModel) func(tx *buntdb.Tx) error {
-// 	return func(tx *buntdb.Tx) error {
-// 		workflowID := fmt.Sprintf("%s:%d", workflowsPrefix, wf.ID)
+		wb, err := json.Marshal(wf)
+		if err != nil {
+			return err
+		}
+		s.logger.WithField("workflow", wf.ID).Debug("store: Setting workflow")
 
-// 		wb, err := json.Marshal(wf)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		s.logger.WithField("workflow", wf.ID).Debug("store: Setting workflow")
+		if _, _, err := tx.Set(workflowID, string(wb), nil); err != nil {
+			return err
+		}
 
-// 		if _, _, err := tx.Set(workflowID, string(wb), nil); err != nil {
-// 			return err
-// 		}
+		return nil
+	}
+}
 
-// 		return nil
-// 	}
-// }
+func (s *Store) deleteWorkflowTxFunc(ids []int64) func(tx *buntdb.Tx) error {
+	return func(tx *buntdb.Tx) error {
+		var delkeys []string
+		if err := tx.Ascend("", func(key, value string) bool {
+			for _, id := range ids {
+				prefix := fmt.Sprintf("%s:%d", workflowsPrefix, id)
+				if strings.HasPrefix(key, prefix) {
+					delkeys = append(delkeys, key)
+				}
+			}
+			return true
+		}); err != nil {
+			return err
+		}
+
+		for _, k := range delkeys {
+			_, _ = tx.Delete(k)
+		}
+
+		return nil
+	}
+}
 
 // func (s *Store) SetWorkflow(wf *workflow.Workflow, rawData string) error {
 // 	wfe, err := s.GetWorkflow(wf.ID, wf.Key)
@@ -317,7 +403,7 @@ func (s *Store) taskHasMetadata(task *Task, metadata map[string]string) bool {
 func (s *Store) GetTasks(options *TaskOptions) ([]*Task, error) {
 	if options == nil {
 		options = &TaskOptions{
-			Sort: "key",
+			Sort: "id",
 		}
 	}
 
@@ -336,7 +422,7 @@ func (s *Store) GetTasks(options *TaskOptions) ([]*Task, error) {
 		if options == nil ||
 			(options.WorkflowID != 0 || options.WorkflowID == task.WorkflowID) &&
 				(options.Metadata == nil || len(options.Metadata) == 0 || s.taskHasMetadata(task, options.Metadata)) &&
-				(options.Query == "" || strings.Contains(task.Key, options.Query) || strings.Contains(task.DisplayName, options.Query)) &&
+				(options.Query == "" || strings.Contains(task.Key, options.Query)) &&
 				(options.Disabled == "" || strconv.FormatBool(task.Disabled) == options.Disabled) &&
 				((options.Status == "untriggered" && task.Status == "") || (options.Status == "" || task.Status == options.Status)) {
 
@@ -444,7 +530,7 @@ func (s *Store) SetTask(task *Task) error {
 		}
 		ej = NewTaskFromProto(&pbej, s.logger)
 
-		if ej.Key != "" {
+		if ej.ID != 0 {
 			// When the task runs, these status vars are updated
 			// otherwise use the ones that are stored
 			if ej.LastError.After(task.LastError) {
@@ -539,11 +625,9 @@ func (s *Store) unmarshalExecutions(items []kv, timezone *time.Location) ([]*Exe
 	for _, item := range items {
 		var pbe kproto.Execution
 
-		// [TODO] This condition is temporary while we migrate to JSON marshalling for tasks
-		// so we can use BuntDb indexes. To be removed in future versions.
 		if err := proto.Unmarshal([]byte(item.Value), &pbe); err != nil {
 			if err := json.Unmarshal(item.Value, &pbe); err != nil {
-				s.logger.WithError(err).WithField("key", item.Key).Debug("error unmarshaling JSON")
+				s.logger.WithError(err).WithField("id", item.Key).Debug("error unmarshaling JSON")
 				return nil, err
 			}
 		}
@@ -561,7 +645,6 @@ func (*Store) listTxFunc(prefix string, kvs *[]kv, found *bool, opts *ExecutionO
 	fnc := func(key, value string) bool {
 		if strings.HasPrefix(key, prefix) {
 			*found = true
-			// ignore self in listing
 			if !bytes.Equal(trimDirectoryKey([]byte(key)), []byte(prefix)) {
 				kv := kv{Key: key, Value: []byte(value)}
 				*kvs = append(*kvs, kv)
@@ -581,7 +664,6 @@ func (*Store) listTxFunc(prefix string, kvs *[]kv, found *bool, opts *ExecutionO
 }
 
 func (s *Store) computeStatus(taskID string, exGroup int64, tx *buntdb.Tx) (string, error) {
-	// compute task status based on execution group
 	kvs := []kv{}
 	found := false
 	prefix := fmt.Sprintf("%s:%s:", executionsPrefix, taskID)
@@ -625,11 +707,8 @@ func (s *Store) computeStatus(taskID string, exGroup int64, tx *buntdb.Tx) (stri
 	return status, nil
 }
 
-// SetExecutionDone saves the execution and updates the task with the corresponding
-// results
 func (s *Store) SetExecutionDone(execution *Execution) (bool, error) {
 	err := s.db.Update(func(tx *buntdb.Tx) error {
-		// Load the task from the store
 		var pbj kproto.Task
 		if err := s.getTaskTxFunc(execution.TaskID, &pbj)(tx); err != nil {
 			if err == buntdb.ErrNotFound {
@@ -642,7 +721,6 @@ func (s *Store) SetExecutionDone(execution *Execution) (bool, error) {
 
 		key := fmt.Sprintf("%s:%d:%s", executionsPrefix, execution.TaskID, execution.Key())
 
-		// Save the execution to store
 		pbe := execution.ToProto()
 		if err := s.setExecutionTxFunc(key, pbe)(tx); err != nil {
 			return err
@@ -690,7 +768,6 @@ func (s *Store) list(prefix string, checkRoot bool, opts *ExecutionOptions) ([]k
 	return kvs, err
 }
 
-// GetExecutions returns the executions given a Task key.
 func (s *Store) GetExecutions(taskID int64, opts *ExecutionOptions) ([]*Execution, error) {
 	prefix := fmt.Sprintf("%s:%d:", executionsPrefix, taskID)
 
@@ -702,7 +779,6 @@ func (s *Store) GetExecutions(taskID int64, opts *ExecutionOptions) ([]*Executio
 	return s.unmarshalExecutions(kvs, opts.Timezone)
 }
 
-// GetExecutionGroup returns all executions in the same group of a given execution
 func (s *Store) GetExecutionGroup(execution *Execution, opts *ExecutionOptions) ([]*Execution, error) {
 	res, err := s.GetExecutions(execution.TaskID, opts)
 	if err != nil {
@@ -745,9 +821,7 @@ func (s *Store) SetExecution(execution *Execution) (string, error) {
 			Error("store: Error getting executions for task")
 	}
 
-	// Delete all execution results over the limit, starting from olders
 	if len(execs) > MaxExecutions {
-		//sort the array of all execution groups by StartedAt time
 		sort.Slice(execs, func(i, j int) bool {
 			return execs[i].StartedAt.Before(execs[j].StartedAt)
 		})
@@ -775,23 +849,17 @@ func (s *Store) SetExecution(execution *Execution) (string, error) {
 
 func (*Store) setExecutionTxFunc(key string, pbe *kproto.Execution) func(tx *buntdb.Tx) error {
 	return func(tx *buntdb.Tx) error {
-		// Get previous execution
 		i, err := tx.Get(key)
 		if err != nil && err != buntdb.ErrNotFound {
 			return err
 		}
-		// Do nothing if a previous execution exists and is
-		// more recent, avoiding non ordered execution set
 		if i != "" {
 			var p kproto.Execution
-			// [TODO] This condition is temporary while we migrate to JSON marshalling for executions
-			// so we can use BuntDb indexes. To be removed in future versions.
 			if err := proto.Unmarshal([]byte(i), &p); err != nil {
 				if err := json.Unmarshal([]byte(i), &p); err != nil {
 					return err
 				}
 			}
-			// Compare existing execution
 			if p.GetFinishedAt().Seconds > pbe.GetFinishedAt().Seconds {
 				return nil
 			}

@@ -15,6 +15,7 @@ type Task struct {
 	Strict     bool   `json:"strict"`
 	EnvExec    string `json:"env_exec"`
 	ExpiresAt  int    `json:"expires_at"`
+	UserID     int64  `json:"user_id"`
 	CreatedAt  int    `json:"created_at"`
 	UpdatedAt  int    `json:"updated_at"`
 }

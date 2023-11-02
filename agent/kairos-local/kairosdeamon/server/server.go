@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/THPTUHA/kairos/agent/kairos-local/kairosdeamon/config"
 	"github.com/THPTUHA/kairos/agent/kairos-local/kairosdeamon/routers"
 	"github.com/THPTUHA/kairos/agent/kairos-local/kairosdeamon/storage"
 	"github.com/THPTUHA/kairos/pkg/logger"
@@ -35,7 +36,7 @@ func (server *DeamonServer) start() {
 	)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", 3111),
+		Addr:    fmt.Sprintf(":%d", config.ServerPort),
 		Handler: server.Router,
 	}
 
@@ -60,7 +61,6 @@ func (server *DeamonServer) start() {
 var Deamon DeamonServer
 
 func Start() {
-
 	Deamon = DeamonServer{}
 	err := Deamon.initialize()
 	storage.Init(Deamon.Logger)

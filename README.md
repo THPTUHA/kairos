@@ -84,3 +84,10 @@ https://github.com/appleboy/gorush
 SET UP DB
 createdb kairos
 grant all privileges on database kairos to kairos;
+
+kairosdeamon:
+nhận task, chạy task local và trả kết quả về cho server.
+
+watcher:
+Lấy task và lập lịch
+Nhận thông tin từ nats để cập nhật trạng thái task.

@@ -75,7 +75,7 @@ type Agent struct {
 	GRPCServer KairosGRPCServer
 
 	// GRPCClient interface for setting the GRPC client
-	GRPCClient KiarosGRPCClient
+	GRPCClient KairosGRPCClient
 
 	// TLSConfig allows setting a TLS config for transport
 	TLSConfig *tls.Config
@@ -239,7 +239,7 @@ func (a *Agent) RetryJoinCh() <-chan error {
 	return a.retryJoinCh
 }
 
-// JoinLAN is used to have Dkron join the inner-DC pool
+// JoinLAN is used to have Kairos join the inner-DC pool
 // The target address should be another node inside the DC
 // listening on the Serf LAN address
 func (a *Agent) JoinLAN(addrs []string) (int, error) {
@@ -805,13 +805,8 @@ func (a *Agent) applySetTask(task *proto.Task) error {
 	if err := af.Error(); err != nil {
 		return err
 	}
-	res := af.Response()
-	switch res {
-	case ErrParentTaskNotFound:
-		return ErrParentTaskNotFound
-	case ErrSameParent:
-		return ErrParentTaskNotFound
-	}
+
+	af.Response()
 
 	return nil
 }

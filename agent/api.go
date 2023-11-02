@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/tidwall/buntdb"
 	"google.golang.org/grpc/status"
 )
 
@@ -53,6 +54,7 @@ func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerF
 	v1 := r.Group("/v1")
 	v1.GET("/tasks", h.tasksHandler)
 	v1.POST("/tasks", h.taskCreateOrUpdateHandler)
+	v1.GET("/view/:task/executions", h.executionsHandler)
 }
 
 func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
@@ -76,11 +78,7 @@ func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
 	// Call gRPC SetTask
 	if err := h.agent.GRPCClient.SetTask(&task); err != nil {
 		s := status.Convert(err)
-		if s.Message() == ErrParentTaskNotFound.Error() {
-			c.AbortWithStatus(http.StatusNotFound)
-		} else {
-			c.AbortWithStatus(http.StatusInternalServerError)
-		}
+		c.AbortWithStatus(http.StatusInternalServerError)
 		_, _ = c.Writer.WriteString(s.Message())
 		return
 	}
@@ -149,4 +147,65 @@ func renderJSON(c *gin.Context, status int, v interface{}) {
 	} else {
 		c.JSON(status, v)
 	}
+}
+
+type apiExecution struct {
+	*Execution
+	OutputTruncated bool `json:"output_truncated"`
+}
+
+func (h *HTTPTransport) executionsHandler(c *gin.Context) {
+	taskID, err := strconv.Atoi(c.Param("task"))
+
+	if err != nil {
+		_ = c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	sort := c.DefaultQuery("_sort", "")
+	if sort == "id" {
+		sort = "started_at"
+	}
+	order := c.DefaultQuery("_order", "DESC")
+	outputSizeLimit, err := strconv.Atoi(c.DefaultQuery("output_size_limit", ""))
+	if err != nil {
+		outputSizeLimit = -1
+	}
+
+	job, err := h.agent.Store.GetTask(int64(taskID), nil)
+	fmt.Printf("TaskID = %d", taskID)
+	if err != nil {
+		_ = c.AbortWithError(http.StatusNotFound, err)
+		return
+	}
+
+	executions, err := h.agent.Store.GetExecutions(job.ID,
+		&ExecutionOptions{
+			Sort:     sort,
+			Order:    order,
+			Timezone: job.GetTimeLocation(),
+		},
+	)
+	if err == buntdb.ErrNotFound {
+		executions = make([]*Execution, 0)
+	} else if err != nil {
+		h.logger.Error(err)
+		return
+	}
+
+	apiExecutions := make([]*apiExecution, len(executions))
+	for j, execution := range executions {
+		apiExecutions[j] = &apiExecution{execution, false}
+		if outputSizeLimit > -1 {
+			// truncate execution output
+			size := len(execution.Output)
+			if size > outputSizeLimit {
+				apiExecutions[j].Output = apiExecutions[j].Output[size-outputSizeLimit:]
+				apiExecutions[j].OutputTruncated = true
+			}
+		}
+	}
+
+	c.Header("X-Total-Count", strconv.Itoa(len(executions)))
+	renderJSON(c, http.StatusOK, apiExecutions)
 }

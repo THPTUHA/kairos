@@ -14,6 +14,7 @@ type Storage interface {
 	GetTasks(options *TaskOptions) ([]*Task, error)
 	GetTask(id int64, options *TaskOptions) (*Task, error)
 	GetExecutionGroup(execution *Execution, opts *ExecutionOptions) ([]*Execution, error)
+	GetExecutions(taskID int64, opts *ExecutionOptions) ([]*Execution, error)
 	Snapshot(w io.WriteCloser) error
 	Shutdown() error
 	Restore(r io.ReadCloser) error
@@ -32,4 +33,5 @@ type DeamonStorage interface {
 	Restore(r io.ReadCloser) error
 	GetCollections(options *CollectionOptions) ([]*workflow.Collection, error)
 	SetCollection(collection *workflow.Collection) error
+	GetWorkflows(options *WorkflowOptions) ([]*workflow.Workflow, error)
 }

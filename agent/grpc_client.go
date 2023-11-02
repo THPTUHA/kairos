@@ -14,9 +14,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// KiarosGRPCClient defines the interface that any gRPC client for
+// KairosGRPCClient defines the interface that any gRPC client for
 // kairos should implement.
-type KiarosGRPCClient interface {
+type KairosGRPCClient interface {
 	Connect(string) (*grpc.ClientConn, error)
 	ExecutionDone(string, *Execution) error
 	GetTask(string, int64) (*Task, error)
@@ -25,7 +25,7 @@ type KiarosGRPCClient interface {
 	AgentRun(addr string, task *proto.Task, execution *proto.Execution) error
 }
 
-// GRPCClient is the local implementation of the KiarosGRPCClient interface.
+// GRPCClient is the local implementation of the KairosGRPCClient interface.
 type GRPCClient struct {
 	dialOpt []grpc.DialOption
 	agent   *Agent
@@ -33,7 +33,7 @@ type GRPCClient struct {
 }
 
 // NewGRPCClient returns a new instance of the gRPC client.
-func NewGRPCClient(dialOpt grpc.DialOption, agent *Agent, logger *logrus.Entry) KiarosGRPCClient {
+func NewGRPCClient(dialOpt grpc.DialOption, agent *Agent, logger *logrus.Entry) KairosGRPCClient {
 	if dialOpt == nil {
 		dialOpt = grpc.WithInsecure()
 	}

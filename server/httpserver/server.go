@@ -19,14 +19,15 @@ import (
 )
 
 type HttpServer struct {
-	Router *gin.Engine
-	Token  auth.TokenInterface
-	Config *config.Configs
+	Router     *gin.Engine
+	Token      auth.TokenInterface
+	Config     *config.Configs
+	PubsubChan chan *pubsub.PubSubPayload
 }
 
 func (server *HttpServer) initialize(config *config.Configs) {
 	server.Config = config
-	server.Router = routes.Build()
+	server.Router = routes.Build(server.PubsubChan)
 }
 
 func (server *HttpServer) start() {
@@ -60,7 +61,7 @@ func (server *HttpServer) start() {
 
 func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	config, err := config.Get("httpserver.yaml")
+	config, err := config.Set("httpserver.yaml")
 	if err != nil {
 		log.Error().Msg(err.Error())
 		return
@@ -79,8 +80,12 @@ func main() {
 		log.Error().Msg(err.Error())
 		return
 	}
-	go pubsub.Start()
 	httpserver := HttpServer{}
+
+	pubsubChan := make(chan *pubsub.PubSubPayload)
+	httpserver.PubsubChan = pubsubChan
+
+	go pubsub.Start(config, pubsubChan)
 	httpserver.initialize(config)
 	httpserver.start()
 

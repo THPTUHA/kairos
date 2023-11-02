@@ -78,6 +78,7 @@ RECONCILE:
 	if !establishedLeader {
 		if err := a.establishLeadership(stopCh); err != nil {
 			log.Error().Msg("agent: failed to establish leadership")
+			log.Error().Msg(err.Error())
 
 			// Immediately revoke leadership since we didn't successfully
 			// establish leadership.
@@ -147,7 +148,7 @@ WAIT:
 func (a *Agent) establishLeadership(stopCh chan struct{}) error {
 	log.Info().Msg("agent: Starting scheduler")
 	tasks, err := a.Store.GetTasks(nil)
-	if err != nil {
+	if err != nil && err.Error() != ErrNotFound {
 		return err
 	}
 	return a.sched.Start(tasks, a)

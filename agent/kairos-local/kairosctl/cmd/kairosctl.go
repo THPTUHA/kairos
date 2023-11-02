@@ -8,6 +8,7 @@ import (
 )
 
 var applyConfig ApplyConfig
+var collectionConfig CollectionConfig
 
 var kairosctlCmd = &cobra.Command{
 	Use:   "kairosctl",

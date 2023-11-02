@@ -1,5 +1,7 @@
 httpserver:
   port: 8001
+pubsub:
+  port: 8002
 auth:
   hmacsecret: kairosauthac
   hmrfsecret: kairosauthrf

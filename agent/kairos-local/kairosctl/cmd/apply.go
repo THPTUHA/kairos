@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -31,6 +32,9 @@ func init() {
 }
 
 func applyRun() error {
+	if applyConfig.File == "" {
+		return errors.New("Empty file config")
+	}
 	file, err := os.ReadFile(applyConfig.File)
 	if err != nil {
 		return err
@@ -41,10 +45,11 @@ func applyRun() error {
 		return err
 	}
 
-	fmt.Printf("%+v\n", wfyml)
 	var collection workflow.Collection
+	collection.Namespace = wfyml.Collection.Namespace
 	collection.RawData = string(file)
 	collection.Workflows = wfyml.Collection.Workflows
+
 	url := "http://localhost:3111/apis/apply-collection"
 	body, err := json.Marshal(collection)
 	if err != nil {

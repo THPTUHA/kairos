@@ -1,10 +1,16 @@
+import { Route, Routes } from 'react-router-dom';
 import './App.css';
+import Login from './pages/login';
+import Verify from './pages/verify';
 
 function App() {
   return (
-    <h1 className="text-3xl font-bold underline text-red-600">
-      Kairos ui
-    </h1>
+   <div>
+     <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/verify" element={<Verify />} />
+     </Routes>
+   </div>
   );
 }
 

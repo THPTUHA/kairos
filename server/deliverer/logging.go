@@ -1,0 +1,83 @@
+package deliverer
+
+type LogLevel int
+
+const (
+	// LogLevelNone means no logging.
+	LogLevelNone LogLevel = iota
+	// LogLevelTrace turns on trace logs - should only be used during development. This
+	// log level shows all client-server communication.
+	LogLevelTrace
+	// LogLevelDebug turns on debug logs - it's generally too much for production in normal
+	// conditions but can help when developing and investigating problems in production.
+	LogLevelDebug
+	// LogLevelInfo logs useful server information. This includes various information
+	// about problems with client connections which is not Centrifuge errors but
+	// in most situations malformed client behaviour.
+	LogLevelInfo
+	// LogLevelWarn logs server warnings. This may contain tips for a developer about things
+	// which should be addressed but usually not immediately.
+	LogLevelWarn
+	// LogLevelError level logs only server errors. This is logging that means non-working
+	// Centrifuge and may require effort from developers/administrators to make things
+	// work again.
+	LogLevelError
+)
+
+// LogHandler handles log entries - i.e. writes into correct destination if necessary.
+type LogHandler func(LogEntry)
+
+type logger struct {
+	level   LogLevel
+	handler LogHandler
+}
+
+func newLogger(level LogLevel, handler LogHandler) *logger {
+	return &logger{
+		level:   level,
+		handler: handler,
+	}
+}
+
+// LogEntry represents log entry.
+type LogEntry struct {
+	Level   LogLevel
+	Message string
+	Fields  map[string]any
+}
+
+// newLogEntry helps to create Entry.
+func newLogEntry(level LogLevel, message string, fields ...map[string]any) LogEntry {
+	var f map[string]any
+	if len(fields) > 0 {
+		f = fields[0]
+	}
+	return LogEntry{
+		Level:   level,
+		Message: message,
+		Fields:  f,
+	}
+}
+
+// log calls log handler with provided LogEntry.
+func (l *logger) log(entry LogEntry) {
+	if l == nil {
+		return
+	}
+	if l.enabled(entry.Level) {
+		l.handler(entry)
+	}
+}
+
+// enabled says whether specified Level enabled or not.
+func (l *logger) enabled(level LogLevel) bool {
+	if l == nil {
+		return false
+	}
+	return level >= l.level && l.level != LogLevelNone
+}
+
+// NewLogEntry creates new LogEntry.
+func NewLogEntry(level LogLevel, message string, fields ...map[string]any) LogEntry {
+	return newLogEntry(level, message, fields...)
+}

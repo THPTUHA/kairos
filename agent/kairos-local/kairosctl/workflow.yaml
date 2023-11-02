@@ -6,16 +6,17 @@ collection:
         - key: task1
           schedule: "* 0 * 0 1"
           timezone: "HN"
-          executor: git
+          executor: lo
           timeout: 3s
           retries: 2
           inputs:
-            - aa:bb
-            - cc:dd
+            vars: {{.ABC}}
+          outputs:
+            dir: 
           env_exec: local
-          run: git clone abc
+          run: 
         - key: task2 
-          dependencies: [task1]
+          deps: [task1]
           schedule: "* 0 * 0 2"
           executor: docker
           timeout: 4s
@@ -23,32 +24,7 @@ collection:
           strict: true
           env_exec: kairos
           inputs:
-            - abc:fff
-            - hhh:ccc
-          run: xyz  
-
-    - key: root2
-      tasks:
-        - key: task1
-          schedule: "* 0 * 0 1"
-          executor: git
-          timeout: 3s
-          retries: 2
-          inputs:
-            - aa:bb
-            - cc:dd
-          run: git clone abc
-          env_exec: xyz
-        - key: task2
-          dependencies: [task1]
-          schedule: "* 0 * 0 2"
-          executor: docker
-          timeout: 4s
-          retries: 2
-          inputs:
-            - abc:fff
-            - hhh:ccc
-          run: xyz    
+          run: once  
   
     
         

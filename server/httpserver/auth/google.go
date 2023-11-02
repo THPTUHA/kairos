@@ -71,22 +71,6 @@ func GetLoginURL(state string) string {
 
 func GoogleAuth() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// session := sessions.Default(ctx)
-
-		// existingSession := session.Get(sessionID)
-		// if userInfo, ok := existingSession.(goauth.Userinfo); ok {
-		// 	fmt.Printf("Exist user %+v\n", userInfo)
-		// 	ctx.Set("user", userInfo)
-		// 	ctx.Next()
-		// 	return
-		// }
-
-		// retrievedState := session.Get(StateKey)
-		// if retrievedState != ctx.Query(StateKey) {
-		// 	ctx.AbortWithError(http.StatusUnauthorized, fmt.Errorf("invalid session state: %s", retrievedState))
-		// 	return
-		// }
-
 		tok, err := conf.Exchange(context.TODO(), ctx.Query("code"))
 		if err != nil {
 			fmt.Printf("failed to exchange code for oauth token: %v", err)
@@ -106,13 +90,6 @@ func GoogleAuth() gin.HandlerFunc {
 			ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("failed to get userinfo for user: %w", err))
 			return
 		}
-
 		ctx.Set("user", userInfo.Email)
-		// session.Set(sessionID, userInfo)
-		// if err := session.Save(); err != nil {
-		// 	glog.Errorf("[Gin-OAuth] Failed to save session: %v", err)
-		// 	ctx.AbortWithError(http.StatusInternalServerError, fmt.Errorf("failed to save session: %v", err))
-		// 	return
-		// }
 	}
 }
