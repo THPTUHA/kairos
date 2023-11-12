@@ -18,8 +18,8 @@ var Handshake = plugin.HandshakeConfig{
 
 // ServeOpts are the configurations to serve a plugin.
 type ServeOpts struct {
-	Processor Processor
-	Executor  Executor
+	// Processor Processor
+	Executor Executor
 }
 
 // Serve serves a plugin. This function never returns and should be the final
@@ -35,6 +35,6 @@ func Serve(opts *ServeOpts) {
 // server or client.
 func pluginMap(opts *ServeOpts) map[string]plugin.Plugin {
 	return map[string]plugin.Plugin{
-		"processor": &ProcessorPlugin{Processor: opts.Processor},
+		// "processor": &ProcessorPlugin{Processor: opts.Processor},
 	}
 }

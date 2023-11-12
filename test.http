@@ -26,9 +26,9 @@ POST http://localhost:8080/v1/tasks
 Content-Type: application/json
 
 {
-  "id": 1,
-  "key": "task1",
-  "schedule": "@every 10s",
+  "id": "2",
+  "name": "task2",
+  "schedule": "@every 2s",
   "timezone": "Europe/Berlin",
   "owner": "Platform Team",
   "owner_email": "platform@example.com",
@@ -53,10 +53,24 @@ Content-Type: application/json
   }
 }
 ###
-GET http://localhost:8080/v1/view/1/executions
+GET http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+###
+GET http://localhost:8080/v1/view/2/executions
 
 ###
 GET http://localhost:3111/apis/login
 ###
 POST http://localhost:3111/apis/apply-collection
 Content-Type: application/json
+
+###
+DELETE http://localhost:8001/apis/v1/service/workflow/32/drop
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjRjZjIwMzY2LThjMjYtNDY0MS05NzI3LTc5YTBkNDUyYmY3YSIsImV4cCI6MTcwMTg1MjYyNCwidXNlcl9pZCI6IjEiLCJ1c2VyX25hbWUiOiJtaW5obmdoaWFiYWRhbzEwMDJAZ21haWwuY29tIn0.rNuSeu37JTQeppqKR1oaUyNsqXy2BrCom2cTR4o_dgw
+
+###
+GET http://localhost:8001/apis/v1/service/workflow/3/detail
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjRjZjIwMzY2LThjMjYtNDY0MS05NzI3LTc5YTBkNDUyYmY3YSIsImV4cCI6MTcwMTg1MjYyNCwidXNlcl9pZCI6IjEiLCJ1c2VyX25hbWUiOiJtaW5obmdoaWFiYWRhbzEwMDJAZ21haWwuY29tIn0.rNuSeu37JTQeppqKR1oaUyNsqXy2BrCom2cTR4o_dgw

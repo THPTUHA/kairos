@@ -1,6 +1,7 @@
 package deliverer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sync"
@@ -442,4 +443,80 @@ func (h *connShard) subscribe(user string, ch string, clientID string, sessionID
 
 func (h *Hub) subscribe(userID string, ch string, clientID string, sessionID string, opts ...SubscribeOption) error {
 	return h.connShards[index(userID, numHubShards)].subscribe(userID, ch, clientID, sessionID, opts...)
+}
+
+const (
+	// hubShutdownSemaphoreSize limits graceful disconnects concurrency
+	// on node shutdown.
+	hubShutdownSemaphoreSize = 128
+)
+
+func (h *connShard) shutdown(ctx context.Context, sem chan struct{}) error {
+	advice := DisconnectShutdown
+	h.mu.RLock()
+	// At this moment node won't accept new client connections, so we can
+	// safely copy existing clients and release lock.
+	clients := make([]*Client, 0, len(h.conns))
+	for _, client := range h.conns {
+		clients = append(clients, client)
+	}
+	h.mu.RUnlock()
+
+	closeFinishedCh := make(chan struct{}, len(clients))
+	finished := 0
+
+	if len(clients) == 0 {
+		return nil
+	}
+
+	for _, client := range clients {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		go func(cc *Client) {
+			defer func() { <-sem }()
+			defer func() { closeFinishedCh <- struct{}{} }()
+			_ = cc.close(advice)
+		}(client)
+	}
+
+	for {
+		select {
+		case <-closeFinishedCh:
+			finished++
+			if finished == len(clients) {
+				return nil
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (h *Hub) shutdown(ctx context.Context) error {
+	// Limit concurrency here to prevent resource usage burst on shutdown.
+	sem := make(chan struct{}, hubShutdownSemaphoreSize)
+
+	var errMu sync.Mutex
+	var shutdownErr error
+
+	var wg sync.WaitGroup
+	wg.Add(numHubShards)
+	for i := 0; i < numHubShards; i++ {
+		go func(i int) {
+			defer wg.Done()
+			err := h.connShards[i].shutdown(ctx, sem)
+			if err != nil {
+				errMu.Lock()
+				if shutdownErr == nil {
+					shutdownErr = err
+				}
+				errMu.Unlock()
+			}
+		}(i)
+	}
+	wg.Wait()
+	return shutdownErr
 }

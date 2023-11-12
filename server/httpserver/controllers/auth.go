@@ -13,6 +13,7 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/helper"
 	"github.com/THPTUHA/kairos/server/httpserver/pubsub"
 	"github.com/THPTUHA/kairos/server/storage"
+	"github.com/THPTUHA/kairos/server/storage/models"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 )
@@ -26,13 +27,12 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	if !strings.HasPrefix(useCountID, config.KairosDeamon) && strings.HasPrefix(useCountID, config.KairosWeb) {
+	if !strings.HasPrefix(useCountID, config.KairosDeamon) && !strings.HasPrefix(useCountID, config.KairosWeb) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"message": "user_count_id invalid",
 		})
 		return
 	}
-	fmt.Printf("Login:-------%s\n", useCountID)
 	session := sessions.Default(c)
 	session.Set(auth.StateKey, useCountID)
 	session.Save()
@@ -64,18 +64,51 @@ func Auth(authChan chan *pubsub.PubSubPayload) func(ctx *gin.Context) {
 				}
 
 				tokenService := auth.NewTokenService()
-				token, err := tokenService.CreateToken(strconv.Itoa(int(userID)), val)
 				fmt.Printf("Email user login %v, UserID=%d, userCountID=%s\n", val, userID, userCountID)
-				if err != nil {
-					ctx.JSON(http.StatusBadRequest, nil)
-				}
 
 				if strings.HasPrefix(userCountID, config.KairosWeb) {
+					token, err := tokenService.CreateToken(strconv.Itoa(int(userID)), val)
+					if err != nil {
+						ctx.JSON(http.StatusBadRequest, nil)
+					}
 					ctx.Writer.Write([]byte(helper.AutoRedirctUrl(fmt.Sprintf("%s/verify?token=%s", config.KairosWebURL, token.AccessToken))))
-					eventChan <- pubsub.SuccessEvent
 					return
 				} else if strings.HasPrefix(userCountID, config.KairosDeamon) {
+
+					if err != nil {
+						ctx.JSON(http.StatusBadRequest, nil)
+						return
+					}
+
+					items := strings.Split(userCountID, "@")
+
+					if items[1] == "" {
+						items[1] = items[0]
+					}
+					err = storage.SetClient(&models.Client{
+						KairosName: items[0],
+						Name:       items[1],
+						UserID:     userID,
+					})
+
+					if err != nil {
+						ctx.Writer.Write([]byte(err.Error()))
+						return
+					}
+					token, err := tokenService.CreateClientToken(
+						strconv.Itoa(int(userID)),
+						val,
+						items[1],
+						items[0],
+					)
+
+					if err != nil {
+						ctx.Writer.Write([]byte(err.Error()))
+						return
+					}
+
 					authChan <- &pubsub.PubSubPayload{
+						UserID:      userID,
 						UserCountID: userCountID,
 						Data:        token.AccessToken,
 						Cmd:         pubsub.AuthCmd,

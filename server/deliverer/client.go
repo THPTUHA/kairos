@@ -172,8 +172,6 @@ func NewClient(ctx context.Context, n *Node, t Transport) (*Client, ClientCloseF
 	return client, func() error { return client.close(DisconnectConnectionClosed) }, nil
 }
 
-// HandleCommand processes a single protocol.Command. Supposed to be called only
-// from a transport connection reader.
 func (c *Client) HandleCommand(cmd *protocol.Command, cmdProtocolSize int) bool {
 	c.mu.Lock()
 	if c.status == statusClosed {
@@ -360,14 +358,12 @@ func (c *Client) dispatchCommand(cmd *protocol.Command, cmdSize int) (*Disconnec
 	} else if cmd.Subscribe != nil {
 		log.Info().Msg("handle subscribe")
 		handleErr = c.handleSubscribe(cmd.Subscribe, cmd, started, nil)
+	} else if cmd.Publish != nil {
+		handleErr = c.handlePublish(cmd.Publish, cmd, started, nil)
 	}
-	// else if cmd.Ping != nil {
-	// 	handleErr = c.handlePing(cmd, started, nil)
-	// } else if cmd.Unsubscribe != nil {
+	//  else if cmd.Unsubscribe != nil {
 	// 	handleErr = c.handleUnsubscribe(cmd.Unsubscribe, cmd, started, nil)
-	// } else if cmd.Publish != nil {
-	// 	handleErr = c.handlePublish(cmd.Publish, cmd, started, nil)
-	// } else if cmd.Presence != nil {
+	//  else if cmd.Presence != nil {
 	// 	handleErr = c.handlePresence(cmd.Presence, cmd, started, nil)
 	// } else if cmd.PresenceStats != nil {
 	// 	handleErr = c.handlePresenceStats(cmd.PresenceStats, cmd, started, nil)
@@ -388,6 +384,68 @@ func (c *Client) dispatchCommand(cmd *protocol.Command, cmdSize int) (*Disconnec
 	// 	return c.handleCommandDispatchError(metricChannel, cmd, frameType, handleErr, started)
 	// }
 	return nil, true
+}
+
+func (c *Client) handlePublish(req *protocol.PublishRequest, cmd *protocol.Command, started time.Time, rw *replyWriter) error {
+	if c.eventHub.publishHandler == nil {
+		return ErrorNotAvailable
+	}
+
+	channel := req.Channel
+	data := req.Data
+
+	if channel == "" || len(data) == 0 {
+		return c.logDisconnectBadRequest("channel and data required for publish")
+	}
+
+	c.mu.RLock()
+	info := c.clientInfo(channel)
+	c.mu.RUnlock()
+
+	event := PublishEvent{
+		Channel:    channel,
+		Data:       data,
+		ClientInfo: info,
+	}
+
+	cb := func(reply PublishReply, err error) {
+		if err != nil {
+			c.writeDisconnectOrErrorFlush(channel, protocol.FrameTypePublish, cmd, err, started, rw)
+			return
+		}
+
+		if reply.Result == nil {
+			_, err := c.node.Publish(
+				event.Channel, event.Data,
+				WithHistory(reply.Options.HistorySize, reply.Options.HistoryTTL, reply.Options.HistoryMetaTTL),
+				WithClientInfo(reply.Options.ClientInfo),
+			)
+			if err != nil {
+				c.logWriteInternalErrorFlush(channel, protocol.FrameTypePublish, cmd, err, "error publish", started, rw)
+				return
+			}
+		}
+
+		protoReply, err := c.getPublishCommandReply(&protocol.PublishResult{})
+		if err != nil {
+			c.logWriteInternalErrorFlush(channel, protocol.FrameTypePublish, cmd, err, "error encoding publish", started, rw)
+			return
+		}
+		c.writeEncodedCommandReply(channel, protocol.FrameTypePublish, cmd, protoReply, rw)
+		c.handleCommandFinished(cmd, protocol.FrameTypePublish, nil, protoReply, started)
+		c.releasePublishCommandReply(protoReply)
+	}
+
+	c.eventHub.publishHandler(event, cb)
+	return nil
+}
+
+func (c *Client) releasePublishCommandReply(reply *protocol.Reply) {
+	protocol.ReplyPool.ReleasePublishReply(reply)
+}
+
+func (c *Client) getPublishCommandReply(res *protocol.PublishResult) (*protocol.Reply, error) {
+	return protocol.ReplyPool.AcquirePublishReply(res), nil
 }
 
 type replyWriter struct {
@@ -1307,25 +1365,18 @@ func (c *Client) UserID() string {
 	return c.user
 }
 
-// Transport returns client connection transport information.
 func (c *Client) Transport() TransportInfo {
 	return c.transport
 }
 
-// OnSubscribe allows setting SubscribeHandler.
-// SubscribeHandler called when client subscribes on a channel.
 func (c *Client) OnSubscribe(h SubscribeHandler) {
 	c.eventHub.subscribeHandler = h
 }
 
-// OnPublish allows setting PublishHandler.
-// PublishHandler called when client publishes message into channel.
 func (c *Client) OnPublish(h PublishHandler) {
 	c.eventHub.publishHandler = h
 }
 
-// OnDisconnect allows setting DisconnectHandler.
-// DisconnectHandler called when client disconnected.
 func (c *Client) OnDisconnect(h DisconnectHandler) {
 	c.eventHub.disconnectHandler = h
 }
@@ -1770,4 +1821,52 @@ func (c *Client) writePublicationUpdatePosition(ch string, pub *protocol.Publica
 		return nil
 	}
 	return c.transportEnqueue(data, ch, protocol.FrameTypePushPublication)
+}
+
+// Context returns client Context. This context will be canceled
+// as soon as client connection closes.
+func (c *Client) Context() context.Context {
+	return c.ctx
+}
+
+// OnPresence allows setting PresenceHandler.
+// PresenceHandler called when Presence request from client received.
+// At this moment you can only return a custom error or disconnect client.
+func (c *Client) OnPresence(h PresenceHandler) {
+	c.eventHub.presenceHandler = h
+}
+
+func (c *Client) OnRefresh(h RefreshHandler) {
+	c.eventHub.refreshHandler = h
+}
+
+func (c *Client) OnUnsubscribe(h UnsubscribeHandler) {
+	c.eventHub.unsubscribeHandler = h
+}
+
+func (c *Client) OnAlive(h AliveHandler) {
+	c.eventHub.aliveHandler = h
+}
+
+func (c *Client) IsSubscribed(ch string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	ctx, ok := c.channels[ch]
+	return ok && channelHasFlag(ctx.flags, flagSubscribed)
+}
+
+func (c *Client) logWriteInternalErrorFlush(ch string, frameType protocol.FrameType, cmd *protocol.Command, err error, message string, started time.Time, rw *replyWriter) {
+	if clientErr, ok := err.(*Error); ok {
+		errorReply := &protocol.Reply{Error: clientErr.toProto()}
+		c.writeError(ch, frameType, cmd, errorReply, rw)
+		return
+	}
+	c.node.logger.log(newLogEntry(LogLevelError, message, map[string]any{"error": err.Error()}))
+
+	errorReply := &protocol.Reply{Error: ErrorInternal.toProto()}
+	c.writeError(ch, frameType, cmd, errorReply, rw)
+	if c.node.clientEvents.commandProcessedHandler != nil {
+		event := newCommandProcessedEvent(cmd, nil, errorReply, started)
+		c.issueCommandProcessedEvent(event)
+	}
 }

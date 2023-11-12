@@ -1,5 +1,6 @@
 httpserver:
   port: 8001
+  max_worklow_concurrent: 100000
 pubsub:
   port: 8002
 auth:

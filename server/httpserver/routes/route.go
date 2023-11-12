@@ -21,9 +21,10 @@ func initialize(ginApp *gin.Engine, pubsub chan *pubsub.PubSubPayload) {
 	routeGroup.Use(auth.GoogleAuth())
 	routeGroup.GET("/auth", controllers.Auth(pubsub))
 
-	privateGroup := ginApp.Group("/apis/v1/workflow")
+	privateGroup := ginApp.Group("/apis/v1/service")
 	privateGroup.Use(middlewares.Authorize())
 	privateGroup.POST("/apply", controllers.ApplyYaml)
+	v1.Workflow(privateGroup)
 }
 
 func Build(pubsub chan *pubsub.PubSubPayload) *gin.Engine {

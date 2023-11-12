@@ -1,0 +1,76 @@
+$body-font-family: 'Heebo', sans-serif !default;
+$global-width: 100%;
+$breakpoint-classes: (small medium large xlarge xxlarge xxxlarge);
+$breakpoints: (
+  small: 0,
+  medium: 640px,
+  large: 1024px,
+  xlarge: 1200px,
+  xxlarge: 1440px,
+  xxxlarge: 1820px,
+);
+
+$kairos-color-gray-1: #F8FBFB;
+$kairos-color-gray-2: #EFF3F5;
+$kairos-color-gray-3: #DEE6EB;
+$kairos-color-gray-4: #CCD6DD;
+$kairos-color-gray-5: #8FA4B1;
+$kairos-color-gray-6: #6D7F8B;
+$kairos-color-gray-7: #495763;
+$kairos-color-gray-8: #363C4A;
+$kairos-color-gray-9: #000000;
+
+$kairos-color-teal-1: #F5FBFD;
+$kairos-color-teal-2: #DFF6F9;
+$kairos-color-teal-3: #BDECF2;
+$kairos-color-teal-4: #99E1EA;
+$kairos-color-teal-5: #1FBDD0;
+$kairos-color-teal-6: #00A2B3;
+$kairos-color-teal-7: #006F8A;
+$kairos-color-teal-8: #004C67;
+
+$white-color: #ffffff;
+$dark-theme-background-1: #100f0f;
+$dark-theme-background-2: #303237;
+$dark-theme-sliding-panel: #28292a;
+// Status colors
+$kairos-failed-color: #E96D76;
+$kairos-failed-color-dark: #c04b4f;
+$kairos-failed-color-light: #ff6262;
+$kairos-status-failed-color: #ef0b28;
+$kairos-color-red: #F00052;
+
+$kairos-success-color: #18BE94;
+$kairos-success-color-dark: #3F946D;
+$kairos-success-color-light: #95D58F;
+$kairos-status-success-color: #0d8d38;
+$kairos-color-green: #7ED321;
+
+$kairos-status-warning-color: #f4c030;
+$kairos-color-yellow: #FFD100;
+
+$kairos-running-color-dark: #378398;
+$kairos-running-color-light: #02C4D3;
+$kairos-running-color: #0DADEA;
+$kairos-suspended-color: #766F94;
+
+$kairos-waiting-color-dark: $kairos-color-gray-6;
+$kairos-waiting-color-light: $kairos-color-gray-5;
+$kairos-waiting-color: $kairos-color-gray-5;
+$kairos-cancelled-color: $kairos-color-gray-5;
+$kairos-init-color: $kairos-color-gray-5;
+
+
+$kairos-breakpoint-md: 1400px;
+$border-radius: 5px;
+$top-bar-height: 50px;
+$nav-width: 60px;
+$basePageWidth: 1024px;
+
+$nav-z-index: 11;
+$top-bar-z-index: 9;
+$sliding-panel-z-index: 20;
+$notifications-z-index: 21;
+
+$kairos-icon-fonts-root: 'assets/fonts/';
+$fa-font-path: 'assets/fonts';

@@ -1,6 +1,9 @@
 package deliverer
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Publication is a data sent to a channel.
 type Publication struct {
@@ -138,4 +141,9 @@ type Broker interface {
 	// needed as history expires automatically (based on history_lifetime)
 	// but sometimes can be useful for application logic.
 	RemoveHistory(ch string) error
+}
+
+type Closer interface {
+	// Close when called should clean up used resources.
+	Close(ctx context.Context) error
 }

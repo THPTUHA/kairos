@@ -91,3 +91,24 @@ nhận task, chạy task local và trả kết quả về cho server.
 watcher:
 Lấy task và lập lịch
 Nhận thông tin từ nats để cập nhật trạng thái task.
+
+yum install epel-release
+yum install redis -y
+systemctl start redis.service
+systemctl enable redis
+
+sudo vi /etc/redis.conf
+bind 0.0.0.0
+
+redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 \
+127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
+--cluster-replicas 1
+
+  sudo ufw allow 7000
+  sudo ufw reload
+  sudo firewall-cmd --zone=public --add-port=7000/tcp --permanent
+  sudo firewall-cmd --reload
+
+redis-cli --cluster create 61.28.230.61:7000  135.181.207.194:7001 \
+135.181.207.194:7000  103.173.254.32:7001 103.173.254.32:7000  61.28.230.61:7001 \
+--cluster-replicas 1

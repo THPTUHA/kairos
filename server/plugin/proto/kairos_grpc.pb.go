@@ -20,17 +20,15 @@ import (
 const _ = grpc.SupportPackageIsVersion7
 
 const (
-	Kairos_GetTask_FullMethodName              = "/proto.Kairos/GetTask"
-	Kairos_ExecutionDone_FullMethodName        = "/proto.Kairos/ExecutionDone"
-	Kairos_Leave_FullMethodName                = "/proto.Kairos/Leave"
-	Kairos_SetTask_FullMethodName              = "/proto.Kairos/SetTask"
-	Kairos_DeleteTask_FullMethodName           = "/proto.Kairos/DeleteTask"
-	Kairos_RunTask_FullMethodName              = "/proto.Kairos/RunTask"
-	Kairos_ToggleTask_FullMethodName           = "/proto.Kairos/ToggleTask"
-	Kairos_RaftGetConfiguration_FullMethodName = "/proto.Kairos/RaftGetConfiguration"
-	Kairos_RaftRemovePeerByID_FullMethodName   = "/proto.Kairos/RaftRemovePeerByID"
-	Kairos_GetActiveExecutions_FullMethodName  = "/proto.Kairos/GetActiveExecutions"
-	Kairos_SetExecution_FullMethodName         = "/proto.Kairos/SetExecution"
+	Kairos_GetTask_FullMethodName             = "/proto.Kairos/GetTask"
+	Kairos_ExecutionDone_FullMethodName       = "/proto.Kairos/ExecutionDone"
+	Kairos_Leave_FullMethodName               = "/proto.Kairos/Leave"
+	Kairos_SetTask_FullMethodName             = "/proto.Kairos/SetTask"
+	Kairos_DeleteTask_FullMethodName          = "/proto.Kairos/DeleteTask"
+	Kairos_RunTask_FullMethodName             = "/proto.Kairos/RunTask"
+	Kairos_ToggleTask_FullMethodName          = "/proto.Kairos/ToggleTask"
+	Kairos_GetActiveExecutions_FullMethodName = "/proto.Kairos/GetActiveExecutions"
+	Kairos_SetExecution_FullMethodName        = "/proto.Kairos/SetExecution"
 )
 
 // KairosClient is the client API for Kairos service.
@@ -44,8 +42,6 @@ type KairosClient interface {
 	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
 	RunTask(ctx context.Context, in *RunTaskRequest, opts ...grpc.CallOption) (*RunTaskResponse, error)
 	ToggleTask(ctx context.Context, in *ToggleTaskRequest, opts ...grpc.CallOption) (*ToggleTaskResponse, error)
-	RaftGetConfiguration(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*RaftGetConfigurationResponse, error)
-	RaftRemovePeerByID(ctx context.Context, in *RaftRemovePeerByIDRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetActiveExecutions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetActiveExecutionsResponse, error)
 	SetExecution(ctx context.Context, in *Execution, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
@@ -121,24 +117,6 @@ func (c *kairosClient) ToggleTask(ctx context.Context, in *ToggleTaskRequest, op
 	return out, nil
 }
 
-func (c *kairosClient) RaftGetConfiguration(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*RaftGetConfigurationResponse, error) {
-	out := new(RaftGetConfigurationResponse)
-	err := c.cc.Invoke(ctx, Kairos_RaftGetConfiguration_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *kairosClient) RaftRemovePeerByID(ctx context.Context, in *RaftRemovePeerByIDRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
-	out := new(emptypb.Empty)
-	err := c.cc.Invoke(ctx, Kairos_RaftRemovePeerByID_FullMethodName, in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *kairosClient) GetActiveExecutions(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetActiveExecutionsResponse, error) {
 	out := new(GetActiveExecutionsResponse)
 	err := c.cc.Invoke(ctx, Kairos_GetActiveExecutions_FullMethodName, in, out, opts...)
@@ -168,8 +146,6 @@ type KairosServer interface {
 	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
 	RunTask(context.Context, *RunTaskRequest) (*RunTaskResponse, error)
 	ToggleTask(context.Context, *ToggleTaskRequest) (*ToggleTaskResponse, error)
-	RaftGetConfiguration(context.Context, *emptypb.Empty) (*RaftGetConfigurationResponse, error)
-	RaftRemovePeerByID(context.Context, *RaftRemovePeerByIDRequest) (*emptypb.Empty, error)
 	GetActiveExecutions(context.Context, *emptypb.Empty) (*GetActiveExecutionsResponse, error)
 	SetExecution(context.Context, *Execution) (*emptypb.Empty, error)
 	mustEmbedUnimplementedKairosServer()
@@ -199,12 +175,6 @@ func (UnimplementedKairosServer) RunTask(context.Context, *RunTaskRequest) (*Run
 }
 func (UnimplementedKairosServer) ToggleTask(context.Context, *ToggleTaskRequest) (*ToggleTaskResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ToggleTask not implemented")
-}
-func (UnimplementedKairosServer) RaftGetConfiguration(context.Context, *emptypb.Empty) (*RaftGetConfigurationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RaftGetConfiguration not implemented")
-}
-func (UnimplementedKairosServer) RaftRemovePeerByID(context.Context, *RaftRemovePeerByIDRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RaftRemovePeerByID not implemented")
 }
 func (UnimplementedKairosServer) GetActiveExecutions(context.Context, *emptypb.Empty) (*GetActiveExecutionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetActiveExecutions not implemented")
@@ -351,42 +321,6 @@ func _Kairos_ToggleTask_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Kairos_RaftGetConfiguration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KairosServer).RaftGetConfiguration(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Kairos_RaftGetConfiguration_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).RaftGetConfiguration(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Kairos_RaftRemovePeerByID_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RaftRemovePeerByIDRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(KairosServer).RaftRemovePeerByID(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Kairos_RaftRemovePeerByID_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(KairosServer).RaftRemovePeerByID(ctx, req.(*RaftRemovePeerByIDRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Kairos_GetActiveExecutions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(emptypb.Empty)
 	if err := dec(in); err != nil {
@@ -457,14 +391,6 @@ var Kairos_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ToggleTask",
 			Handler:    _Kairos_ToggleTask_Handler,
-		},
-		{
-			MethodName: "RaftGetConfiguration",
-			Handler:    _Kairos_RaftGetConfiguration_Handler,
-		},
-		{
-			MethodName: "RaftRemovePeerByID",
-			Handler:    _Kairos_RaftRemovePeerByID_Handler,
 		},
 		{
 			MethodName: "GetActiveExecutions",

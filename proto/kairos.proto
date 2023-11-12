@@ -138,8 +138,6 @@ service Kairos {
     rpc DeleteTask (DeleteTaskRequest) returns (DeleteTaskResponse);
     rpc RunTask (RunTaskRequest) returns (RunTaskResponse);
     rpc ToggleTask (ToggleTaskRequest) returns (ToggleTaskResponse);
-    rpc RaftGetConfiguration (google.protobuf.Empty) returns (RaftGetConfigurationResponse);
-    rpc RaftRemovePeerByID (RaftRemovePeerByIDRequest) returns (google.protobuf.Empty);
     rpc GetActiveExecutions (google.protobuf.Empty) returns  (GetActiveExecutionsResponse);
     rpc SetExecution (Execution) returns (google.protobuf.Empty);
 }

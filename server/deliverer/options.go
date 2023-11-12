@@ -172,3 +172,9 @@ func WithSubscribeSource(source uint8) SubscribeOption {
 		opts.Source = source
 	}
 }
+
+func WithClientInfo(info *ClientInfo) PublishOption {
+	return func(opts *PublishOptions) {
+		opts.ClientInfo = info
+	}
+}

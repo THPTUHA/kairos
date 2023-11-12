@@ -3,6 +3,7 @@ package models
 type TaskRecord struct {
 	ID           int64  `json:"id"`
 	Status       int    `json:"status"`
+	Input        string `json:"input"`
 	Output       string `json:"output"`
 	TaskID       int64  `json:"task_id"`
 	Attemp       int    `json:"attemp"`
@@ -12,4 +13,5 @@ type TaskRecord struct {
 	FinishedAt   int    `json:"finished_at"`
 	LastSuccess  int    `json:"last_success"`
 	LastError    int    `json:"last_error"`
+	CreatedAt    int64  `json:"created_at"`
 }

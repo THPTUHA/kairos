@@ -1,21 +1,21 @@
 package models
 
+const (
+	TaksPending = iota
+)
+
 type Task struct {
 	ID         int64  `json:"id"`
-	Key        string `json:"key"`
+	Name       string `json:"name"`
+	Deps       string `json:"deps"`
 	Schedule   string `json:"schedule"`
 	Timezone   string `json:"timezone"`
-	Executor   string `json:"executor"`
-	TimeOut    int    `json:"timeout"`
+	Clients    string `json:"clients"`
 	Retries    int    `json:"retries"`
-	Inputs     string `json:"inputs"`
-	Run        string `json:"run"`
+	Executor   string `json:"executor"`
+	Duration   string `json:"duration"`
 	WorkflowID int64  `json:"workflow_id"`
 	Status     int    `json:"status"`
-	Strict     bool   `json:"strict"`
-	EnvExec    string `json:"env_exec"`
-	ExpiresAt  int    `json:"expires_at"`
-	UserID     int64  `json:"user_id"`
-	CreatedAt  int    `json:"created_at"`
-	UpdatedAt  int    `json:"updated_at"`
+	Payload    string `json:"payload"`
+	ExpiresAt  string `json:"expires_at"`
 }

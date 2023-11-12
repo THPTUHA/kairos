@@ -2,15 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/THPTUHA/kairos/agent"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
-
-var config = agent.DefaultConfig()
 
 var kairosCmd = &cobra.Command{
 	Use:   "kairos",
@@ -26,9 +21,7 @@ func Execute() {
 
 // TODO
 func initConfig() {
-	if err := viper.Unmarshal(config); err != nil {
-		log.Fatal("config: Error unmarshalling config")
-	}
+
 }
 
 // add config here

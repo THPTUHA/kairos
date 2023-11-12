@@ -1,0 +1,45 @@
+version: '1'
+name: simple_flow_post
+vars:
+  REQUIRE_POST_CMD: 'require_post'
+  RESPONSE_POST_CMD: 'response_post'
+
+tasks:
+  require_post_message:
+    executor: pubsub
+    payload: |
+      {
+        cmd:require_post
+        channel:post_channel
+        content: {{.INPUT}}
+      }
+  response_post_message:
+    executor: pubsub
+    payload: |
+      {
+        cmd: response_post
+        channel: response_channel
+        content: {{.INPUT}}
+      }
+  
+brokers:
+  require_post_channel:
+    listens: [require_post_channel]
+    follows: |
+      {{if eq .MESSAGE_CMD REQUIRE_POST_CMD}}
+        [require_post_message_task]
+      {{end}}
+  
+  get_post:
+    listens: [response_post_channel]
+    follows: |
+      {{if eq .MESSAGE_CMD RESPONSE_POST_CMD}}
+        [response_post_message_task]
+      {{end}}
+
+
+
+    
+    
+        
+

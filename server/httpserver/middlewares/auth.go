@@ -15,7 +15,7 @@ func Authorize() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		c.Set("user_id", acc.UserId)
+		c.Set("userID", acc.UserID)
 		c.Next()
 	}
 }

@@ -58,3 +58,8 @@ func (d *Dissolver) Submit(job Job) error {
 	}
 	return nil
 }
+
+func (d *Dissolver) Close() error {
+	d.queue.Close()
+	return nil
+}

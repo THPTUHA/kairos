@@ -39,6 +39,11 @@ var (
 		Message:   "internal server error",
 		Temporary: true,
 	}
+	ErrorPermissionDenied = &Error{
+		Code:    103,
+		Message: "permission denied",
+	}
+
 	// ErrorBadRequest says that server can not process received
 	// data because it is malformed. Retrying request does not make sense.
 	ErrorBadRequest = &Error{

@@ -1,0 +1,56 @@
+@import './config.scss';
+
+$themes: (
+    light: (
+        background-1: $kairos-color-gray-3,
+        text-1: $kairos-color-gray-7,     
+        background-2: $white-color,
+        text-2: $kairos-color-gray-8,        
+        light-kairos-gray-6: $kairos-color-gray-6,
+        light-kairos-gray-2: $kairos-color-gray-2,
+        light-kairos-teal-1: $kairos-color-teal-1,
+        light-kairos-teal-7: $kairos-color-teal-7,
+        light-kairos-teal-5: $kairos-color-teal-5,
+        pod-cyan: lightcyan,
+        layout-loader-bg: rgba($kairos-color-gray-7, 0.4),
+        overlay: rgba(222, 222, 222, 0.62),
+        shadow: $kairos-color-gray-5,
+        border: $kairos-color-gray-3
+    ),
+    dark: (
+        background-1: $dark-theme-background-1,
+        text-1: $kairos-color-gray-3,        
+        background-2: $dark-theme-background-2,
+        text-2: $white-color,        
+        light-kairos-gray-6: $kairos-color-gray-2,
+        light-kairos-gray-2: $dark-theme-sliding-panel,
+        light-kairos-teal-1: $kairos-color-gray-6,
+        light-kairos-teal-7: $kairos-color-teal-5,
+        light-kairos-teal-5: $kairos-color-teal-4,
+        pod-cyan: $kairos-color-teal-8,
+        layout-loader-bg: rgba($kairos-color-gray-3, 0.4),
+        overlay: rgba(70, 70, 70, 0.62),
+        shadow: $dark-theme-background-1,
+        border: $kairos-color-gray-7
+    )
+);
+
+
+@mixin themify($themes) {
+    @each $theme, $map in $themes {
+      .theme-#{$theme} & {
+        $theme-map: () !global;
+        @each $key, $submap in $map {
+          $value: map-get(map-get($themes, $theme), '#{$key}');
+          $theme-map: map-merge($theme-map, ($key: $value)) !global;
+        }
+        @content;
+        $theme-map: null !global;
+      }
+    }
+  }
+  
+  @function themed($key) {
+    @return map-get($theme-map, $key);
+  }
+  

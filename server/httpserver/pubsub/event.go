@@ -6,9 +6,11 @@ var (
 
 type Event struct {
 	Message string
+	Payload string
 }
 
 type PubSubPayload struct {
+	UserID      int64
 	UserCountID string
 	Cmd         string
 	Data        string

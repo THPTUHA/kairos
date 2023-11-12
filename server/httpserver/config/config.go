@@ -15,7 +15,8 @@ type Configs struct {
 		HmrfSecret string `yaml:"hmrfsecret"`
 	}
 	HTTPServer struct {
-		Port int `yaml:"port"`
+		Port                  int `yaml:"port"`
+		MaxWorkflowConcurrent int `yaml:"max_worklow_concurrent"`
 	}
 	PubSub struct {
 		Port int `yaml:"port"`

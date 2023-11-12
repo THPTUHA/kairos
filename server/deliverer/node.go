@@ -1,6 +1,7 @@
 package deliverer
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -344,6 +345,13 @@ func (n *Node) Run() error {
 	go n.sendNodePing()
 	go n.cleanNodeInfo()
 	return n.subDissolver.Run()
+}
+
+// OnConnecting allows setting ConnectingHandler.
+// ConnectingHandler will be called when client sends Connect command to server.
+// In this handler server can reject connection or provide Credentials for it.
+func (n *Node) OnConnecting(handler ConnectingHandler) {
+	n.clientEvents.connectingHandler = handler
 }
 
 // OnConnect allows setting ConnectHandler.
@@ -745,4 +753,40 @@ func (n *Node) removePresence(ch string, uid string) error {
 // or leave message when someone unsubscribes from channel.
 func (n *Node) publishLeave(ch string, info *ClientInfo) error {
 	return n.broker.PublishLeave(ch, info)
+}
+
+func (n *Node) Shutdown(ctx context.Context) error {
+	n.mu.Lock()
+	if n.shutdown {
+		n.mu.Unlock()
+		return nil
+	}
+	n.shutdown = true
+	close(n.shutdownCh)
+	n.mu.Unlock()
+	cmd := &controlpb.Command{
+		Uid:      n.uid,
+		Shutdown: &controlpb.Shutdown{},
+	}
+	_ = n.publishControl(cmd, "")
+	if closer, ok := n.broker.(Closer); ok {
+		defer func() { _ = closer.Close(ctx) }()
+	}
+	if n.presenceManager != nil {
+		if closer, ok := n.presenceManager.(Closer); ok {
+			defer func() { _ = closer.Close(ctx) }()
+		}
+	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_ = n.subDissolver.Close()
+	}()
+	go func() {
+		defer wg.Done()
+		_ = n.hub.shutdown(ctx)
+	}()
+	wg.Wait()
+	return ctx.Err()
 }

@@ -9,7 +9,7 @@ const Verify = ()=>{
         const token = new URLSearchParams(search).get('token');
         if(token){
             localStorage.setItem("accessToken", token)
-            navigate("/home")
+            navigate("/dashboard")
         }
     },[search])
     return <div></div>

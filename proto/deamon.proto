@@ -3,24 +3,7 @@ syntax = "proto3";
 package proto;
 option go_package = "github.com/THPTUHA/dkron/server/plugin/proto";
 
-message DoneTaskRequest {
-    int64 taskID = 1;
-    int32 status = 2;
-}
-
-message DoneTaskResponse {
-    bool success = 1;
-}
-
-message StartTaskRequest {
-    int64 taskID = 1;
-}
-
-message StartTaskResponse {
-    int64 success = 2;
-}
-
-service Deamon{
-    rpc DoneTask(DoneTaskRequest) returns (DoneTaskResponse);
-    rpc StartTask(StartTaskRequest) returns (StartTaskResponse);
+message TaskeEventCmd {
+    int32 set_task = 1;
+    int32 delete_task = 2;
 }

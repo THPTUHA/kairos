@@ -27,9 +27,13 @@ agent:
 
 migrate-create:
 	migrate create -ext sql -dir server/storage/migration/ -seq kairos
-	
-migrate-up:
+resetdb:
+	psql -U kairos -d kairos -a -f server/storage/script/reset.sql 
+migrate-up:resetdb
 	migrate -path server/storage/migration -database postgresql://kairos:kairos@localhost:5432/kairos?sslmode=disable up
+
+migrate-down:
+	migrate -path server/storage/migration -database postgresql://kairos:kairos@localhost:5432/kairos?sslmode=disable down
 
 migrate-force:
 	migrate -path server/storage/migration -database postgresql://kairos:kairos@localhost:5432/kairos?sslmode=disable force ${v}

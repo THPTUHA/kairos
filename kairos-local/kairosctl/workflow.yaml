@@ -1,0 +1,82 @@
+version: '1'
+name: simple_flow_post
+vars:
+  REQUEST_POST_CMD: 'request_post'
+  RESPONSE_POST_CMD: 'response_post'
+  CRAWL_DATA_PAYLOAD: |
+    {
+      "method": "GET",
+      "url": "http://example.com",
+      "headers": "[]",
+      "body": "",
+      "timeout": "30",
+      "expectCode": "200",
+      "expectBody": "",
+    }
+  
+tasks:
+  crawl_data:
+    schedule: "@every 2s"
+    timezone: "Indochina Time"
+    executor: http
+    clients: [abc]
+    success: none
+    payload: |
+      {{.CRAWL_DATA_PAYLOAD}} 
+  summary_data:
+    executor: script
+    clients: [abc]
+    payload: |
+      {
+        content: {{.INPUT_CLIENT}} + {{.INPUT_CONTENT}} 
+      } 
+  prepare_post:
+    deps: [summary_data]
+    schedule: "0 20 * * *"
+    timezone: "Indochina Time"
+    executor: script
+    clients: [abc]
+    success: all
+    retries: 1
+    expires_at: 3h
+
+  request_post_message:
+    deps: [prepare_post]
+    schedule: "0 0 * * *"
+    duration: 2h
+    executor: pubsub
+    message_schedule: "outside post"
+    message_error: "request error"
+    payload: |
+      {
+        "cmd":"request_post",
+        "channel":"post_channel",
+        "content": "{{.INPUT}}"
+      }
+  response_post_message:
+    executor: pubsub
+    payload: |
+      {
+        cmd: response_post
+        channel: response_channel
+        content: {{.INPUT}}
+      }
+  
+brokers:
+  request_post_channel:
+    listens: [request_post_channel]
+    flows: |
+      {{if eq .MESSAGE_CMD .REQUEST_POST_CMD}}
+        [request_post_message_task]
+      {{end}}
+  
+  get_post:
+    listens: [response_post_channel]
+    flows: |
+      {{if eq .MESSAGE_CMD .RESPONSE_POST_CMD}}
+        [response_post_message_task]
+      {{end}}
+
+  view_crawl:
+    listens: [crawl_data_task]
+    flows: [crawl_watcher_channel, summary_data_task]

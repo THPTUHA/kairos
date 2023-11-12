@@ -12,7 +12,6 @@ type StatusHelper interface {
 	Update([]byte, bool) (int64, error)
 }
 
-// Executor is the interface that we're exposing as a plugin.
 type Executor interface {
 	Execute(args *proto.ExecuteRequest, cb StatusHelper) (*proto.ExecuteResponse, error)
 }
@@ -20,7 +19,6 @@ type Executor interface {
 // ExecutorPluginConfig is the plugin config
 type ExecutorPluginConfig map[string]string
 
-// Here is the gRPC server that GRPCClient talks to.
 type ExecutorServer struct {
 	// This is the real implementation
 	proto.ExecutorServer
