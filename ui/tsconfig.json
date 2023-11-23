@@ -18,11 +18,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "paths": {
+      "highlight.js": [
+        "./node_modules/@types/highlight.js"
+      ]
+    }
   },
   "include": [
     "src"
-  ]
+  ],
 }
-
-

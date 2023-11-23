@@ -5,19 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
 )
 
 var (
-	ErrNotFound = "not found"
+	ErrNotFound = errors.New("not found")
 )
 
 const (
@@ -25,6 +24,14 @@ const (
 	workflowsPrefix  = "workflows"
 	tasksPrefix      = "tasks"
 	executionsPrefix = "executions"
+)
+
+var (
+	workflowBucket   = []byte("workflows")
+	tasksBucket      = []byte("tasks")
+	executionsBucket = []byte("executions")
+	metaBucket       = []byte("meta")
+	queueBucket      = []byte("queue")
 )
 
 var (
@@ -37,7 +44,7 @@ type kv struct {
 }
 
 type Store struct {
-	db   *buntdb.DB
+	db   *bolt.DB
 	lock *sync.Mutex
 	// for kairos local
 	local  bool
@@ -50,24 +57,11 @@ type ExecutionOptions struct {
 	Timezone *time.Location
 }
 
-// NewStore creates a new Storage instance.
-func NewStore(logger *logrus.Entry, local bool) (*Store, error) {
-	db, err := buntdb.Open(":memory:")
+func NewStore(database string, logger *logrus.Entry, local bool) (*Store, error) {
+	db, err := bolt.Open(database, 0600, nil)
 	if err != nil {
 		return nil, err
 	}
-	_ = db.CreateIndex("workflow_id", tasksPrefix+":*", buntdb.IndexJSON("workflow_id"))
-	_ = db.CreateIndex("name", tasksPrefix+":*", buntdb.IndexJSON("name"))
-	_ = db.CreateIndex("started_at", executionsPrefix+":*", buntdb.IndexJSON("started_at"))
-	_ = db.CreateIndex("finished_at", executionsPrefix+":*", buntdb.IndexJSON("finished_at"))
-	_ = db.CreateIndex("attempt", executionsPrefix+":*", buntdb.IndexJSON("attempt"))
-	_ = db.CreateIndex("displayname", tasksPrefix+":*", buntdb.IndexJSON("displayname"))
-	_ = db.CreateIndex("schedule", tasksPrefix+":*", buntdb.IndexJSON("schedule"))
-	_ = db.CreateIndex("success_count", tasksPrefix+":*", buntdb.IndexJSON("success_count"))
-	_ = db.CreateIndex("error_count", tasksPrefix+":*", buntdb.IndexJSON("error_count"))
-	_ = db.CreateIndex("last_success", tasksPrefix+":*", buntdb.IndexJSON("last_success"))
-	_ = db.CreateIndex("last_error", tasksPrefix+":*", buntdb.IndexJSON("last_error"))
-	_ = db.CreateIndex("next", tasksPrefix+":*", buntdb.IndexJSON("next"))
 
 	store := &Store{
 		db:     db,
@@ -79,43 +73,16 @@ func NewStore(logger *logrus.Entry, local bool) (*Store, error) {
 	return store, nil
 }
 
-func (s *Store) gsStoreIdx() func(tx *buntdb.Tx) (int, error) {
-	return func(tx *buntdb.Tx) (int, error) {
-		s.lock.Lock()
-		id, err := tx.Get("idx")
-		var num int
-
-		if err != nil {
-			if err.Error() == ErrNotFound {
-				num = -1
-			} else {
-				s.lock.Unlock()
-				return -1, err
-			}
-		} else {
-			num, err = strconv.Atoi(id)
-			if err != nil {
-				s.lock.Unlock()
-				return -1, err
-			}
-		}
-		num--
-		tx.Set("idx", strconv.Itoa(num), nil)
-		s.logger.Debug(fmt.Sprintf("Set Idx db = %d", num))
-		s.lock.Unlock()
-		return num, nil
-	}
-}
-
 // TaskOptions additional options to apply when loading a Task.
 type TaskOptions struct {
-	Metadata   map[string]string `json:"tags"`
-	Sort       string
-	WorkflowID int64
-	Order      string
-	Query      string
-	Status     string
-	Disabled   string
+	Metadata    map[string]string `json:"tags"`
+	Sort        string
+	WorkflowID  int64
+	Order       string
+	Query       string
+	Status      string
+	Disabled    string
+	NoScheduler bool
 }
 
 func (s *Store) taskHasMetadata(task *Task, metadata map[string]string) bool {
@@ -132,131 +99,256 @@ func (s *Store) taskHasMetadata(task *Task, metadata map[string]string) bool {
 	return true
 }
 
-// GetTasks returns all tasks
+func (s *Store) GetMeta(key string) (string, error) {
+	var v string
+	tx, err := s.db.Begin(true)
+	if err != nil {
+		return v, err
+	}
+	defer tx.Rollback()
+	mBkt, err := tx.CreateBucketIfNotExists(metaBucket)
+	if err != nil {
+		return v, err
+	}
+	e := string(mBkt.Get([]byte(key)))
+	return e, tx.Commit()
+}
+
+func (s *Store) getMetaTxFunc(key string, value *string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		mBkt, err := tx.CreateBucketIfNotExists(metaBucket)
+		if err != nil {
+			return err
+		}
+		e := string(mBkt.Get([]byte(key)))
+		value = &e
+		return nil
+	}
+}
+
+func (s *Store) SetMeta(key, value string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setMetaTxFunc(key, value)(tx)
+	})
+}
+
+func (s *Store) setMetaTxFunc(key, value string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		mBkt, err := tx.CreateBucketIfNotExists(metaBucket)
+		if err != nil {
+			return err
+		}
+		mBkt.Put([]byte(key), []byte(value))
+		return nil
+	}
+}
+
 func (s *Store) GetTasks(options *TaskOptions) ([]*Task, error) {
+	s.logger.Debug(" GetTasks-----")
+	tasks := make([]*Task, 0)
+	tx, err := s.db.Begin(true)
+	if err != nil {
+		return tasks, err
+	}
+	defer tx.Rollback()
+
+	taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+	if err != nil {
+		s.logger.Debug("err 1")
+		return tasks, err
+	}
+
 	if options == nil {
 		options = &TaskOptions{
 			Sort: "id",
 		}
 	}
 
-	tasks := make([]*Task, 0)
-
-	tasksFn := func(key, item string) bool {
-		var task Task
-		if err := json.Unmarshal([]byte(item), &task); err != nil {
-			return false
-		}
+	tasksFn := func(task *Task) bool {
 		task.logger = s.logger
-
 		if options == nil ||
 			(options.WorkflowID != 0 || options.WorkflowID == task.WorkflowID) &&
-				(options.Metadata == nil || len(options.Metadata) == 0 || s.taskHasMetadata(&task, options.Metadata)) &&
+				(options.Metadata == nil || len(options.Metadata) == 0 || s.taskHasMetadata(task, options.Metadata)) &&
 				(options.Query == "" || strings.Contains(task.Name, options.Query)) &&
 				(options.Disabled == "" || strconv.FormatBool(task.Disabled) == options.Disabled) &&
-				((options.Status == "untriggered" && task.Status == "") || (options.Status == "" || task.Status == options.Status)) {
-
-			tasks = append(tasks, &task)
+				(task.Status == "" || (options.Status == "" || task.Status == options.Status)) &&
+				(task.Schedule != "" || options.NoScheduler) {
+			return true
 		}
-		return true
+		return false
 	}
 
-	err := s.db.View(func(tx *buntdb.Tx) error {
-		var err error
-		if options.Order == "DESC" {
-			err = tx.Descend(options.Sort, tasksFn)
-		} else {
-			err = tx.Ascend(options.Sort, tasksFn)
+	if options.WorkflowID == 0 {
+		c := taskBkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			s.logger.Debug("taskID = ", string(k))
+			var task Task
+			err := json.Unmarshal(v, &task)
+			if err != nil {
+				return tasks, err
+			}
+			if tasksFn(&task) {
+				s.logger.Debug("taskID Pass = ", string(k))
+				task.logger = s.logger
+				tasks = append(tasks, &task)
+			}
 		}
-		return err
-	})
+	} else {
+		workflowBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return tasks, err
+		}
 
-	return tasks, err
+		r := workflowBkt.Get([]byte(fmt.Sprint(options.WorkflowID)))
+		ids := strings.Split(string(r), ",")
+		for _, id := range ids {
+			v := taskBkt.Get([]byte(id))
+			if v != nil {
+				var task Task
+				err := json.Unmarshal(v, &task)
+				if err != nil {
+					return tasks, err
+				}
+				if tasksFn(&task) {
+					task.logger = s.logger
+					tasks = append(tasks, &task)
+				}
+			}
+		}
+
+	}
+	return tasks, tx.Commit()
 }
 
-// GetTask finds and return a Task from the store
 func (s *Store) GetTask(id string, options *TaskOptions) (*Task, error) {
 	var task Task
 
-	err := s.db.View(s.getTaskTxFunc(id, &task))
-	if err != nil {
-		return nil, err
-	}
-
-	task.logger = s.logger
-
+	s.db.Update(func(tx *bolt.Tx) error {
+		err := s.getTaskTxFunc(id, &task)(tx)
+		return err
+	})
 	return &task, nil
 }
 
-// Snapshot creates a backup of the data stored in BuntDB
-func (s *Store) Snapshot(w io.WriteCloser) error {
-	return s.db.Save(w)
-}
-
-// Restore load data created with backup in to Bunt
-func (s *Store) Restore(r io.ReadCloser) error {
-	return s.db.Load(r)
-}
-
-// Shutdown close the KV store
 func (s *Store) Shutdown() error {
 	return s.db.Close()
 }
 
-func (s *Store) getTaskTxFunc(id string, task *Task) func(tx *buntdb.Tx) error {
-	return func(tx *buntdb.Tx) error {
-		item, err := tx.Get(fmt.Sprintf("%s:%s", tasksPrefix, id))
-		if err != nil {
-			return err
-		}
-		if err := json.Unmarshal([]byte(item), task); err != nil {
-			return err
-		}
-
-		s.logger.WithFields(logrus.Fields{
-			"task": task.Name,
-		}).Debug("store: Retrieved task from datastore")
-
-		return nil
-	}
-}
-
-func (s *Store) setTaskTxFunc(task *Task) func(tx *buntdb.Tx) error {
-	return func(tx *buntdb.Tx) error {
-		taskID := fmt.Sprintf("%s:%s", tasksPrefix, task.ID)
-
-		tj, err := json.Marshal(task)
-		if err != nil {
-			return err
-		}
-		s.logger.WithField("task", task.ID).Debug("store: Setting task")
-
-		if _, _, err := tx.Set(taskID, string(tj), nil); err != nil {
-			return err
-		}
-
-		return nil
-	}
-}
-
-// SetTask stores a task in the storage
 func (s *Store) SetTask(task *Task) error {
-	var et Task
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setTaskTxFunc(task)(tx)
+	})
+}
 
-	if err := task.Validate(); err != nil {
-		return err
-	}
+func (*Store) setQueueTxFunc(workflowID, k, v string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		qbkt, err := tx.CreateBucketIfNotExists(queueBucket)
 
-	err := s.db.Update(func(tx *buntdb.Tx) error {
-		// Get if the requested task already exist
-		err := s.getTaskTxFunc(task.ID, &et)(tx)
-		if err != nil && err != buntdb.ErrNotFound {
+		bk, err := qbkt.CreateBucketIfNotExists([]byte(workflowID))
+
+		if err != nil {
 			return err
 		}
+		q := bk.Get([]byte(k))
+		qs := make([]string, 0)
+		if q != nil {
+			err := json.Unmarshal(q, &qs)
+			if err != nil {
+				return err
+			}
+		}
+		qs = append(qs, v)
+		q, err = json.Marshal(qs)
+		if err != nil {
+			return err
+		}
+		err = bk.Put([]byte(k), q)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
 
-		if et.ID != "" {
-			// When the task runs, these status vars are updated
-			// otherwise use the ones that are stored
+func (*Store) getQueueTxFunc(workflowID string, value *map[string]string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		qbkt, err := tx.CreateBucketIfNotExists(queueBucket)
+
+		bk, err := qbkt.CreateBucketIfNotExists([]byte(workflowID))
+
+		if err != nil {
+			return err
+		}
+		qs := make([]string, 0)
+		c := bk.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			err := json.Unmarshal(v, &qs)
+			if err != nil {
+				return err
+			}
+			f := qs[0]
+			qs = qs[1:]
+			if len(qs) == 0 {
+				bk.Delete([]byte(k))
+			} else {
+				q, err := json.Marshal(qs)
+				if err != nil {
+					return err
+				}
+				bk.Put([]byte(k), q)
+			}
+			(*value)[string(k)] = string(f)
+		}
+		return nil
+	}
+}
+
+func (s *Store) SetQueue(workflowID, k, v string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setQueueTxFunc(workflowID, k, v)(tx)
+	})
+}
+
+func (s *Store) GetQueue(workflowID string, value *map[string]string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.getQueueTxFunc(workflowID, value)(tx)
+	})
+}
+
+func (s *Store) getTaskTxFunc(taskID string, task *Task) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+		if err != nil {
+			return err
+		}
+		v := taskBkt.Get([]byte(taskID))
+		if v == nil {
+			return ErrNotFound
+		}
+		err = json.Unmarshal(v, task)
+		if err != nil {
+			return err
+		}
+		task.logger = s.logger
+		return nil
+	}
+}
+
+func (s *Store) setTaskTxFunc(task *Task) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+		te := taskBkt.Get([]byte(task.ID))
+		if te != nil {
+			var et Task
+			err := json.Unmarshal(te, &et)
+			if err != nil {
+				return err
+			}
+
 			if et.LastError.After(task.LastError) {
 				task.LastError = et.LastError
 			}
@@ -272,72 +364,67 @@ func (s *Store) SetTask(task *Task) error {
 			if et.Status != "" {
 				task.Status = et.Status
 			}
-		}
 
-		if task.Schedule != et.Schedule {
-			task.Next, err = task.GetNext()
-			if err != nil {
-				return err
+			if task.Schedule != et.Schedule {
+				task.Next, err = task.GetNext()
+				if err != nil {
+					return err
+				}
+			} else {
+				if task.Next.Before(et.Next) {
+					task.Next = et.Next
+				}
 			}
-		} else {
-			// If coming from a backup us the previous value, don't allow overwriting this
-			if task.Next.Before(et.Next) {
-				task.Next = et.Next
-			}
-		}
 
-		if err := s.setTaskTxFunc(task)(tx); err != nil {
+		}
+		bt, err := task.ToBytes()
+		if err != nil {
 			return err
 		}
-		return nil
-	})
-
-	return err
-}
-
-func (s *Store) deleteExecutionsTxFunc(taskID string) func(tx *buntdb.Tx) error {
-	return func(tx *buntdb.Tx) error {
-		var delkeys []string
-		prefix := fmt.Sprintf("%s:%s", executionsPrefix, taskID)
-		if err := tx.Ascend("", func(key, value string) bool {
-			if strings.HasPrefix(key, prefix) {
-				delkeys = append(delkeys, key)
-			}
-			return true
-		}); err != nil {
-			return err
-		}
-
-		for _, k := range delkeys {
-			_, _ = tx.Delete(k)
-		}
-
+		taskBkt.Put([]byte(task.ID), bt)
 		return nil
 	}
 }
 
-// DeleteTask deletes the given task from the store, along with
-// all its executions and references to it.
-func (s *Store) DeleteTask(id string) (*Task, error) {
-	var task *Task
-	err := s.db.Update(func(tx *buntdb.Tx) error {
-		// Get the task
-		if err := s.getTaskTxFunc(id, task)(tx); err != nil {
+func (s *Store) deleteTaskTxFunc(taskID string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+
+		taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+		if err != nil {
 			return err
 		}
-
-		if err := s.deleteExecutionsTxFunc(id)(tx); err != nil {
+		te := taskBkt.Get([]byte(taskID))
+		if te == nil {
+			return ErrNotFound
+		}
+		if err = taskBkt.Delete([]byte(taskID)); err != nil {
 			return err
 		}
+		return nil
+	}
+}
 
-		_, err := tx.Delete(fmt.Sprintf("%s:%d", tasksPrefix, id))
+func (s *Store) DeleteTask(id string) error {
+	s.db.Update(func(tx *bolt.Tx) error {
+		err := s.deleteTaskTxFunc(id)(tx)
+		if err != nil {
+			return err
+
+		}
+		return s.deleteExecutionsTxFunc(id)(tx)
+	})
+	return nil
+}
+
+func (s *Store) deleteExecutionsTxFunc(taskID string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		eBkt, err := tx.CreateBucketIfNotExists(executionsBucket)
+		if err != nil {
+			return err
+		}
+		err = eBkt.DeleteBucket([]byte(taskID))
 		return err
-	})
-	if err != nil {
-		return nil, err
 	}
-
-	return task, nil
 }
 
 func (s *Store) unmarshalExecutions(items []kv, timezone *time.Location) ([]*Execution, error) {
@@ -424,21 +511,16 @@ func (s *Store) computeStatus(taskID string, exGroup int64, tx *buntdb.Tx) (stri
 	return status, nil
 }
 
-func (s *Store) SetExecutionDone(execution *Execution) (bool, error) {
-	err := s.db.Update(func(tx *buntdb.Tx) error {
-		var task Task
-		if err := s.getTaskTxFunc(execution.TaskID, &task)(tx); err != nil {
-			if err == buntdb.ErrNotFound {
-				s.logger.Warn(ErrExecutionDoneForDeletedTask)
-				return ErrExecutionDoneForDeletedTask
-			}
-			s.logger.WithError(err).Fatal(err)
+func (s *Store) SetExecutionDone(taskID string, execution *Execution) (bool, error) {
+	s.logger.Debug("Set execution done", execution)
+	err := s.db.Update(func(tx *bolt.Tx) error {
+		err := s.setExecutionTxFunc(taskID, execution)(tx)
+		if err != nil {
 			return err
 		}
-
-		key := fmt.Sprintf("%s:%d:%s", executionsPrefix, execution.TaskID, execution.Key())
-
-		if err := s.setExecutionTxFunc(key, execution)(tx); err != nil {
+		var task Task
+		err = s.getTaskTxFunc(taskID, &task)(tx)
+		if err != nil {
 			return err
 		}
 
@@ -449,43 +531,44 @@ func (s *Store) SetExecutionDone(execution *Execution) (bool, error) {
 			task.LastError.Set(execution.FinishedAt)
 			task.ErrorCount++
 		}
-
-		status, err := s.computeStatus(task.ID, execution.Group, tx)
-		if err != nil {
-			return err
-		}
-		task.Status = status
-
-		if err := s.setTaskTxFunc(&task)(tx); err != nil {
-			return err
-		}
-
-		return nil
+		return s.setTaskTxFunc(&task)(tx)
 	})
 	if err != nil {
-		s.logger.WithError(err).Error("store: Error in SetExecutionDone")
 		return false, err
 	}
 
 	return true, nil
 }
 
-func (s *Store) list(prefix string, checkRoot bool, opts *ExecutionOptions) ([]kv, error) {
-	var found bool
-	kvs := []kv{}
+func (s *Store) GetExecutions(taskID string, opts *ExecutionOptions) ([]*Execution, error) {
+	s.logger.Debug(" executor run here 1")
+	tx, err := s.db.Begin(true)
 
-	err := s.db.View(s.listTxFunc(prefix, &kvs, &found, opts))
-	if err == nil && !found && checkRoot {
-		return nil, buntdb.ErrNotFound
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	s.logger.Debug(" executor run here 2")
+	ebkt, err := tx.CreateBucketIfNotExists(executionsBucket)
+	if err != nil {
+		return nil, err
 	}
 
-	return kvs, err
-}
-
-func (s *Store) GetExecutions(taskID string, opts *ExecutionOptions) ([]*Execution, error) {
-	prefix := fmt.Sprintf("%s:%s:", executionsPrefix, taskID)
-
-	kvs, err := s.list(prefix, true, opts)
+	bk := ebkt.Bucket([]byte(taskID))
+	if bk == nil {
+		return nil, ErrNotFound
+	}
+	s.logger.Debug(" executor run here")
+	kvs := make([]kv, 0)
+	c := bk.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		kvs = append(kvs, kv{
+			Value: v,
+			Key:   string(k),
+		})
+	}
+	err = tx.Commit()
 	if err != nil {
 		return nil, err
 	}
@@ -493,96 +576,38 @@ func (s *Store) GetExecutions(taskID string, opts *ExecutionOptions) ([]*Executi
 	return s.unmarshalExecutions(kvs, opts.Timezone)
 }
 
-func (s *Store) GetExecutionGroup(execution *Execution, opts *ExecutionOptions) ([]*Execution, error) {
-	res, err := s.GetExecutions(execution.TaskID, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	var executions []*Execution
-	for _, ex := range res {
-		if ex.Group == execution.Group {
-			executions = append(executions, ex)
-		}
-	}
-	return executions, nil
-}
-
-func (s *Store) SetExecution(execution *Execution) (string, error) {
-	key := fmt.Sprintf("%s:%d:%s", executionsPrefix, execution.TaskID, execution.Key())
+func (s *Store) SetExecution(taskID string, execution *Execution) error {
 
 	s.logger.WithFields(logrus.Fields{
 		"task":      execution.TaskID,
-		"execution": key,
+		"execution": execution.Id,
 		"finished":  execution.FinishedAt.String(),
 	}).Debug("store: Setting key")
 
-	err := s.db.Update(s.setExecutionTxFunc(key, execution))
-
-	if err != nil {
-		s.logger.WithError(err).WithFields(logrus.Fields{
-			"task":      execution.TaskID,
-			"execution": key,
-		}).Debug("store: Failed to set key")
-		return "", err
-	}
-
-	execs, err := s.GetExecutions(execution.TaskID, &ExecutionOptions{})
-	if err != nil && err != buntdb.ErrNotFound {
-		s.logger.WithError(err).
-			WithField("task", execution.TaskID).
-			Error("store: Error getting executions for task")
-	}
-
-	if len(execs) > MaxExecutions {
-		sort.Slice(execs, func(i, j int) bool {
-			return execs[i].StartedAt.Before(execs[j].StartedAt)
-		})
-
-		for i := 0; i < len(execs)-MaxExecutions; i++ {
-			s.logger.WithFields(logrus.Fields{
-				"task":      execs[i].TaskID,
-				"execution": execs[i].Key(),
-			}).Debug("store: to delete key")
-			err = s.db.Update(func(tx *buntdb.Tx) error {
-				k := fmt.Sprintf("%s:%d:%s", executionsPrefix, execs[i].TaskID, execs[i].Key())
-				_, err := tx.Delete(k)
-				return err
-			})
-			if err != nil {
-				s.logger.WithError(err).
-					WithField("execution", execs[i].Key()).
-					Error("store: Error trying to delete overflowed execution")
-			}
-		}
-	}
-
-	return key, nil
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setExecutionTxFunc(taskID, execution)(tx)
+	})
 }
 
-func (*Store) setExecutionTxFunc(key string, pbe *Execution) func(tx *buntdb.Tx) error {
-	return func(tx *buntdb.Tx) error {
-		i, err := tx.Get(key)
-		if err != nil && err != buntdb.ErrNotFound {
-			return err
-		}
-		if i != "" {
-			var p Execution
-			if err := json.Unmarshal([]byte(i), &p); err != nil {
-				return err
-			}
-			if p.FinishedAt.UnixMilli() > pbe.FinishedAt.UnixMilli() {
-				return nil
-			}
-		}
+func (*Store) setExecutionTxFunc(taskID string, execution *Execution) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		ebkt, err := tx.CreateBucketIfNotExists(executionsBucket)
 
-		eb, err := json.Marshal(pbe)
+		bk, err := ebkt.CreateBucketIfNotExists([]byte(taskID))
+
 		if err != nil {
 			return err
 		}
 
-		_, _, err = tx.Set(key, string(eb), nil)
-		return err
+		eb, err := json.Marshal(execution)
+		if err != nil {
+			return err
+		}
+		err = bk.Put([]byte(execution.Id), eb)
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 }
 

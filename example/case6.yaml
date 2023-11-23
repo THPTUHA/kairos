@@ -1,0 +1,18 @@
+version: '1'
+name: noti
+tasks:
+  a:
+    schedule: '0 20 * * *'
+    timezone: Asia/Ho_Chi_Minh
+    executor: schedule
+brokers:
+  brok:
+    listens: [wait_channel, a_task]
+    queue: true
+    flows: |
+      {{wait .WAIT_CHANNEL .A_TASK}}
+        {{range .WAIT_CHANNEL_QUEUE}}
+          {{set .NOTI_CHANNEL_SUB .ITEM_CONTENT_CMD}}
+          {{send .ITEM .NOTI_CHANNEL }}
+        {{end}}
+      {{endhas}}

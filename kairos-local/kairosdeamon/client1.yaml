@@ -1,0 +1,9 @@
+serverPort: 3111
+loginEndpoint: "http://localhost:8001/apis/v1/login"
+serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
+pubSubEnpoint: "ws://localhost:8003/pubsub"
+logLevel: "debug"
+nodeName: "kairosdeamon"
+agentHTTPAddrPort: 8080
+agentDefaultPort: 6868
+agentDataDir: "kairos.boltdb"

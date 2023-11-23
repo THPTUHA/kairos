@@ -6,6 +6,10 @@ import (
 	"github.com/jpillora/backoff"
 )
 
+type reconnectStrategy interface {
+	timeBeforeNextAttempt(attempt int) time.Duration
+}
+
 type backoffReconnect struct {
 	// Factor is the multiplying factor for each increment step.
 	Factor float64

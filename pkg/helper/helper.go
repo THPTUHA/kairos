@@ -21,5 +21,5 @@ func GetTimeNow() int64 {
 
 	now := time.Now()
 
-	return now.In(location).Unix() / int64(time.Second)
+	return now.In(location).Unix()
 }

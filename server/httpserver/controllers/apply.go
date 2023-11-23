@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ApplyYaml(c *gin.Context) {
+func (ctr *Controller) ApplyYaml(c *gin.Context) {
 	userID := c.GetString("user_id")
 	fmt.Printf("userID = %s", userID)
 

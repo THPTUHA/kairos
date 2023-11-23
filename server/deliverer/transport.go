@@ -1,25 +1,22 @@
 package deliverer
 
-import (
-	"github.com/centrifugal/protocol"
-)
+import "github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 
-// ProtocolType represents client connection transport encoding format.
 type ProtocolType string
 
-func (t ProtocolType) toProto() protocol.Type {
-	return protocol.Type(t)
+func (t ProtocolType) toProto() deliverprotocol.Type {
+	return deliverprotocol.Type(t)
 }
 
 const (
-	// ProtocolTypeJSON means JSON-based protocol.
+	// ProtocolTypeJSON means JSON-based deliverprotocol.
 	ProtocolTypeJSON ProtocolType = "json"
-	// ProtocolTypeProtobuf means Protobuf protocol.
+	// ProtocolTypeProtobuf means Protobuf deliverprotocol.
 	ProtocolTypeProtobuf ProtocolType = "protobuf"
 )
 
 const (
-	// ProtocolVersion2 is the current stable client protocol.
+	// ProtocolVersion2 is the current stable client deliverprotocol.
 	ProtocolVersion2 ProtocolVersion = 2
 )
 
@@ -34,34 +31,14 @@ const (
 	PushFlagMessage
 )
 
-// ProtocolVersion defines protocol behavior.
+// ProtocolVersion defines deliverprotocol behavior.
 type ProtocolVersion uint8
 
 // TransportInfo has read-only transport description methods. Some of these methods
 // can modify the behaviour of Client.
 type TransportInfo interface {
-	// Name returns a name of transport.
 	Name() string
-	// Protocol returns an underlying transport protocol type used by transport.
-	// JSON or Protobuf protocol types are supported by Centrifuge. Message encoding
-	// happens of Client level.
 	Protocol() ProtocolType
-	// ProtocolVersion returns protocol version used by transport.
-	ProtocolVersion() ProtocolVersion
-	// Unidirectional returns whether transport is unidirectional. For
-	// unidirectional transports Client writes Push protobuf messages
-	// without additional wrapping pushes into Reply type.
-	Unidirectional() bool
-	// Emulation must return true for transport that uses Centrifuge emulation layer.
-	// See EmulationHandler for more details.
-	Emulation() bool
-	// DisabledPushFlags returns a disabled push flags for specific transport.
-	// For example this allows to disable sending Disconnect push in case of
-	// bidirectional WebSocket implementation since disconnect data sent inside
-	// Close frame.
-	DisabledPushFlags() uint64
-	// PingPongConfig returns application-level server-to-client ping
-	// configuration.
 	PingPongConfig() PingPongConfig
 }
 

@@ -135,8 +135,27 @@ func (w *writer) waitSendMessage(maxMessagesInFrame int, writeDelay time.Duratio
 		writeErr = w.config.WriteFn(msg)
 	}
 	if writeErr != nil {
-		// WriteMany failed, transport must close itself, here we just return from routine.
 		return false
 	}
 	return true
+}
+
+func (w *writer) close(flushRemaining bool) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+
+	if flushRemaining {
+		remaining := w.messages.CloseRemaining()
+		if len(remaining) > 0 {
+			_ = w.config.WriteManyFn(remaining...)
+		}
+	} else {
+		w.messages.Close()
+	}
+	close(w.closeCh)
+	return nil
 }

@@ -7,6 +7,9 @@ const userNamespaceKey = 'userNamespace';
 const currentNamespaceKey = 'current_namespace';
 
 export const Utils = {
+    lineNumbersInString(code: string): number {
+        return code.split("\n").length
+    },
     statusIconClasses(status: string): string {
         let classes = [];
         switch (status) {
@@ -120,6 +123,17 @@ export const Utils = {
         return this.managedNamespace || namespace;
     },
 
+    humanReadableBytes(bytes: number): string {
+        if (bytes == -1){
+            return "empty"
+        }
+        let i = Math.floor(Math.log(bytes) / Math.log(1024));
+        if (i < 0) i = 0;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+        const result = (bytes / Math.pow(1024, i)).toFixed(2);
+        return result + ' ' + sizes[i];
+    },
+    
     // return a namespace, never return null/undefined, defaults to "default"
     getNamespaceWithDefault(namespace: string) {
         return namespace || this.currentNamespace || this.userNamespace || this.managedNamespace || 'default';
@@ -206,5 +220,14 @@ export const Utils = {
         } else {
             return p.value;
         }
-    }
+    },
+    isJson(str: string): boolean{
+        try {
+          JSON.parse(str);
+        } catch (e) {
+          return false;
+        }
+        return true;
+      }
+    
 };

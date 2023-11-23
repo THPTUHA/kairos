@@ -112,3 +112,11 @@ redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 \
 redis-cli --cluster create 61.28.230.61:7000  135.181.207.194:7001 \
 135.181.207.194:7000  103.173.254.32:7001 103.173.254.32:7000  61.28.230.61:7001 \
 --cluster-replicas 1
+
+Dấu , cuối json
+
+protoc  --go_out=.  --go_opt=paths=source_relative \
+			--go-grpc_out=server/deliverer/internal/controlpb \
+			--go-vtproto_out=server/deliverer/internal/controlpb/ --plugin protoc-gen-go-vtproto=${GOPATH}/bin/protoc-gen-go-vtproto \
+			--go-vtproto_opt=features=marshal+unmarshal+size \
+			server/deliverer/internal/controlpb/control.proto

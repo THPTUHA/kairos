@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) UNIQUE,
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE,
+    avatar VARCHAR(255),
     secret_key VARCHAR(255) UNIQUE,
     api_key VARCHAR(255) UNIQUE
 );
@@ -29,7 +30,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     clients VARCHAR(800),
     retries INT DEFAULT 0,
     executor VARCHAR(255) NOT NULL,
-    duration VARCHAR(255) NOT NULL,
     workflow_id bigserial NOT NULL,
     status INT NOT NULL,
     payload TEXT,
@@ -45,15 +45,39 @@ CREATE TABLE IF NOT EXISTS vars (
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS channels (
+    id bigserial PRIMARY KEY,
+    user_id INT NOT NULl,
+    name VARCHAR(255) NOT NULL,
+    created_at BIGINT NOT NUll,
+    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS brokers (
     id bigserial PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    standard_name VARCHAR(255) NOT NULL,
     listens VARCHAR(800) NOT NULL,
     flows  TEXT,
     workflow_id bigserial NOT NULL,
     status INT NOT NULL,
+    queue BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS task_summaries (
+    id bigserial PRIMARY KEY,
+    status INT NOT NULL,
+    task_id     INT NOT NULL,
+    attemp      INT NOT NULL,
+	success_count INT NOT NULL,
+	error_count   INT NOT NULL,
+	last_success  INT NOT NULL,
+	last_error    INT NOT NULL,
+    created_at BIGINT NOT NUll,
+    CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+
 
 CREATE TABLE IF NOT EXISTS task_records (
     id bigserial PRIMARY KEY,
@@ -61,18 +85,13 @@ CREATE TABLE IF NOT EXISTS task_records (
     input TEXT,
     output TEXT,
     task_id     INT NOT NULL,
-    attemp      INT NOT NULL,
-	success_count INT NOT NULL,
-	error_count   INT NOT NULL,
 	started_at    INT NOT NULL,
 	finished_at   INT NOT NULL,
-	last_success  INT NOT NULL,
-	last_error    INT NOT NULL,
     created_at BIGINT NOT NUll,
     CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS message_flow (
+CREATE TABLE IF NOT EXISTS message_flows (
     id bigserial PRIMARY KEY,
     status INT NOT NULL,
     sender_id INT NOT NULL,
@@ -81,13 +100,51 @@ CREATE TABLE IF NOT EXISTS message_flow (
     receiver_type INT NOT NULL,
     workflow_id bigserial NOT NULL,
     message TEXT,
+    attemp INT DEFAULT 0,
+    created_at BIGINT NOT NUll,
+    flow INT NOT NULL,
+    deliver_id INT NOT NULL,
+    elapsed_time BIGINT NOT NULL,
+    request_size INT NOT NULL,
+    response_size INT NOT NULL,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS clients (
     id bigserial PRIMARY KEY,
-    kairos_name VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(255) NOT NULL,
     user_id INT NOT NULL,
+    active_since BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
     CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS broker_queues (
+    id bigserial PRIMARY KEY,
+    key VARCHAR(255) NOT NULL,
+    value TEXT NOT NULL,
+    workflow_id BIGINT NOT NULL,
+    used BOOLEAN NOT NULL,
+    created_at BIGINT NOT NULL,
+    CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS certificates (
+    id bigserial PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    user_id BIGINT NOT NULL,
+    api_key VARCHAR(255) NOT NULL,
+    secret_key VARCHAR(255) NOT NULL,
+    expire_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS channel_permissions (
+    id bigserial PRIMARY KEY,
+    cert_id BIGINT NOT NULL,
+    role INT NOT NULL,
+    channel_id BIGINT NOT NULL,
+    CONSTRAINT fk_cert FOREIGN KEY(cert_id) REFERENCES certificates(id) ON DELETE CASCADE,
+    CONSTRAINT fk_channel FOREIGN KEY(channel_id) REFERENCES users(id) ON DELETE CASCADE
 );

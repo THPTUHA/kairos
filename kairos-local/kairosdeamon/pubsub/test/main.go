@@ -79,10 +79,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	sub, err := client.NewSubscription("chat:index", pubsub.SubscriptionConfig{
-		Recoverable: true,
-		JoinLeave:   true,
-	})
+	sub, err := client.NewSubscription("chat:index", pubsub.SubscriptionConfig{})
 	if err != nil {
 		log.Fatalln(err)
 	}

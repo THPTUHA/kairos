@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"expvar"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -53,6 +54,7 @@ func (s *Scheduler) ClearCron() {
 }
 
 func (s *Scheduler) AddTask(task *Task) error {
+	s.logger.Debug(fmt.Sprintf("schedule task name = %s, id =%s", task.Name, task.ID))
 	if _, ok := s.GetEntryTask(task.ID); ok {
 		s.RemoveTask(task.ID)
 	}
@@ -122,7 +124,6 @@ func (s *Scheduler) Stop() context.Context {
 func (s *Scheduler) Started() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-
 	return s.started
 }
 
@@ -146,7 +147,7 @@ func (s *Scheduler) GetEntryTask(taskID string) (EntryTask, bool) {
 func (s *Scheduler) RemoveTask(taskID string) {
 	s.logger.WithFields(logrus.Fields{
 		"task": taskID,
-	}).Debug("scheduler: Removing task from cron")
+	}).Info("scheduler: Removing task from cron")
 
 	if ej, ok := s.GetEntryTask(taskID); ok {
 		s.Cron.Remove(ej.entry.ID)

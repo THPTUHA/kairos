@@ -91,5 +91,6 @@ func GoogleAuth() gin.HandlerFunc {
 			return
 		}
 		ctx.Set("user", userInfo.Email)
+		ctx.Set("avatar", userInfo.Picture)
 	}
 }

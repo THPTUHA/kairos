@@ -6,8 +6,6 @@ import (
 	"github.com/hashicorp/go-plugin"
 )
 
-// Processor is an interface that wraps the Process method.
-// Plugins must implement this interface.
 type Processor interface {
 	// Main plugin method, will be called when an execution is done.
 	Process(args *ProcessorArgs) Execution

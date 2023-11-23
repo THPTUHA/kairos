@@ -12,14 +12,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/centrifugal/protocol"
-	"github.com/rs/zerolog/log"
+	"github.com/THPTUHA/kairos/pkg/cbqueue"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
-// State of client connection.
 type State string
 
-// Describe client connection states.
 const (
 	StateDisconnected State = "disconnected"
 	StateConnecting   State = "connecting"
@@ -33,10 +31,10 @@ type Client struct {
 	mu                sync.RWMutex
 	endpoints         []string
 	round             int
-	protocolType      protocol.Type
+	protocolType      deliverprotocol.Type
 	config            Config
 	token             string
-	data              protocol.Raw
+	data              deliverprotocol.Raw
 	transport         transport
 	state             State
 	subs              map[string]*Subscription
@@ -47,17 +45,20 @@ type Client struct {
 	reconnectAttempts int
 	reconnectStrategy reconnectStrategy
 	events            *eventHub
-	sendPong          bool
 	delayPing         chan struct{}
 	closeCh           chan struct{}
 	connectFutures    map[uint64]connectFuture
-	cbQueue           *cbQueue
+	CBQueue           *cbqueue.CBQueue
 	reconnectTimer    *time.Timer
 	refreshTimer      *time.Timer
 	refreshRequired   bool
 }
 
-func newClient(endpoint string, isProtobuf bool, config Config) *Client {
+func NewClient(endpoint string, config Config) *Client {
+	return newClient(endpoint, config)
+}
+
+func newClient(endpoint string, config Config) *Client {
 	if config.ReadTimeout == 0 {
 		config.ReadTimeout = 5 * time.Second
 	}
@@ -74,7 +75,7 @@ func newClient(endpoint string, isProtobuf bool, config Config) *Client {
 		config.Header = http.Header{}
 	}
 	if config.Name == "" {
-		config.Name = "go"
+		config.Name = "kairosdeamon"
 	}
 	// We support setting multiple endpoints to try in round-robin fashion. But
 	// for now this feature is not documented and used for internal tests. In most
@@ -92,10 +93,7 @@ func newClient(endpoint string, isProtobuf bool, config Config) *Client {
 		}
 	}
 
-	protocolType := protocol.TypeJSON
-	if isProtobuf {
-		protocolType = protocol.TypeProtobuf
-	}
+	protocolType := deliverprotocol.TypeJSON
 
 	client := &Client{
 		endpoints:         endpoints,
@@ -113,130 +111,141 @@ func newClient(endpoint string, isProtobuf bool, config Config) *Client {
 		data:              config.Data,
 	}
 
-	// Queue to run callbacks on.
-	client.cbQueue = &cbQueue{}
-	client.cbQueue.cond = sync.NewCond(&client.cbQueue.mu)
-	go client.cbQueue.dispatch()
+	client.CBQueue = &cbqueue.CBQueue{}
+	client.CBQueue.Cond = sync.NewCond(&client.CBQueue.Mu)
+	go client.CBQueue.Dispatch()
 
 	return client
 }
 
-// Connect dials to server and sends connect message. Will return an error if first
-// dial with a server failed. In case of failure client will automatically reconnect.
-// To temporary disconnect from a server call Client.Disconnect.
 func (c *Client) Connect() error {
 	return c.startConnecting()
 }
 
-func (c *Client) runHandlerSync(fn func()) {
-	waitCh := make(chan struct{})
-	c.mu.RLock()
-	c.cbQueue.push(func(delay time.Duration) {
-		defer close(waitCh)
-		fn()
-	})
-	c.mu.RUnlock()
-	<-waitCh
-}
-
-func (c *Client) startConnecting() error {
-	log.Debug().Msg("startConnecting")
-	c.mu.Lock()
-	if c.state == StateClosed {
-		c.mu.Unlock()
+func (c *Client) Disconnect() error {
+	if c.isClosed() {
 		return ErrClientClosed
 	}
-	if c.state == StateConnected || c.state == StateConnecting {
-		c.mu.Unlock()
-		return nil
+	c.moveToDisconnected(disconnectedDisconnectCalled, "disconnect called")
+	return nil
+}
+
+func (c *Client) Close() {
+	if c.isClosed() {
+		return
 	}
-	if c.closeCh == nil {
-		c.closeCh = make(chan struct{})
-	}
-	c.state = StateConnecting
+	c.moveToDisconnected(disconnectedDisconnectCalled, "disconnect called")
+	c.moveToClosed()
+}
+
+func (c *Client) State() State {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state
+}
+
+func (c *Client) SetToken(token string) {
+	c.mu.Lock()
+	c.token = token
 	c.mu.Unlock()
-
-	var handler ConnectingHandler
-	if c.events != nil && c.events.onConnecting != nil {
-		handler = c.events.onConnecting
-	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			event := ConnectingEvent{Code: connectingConnectCalled, Reason: "connect called"}
-			handler(event)
-		})
-	}
-
-	return c.startReconnecting()
 }
 
-func (c *Client) handleError(err error) {
-	var handler ErrorHandler
-	if c.events != nil && c.events.onError != nil {
-		handler = c.events.onError
+func (c *Client) NewSubscription(channel string, config ...SubscriptionConfig) (*Subscription, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var sub *Subscription
+	if _, ok := c.subs[channel]; ok {
+		return nil, ErrDuplicateSubscription
 	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			handler(ErrorEvent{Error: err})
-		})
-	}
+	sub = newSubscription(c, channel, config...)
+	c.subs[channel] = sub
+	return sub, nil
 }
 
-func (c *Client) getReconnectDelay() time.Duration {
-	return c.reconnectStrategy.timeBeforeNextAttempt(c.reconnectAttempts)
+// RemoveSubscription removes Subscription from the internal client registry.
+// Make sure Subscription is in unsubscribed state before removing it.
+func (c *Client) RemoveSubscription(sub *Subscription) error {
+	if sub.State() != SubStateUnsubscribed {
+		return errors.New("subscription must be unsubscribed to be removed")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.subs, sub.Channel)
+	return nil
 }
 
-func (c *Client) refreshToken() (string, error) {
-	handler := c.config.GetToken
-	if handler == nil {
-		c.handleError(ConfigurationError{Err: errors.New("GetToken must be set to handle expired token")})
-		return "", ErrUnauthorized
-	}
-	return handler(ConnectionTokenEvent{})
+// GetSubscription allows getting Subscription from the internal client registry.
+func (c *Client) GetSubscription(channel string) (*Subscription, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	s, ok := c.subs[channel]
+	return s, ok
 }
 
-func (c *Client) clearConnectedState() {
-	if c.reconnectTimer != nil {
-		c.reconnectTimer.Stop()
-		c.reconnectTimer = nil
+// Subscriptions returns a map with all currently registered client-side subscriptions.
+func (c *Client) Subscriptions() map[string]*Subscription {
+	subs := make(map[string]*Subscription)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k, v := range c.subs {
+		subs[k] = v
 	}
-	if c.refreshTimer != nil {
-		c.refreshTimer.Stop()
-		c.refreshTimer = nil
-	}
-	if c.closeCh != nil {
-		close(c.closeCh)
-		c.closeCh = nil
-	}
+	return subs
+}
 
-	c.requestsMu.Lock()
-	reqs := make(map[uint32]request, len(c.requests))
-	for uid, req := range c.requests {
-		reqs[uid] = req
+func (c *Client) Send(ctx context.Context, data []byte) error {
+	if c.isClosed() {
+		return ErrClientClosed
 	}
-	c.requests = make(map[uint32]request)
-	c.requestsMu.Unlock()
-
-	for _, req := range reqs {
-		if req.cb != nil {
-			go req.cb(nil, ErrClientDisconnected)
+	errCh := make(chan error, 1)
+	c.onConnect(func(err error) {
+		if err != nil {
+			errCh <- err
+			return
 		}
-	}
-}
-
-func (c *Client) runHandlerAsync(fn func()) {
-	c.cbQueue.push(func(delay time.Duration) {
-		fn()
+		select {
+		case <-ctx.Done():
+			errCh <- ctx.Err()
+			return
+		default:
+		}
+		cmd := &deliverprotocol.Command{}
+		params := &deliverprotocol.SendRequest{
+			Data: data,
+		}
+		cmd.Send = params
+		errCh <- c.send(cmd)
 	})
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-errCh:
+		return err
+	}
 }
 
-// lock must be held outside.
-func (c *Client) resolveConnectFutures(err error) {
-	for _, fut := range c.connectFutures {
-		fut.fn(err)
-		close(fut.closeCh)
-	}
-	c.connectFutures = make(map[uint64]connectFuture)
+func (c *Client) nextCmdID() uint32 {
+	return atomic.AddUint32(&c.cmdID, 1)
+}
+
+func (c *Client) isConnected() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state == StateConnected
+}
+
+func (c *Client) isClosed() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.state == StateClosed
+}
+
+func (c *Client) isSubscribed(channel string) bool {
+	c.mu.RLock()
+	_, ok := c.subs[channel]
+	c.mu.RUnlock()
+	return ok
 }
 
 func (c *Client) moveToDisconnected(code uint32, reason string) {
@@ -297,167 +306,6 @@ func (c *Client) moveToDisconnected(code uint32, reason string) {
 		c.runHandlerAsync(func() {
 			event := DisconnectedEvent{Code: code, Reason: reason}
 			handler(event)
-		})
-	}
-}
-
-func (c *Client) readOnce(t transport) error {
-	reply, disconnect, err := t.Read()
-	if err != nil {
-		log.Error().Stack().Err(err).Msg("read one")
-		go c.handleDisconnect(disconnect)
-		return err
-	}
-	c.handle(reply)
-	return nil
-}
-
-func (c *Client) handle(reply *protocol.Reply) {
-	if reply.Id > 0 {
-		c.requestsMu.RLock()
-		req, ok := c.requests[reply.Id]
-		c.requestsMu.RUnlock()
-		if ok {
-			if req.cb != nil {
-				req.cb(reply, nil)
-			}
-		}
-		c.removeRequest(reply.Id)
-	} else {
-		log.Info().Msg("hanle reply  clone from server")
-		if reply.Push == nil {
-			// Ping from server, send pong if needed.
-			select {
-			case c.delayPing <- struct{}{}:
-			default:
-			}
-			c.mu.RLock()
-			sendPong := c.sendPong
-			c.mu.RUnlock()
-			if sendPong {
-				cmd := &protocol.Command{}
-				_ = c.send(cmd)
-			}
-			return
-		}
-		c.mu.Lock()
-		if c.state != StateConnected {
-			c.mu.Unlock()
-			return
-		}
-		c.mu.Unlock()
-		c.handlePush(reply.Push)
-	}
-}
-
-// TODO
-func (c *Client) handlePush(push *protocol.Push) {
-	channel := push.Channel
-	c.mu.RLock()
-	sub, ok := c.subs[channel]
-	c.mu.RUnlock()
-	switch {
-	case push.Message != nil:
-		_ = c.handleMessage(push.Message)
-	case push.Pub != nil:
-		if !ok {
-			c.handleServerPublication(channel, push.Pub)
-			return
-		}
-		sub.handlePublication(push.Pub)
-	// case push.Unsubscribe != nil:
-	// 	if !ok {
-	// 		c.handleServerUnsub(channel, push.Unsubscribe)
-	// 		return
-	// 	}
-	// 	sub.handleUnsubscribe(push.Unsubscribe)
-	// case push.Join != nil:
-	// 	if !ok {
-	// 		c.handleServerJoin(channel, push.Join)
-	// 		return
-	// 	}
-	// 	sub.handleJoin(push.Join.Info)
-	// case push.Leave != nil:
-	// 	if !ok {
-	// 		c.handleServerLeave(channel, push.Leave)
-	// 		return
-	// 	}
-	// 	sub.handleLeave(push.Leave.Info)
-	case push.Subscribe != nil:
-		if ok {
-			// Client-side subscription exists.
-			return
-		}
-		c.handleServerSub(channel, push.Subscribe)
-		return
-	case push.Disconnect != nil:
-		code := push.Disconnect.Code
-		reconnect := code < 3500 || code >= 5000 || (code >= 4000 && code < 4500)
-		if reconnect {
-			c.moveToConnecting(code, push.Disconnect.Reason)
-		} else {
-			c.moveToDisconnected(code, push.Disconnect.Reason)
-		}
-	default:
-	}
-}
-
-func (c *Client) handleServerPublication(channel string, pub *protocol.Publication) {
-	c.mu.Lock()
-	serverSub, ok := c.serverSubs[channel]
-	if !ok {
-		c.mu.Unlock()
-		return
-	}
-	if serverSub.Recoverable && pub.Offset > 0 {
-		serverSub.Offset = pub.Offset
-	}
-	c.mu.Unlock()
-
-	var handler ServerPublicationHandler
-	if c.events != nil && c.events.onServerPublication != nil {
-		handler = c.events.onServerPublication
-	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			handler(ServerPublicationEvent{Channel: channel, Publication: pubFromProto(pub)})
-		})
-	}
-}
-
-func (c *Client) handleServerSub(channel string, sub *protocol.Subscribe) {
-	c.mu.Lock()
-	_, ok := c.serverSubs[channel]
-	if ok {
-		c.mu.Unlock()
-		return
-	}
-	c.serverSubs[channel] = &serverSub{
-		Offset:      sub.Offset,
-		Epoch:       sub.Epoch,
-		Recoverable: sub.Recoverable,
-	}
-	c.mu.Unlock()
-
-	var handler ServerSubscribedHandler
-	if c.events != nil && c.events.onServerSubscribe != nil {
-		handler = c.events.onServerSubscribe
-	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			ev := ServerSubscribedEvent{
-				Channel:     channel,
-				Positioned:  sub.GetPositioned(),
-				Recoverable: sub.GetRecoverable(),
-				Data:        sub.GetData(),
-			}
-			if ev.Positioned || ev.Recoverable {
-				ev.StreamPosition = &StreamPosition{
-					Epoch:  sub.GetEpoch(),
-					Offset: sub.GetOffset(),
-				}
-			}
-			handler(ev)
 		})
 	}
 }
@@ -533,6 +381,93 @@ func (c *Client) moveToConnecting(code uint32, reason string) {
 	c.mu.Unlock()
 }
 
+func (c *Client) moveToClosed() {
+	c.mu.Lock()
+	if c.state == StateClosed {
+		c.mu.Unlock()
+		return
+	}
+	c.state = StateClosed
+
+	subsToUnsubscribe := make([]*Subscription, 0, len(c.subs))
+	for _, s := range c.subs {
+		s.mu.Lock()
+		if s.state == SubStateUnsubscribed {
+			s.mu.Unlock()
+			continue
+		}
+		s.mu.Unlock()
+		subsToUnsubscribe = append(subsToUnsubscribe, s)
+	}
+	serverSubsToUnsubscribe := make([]string, 0, len(c.serverSubs))
+	for ch := range c.serverSubs {
+		serverSubsToUnsubscribe = append(serverSubsToUnsubscribe, ch)
+	}
+	c.mu.Unlock()
+
+	for _, s := range subsToUnsubscribe {
+		s.moveToUnsubscribed(unsubscribedClientClosed, "client closed")
+	}
+
+	var serverUnsubscribedHandler ServerUnsubscribedHandler
+	if c.events != nil && c.events.onServerUnsubscribed != nil {
+		serverUnsubscribedHandler = c.events.onServerUnsubscribed
+	}
+	if serverUnsubscribedHandler != nil {
+		c.runHandlerAsync(func() {
+			for _, ch := range serverSubsToUnsubscribe {
+				serverUnsubscribedHandler(ServerUnsubscribedEvent{Channel: ch})
+			}
+		})
+	}
+
+	c.mu.Lock()
+	c.CBQueue.Close()
+	c.CBQueue = nil
+	c.mu.Unlock()
+}
+
+func (c *Client) handleError(err error) {
+	var handler ErrorHandler
+	if c.events != nil && c.events.onError != nil {
+		handler = c.events.onError
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			handler(ErrorEvent{Error: err})
+		})
+	}
+}
+
+func (c *Client) clearConnectedState() {
+	if c.reconnectTimer != nil {
+		c.reconnectTimer.Stop()
+		c.reconnectTimer = nil
+	}
+	if c.refreshTimer != nil {
+		c.refreshTimer.Stop()
+		c.refreshTimer = nil
+	}
+	if c.closeCh != nil {
+		close(c.closeCh)
+		c.closeCh = nil
+	}
+
+	c.requestsMu.Lock()
+	reqs := make(map[uint32]request, len(c.requests))
+	for uid, req := range c.requests {
+		reqs[uid] = req
+	}
+	c.requests = make(map[uint32]request)
+	c.requestsMu.Unlock()
+
+	for _, req := range reqs {
+		if req.cb != nil {
+			go req.cb(nil, ErrClientDisconnected)
+		}
+	}
+}
+
 func (c *Client) handleDisconnect(d *disconnect) {
 	if d == nil {
 		d = &disconnect{
@@ -548,6 +483,30 @@ func (c *Client) handleDisconnect(d *disconnect) {
 	}
 }
 
+func (c *Client) waitServerPing(disconnectCh chan struct{}, pingInterval uint32) {
+	timeout := c.config.MaxServerPingDelay + time.Duration(pingInterval)*time.Second
+	for {
+		select {
+		case <-c.delayPing:
+		case <-time.After(timeout):
+			fmt.Println("*******************ping timeout")
+			go c.handleDisconnect(&disconnect{Code: connectingNoPing, Reason: "no ping", Reconnect: true})
+		case <-disconnectCh:
+			return
+		}
+	}
+}
+
+func (c *Client) readOnce(t transport) error {
+	reply, disconnect, err := t.Read()
+	if err != nil {
+		go c.handleDisconnect(disconnect)
+		return err
+	}
+	c.handle(reply)
+	return nil
+}
+
 func (c *Client) reader(t transport, disconnectCh chan struct{}) {
 	defer close(disconnectCh)
 	for {
@@ -558,8 +517,245 @@ func (c *Client) reader(t transport, disconnectCh chan struct{}) {
 	}
 }
 
+func (c *Client) runHandlerSync(fn func()) {
+	waitCh := make(chan struct{})
+	c.mu.RLock()
+	c.CBQueue.Push(func(delay time.Duration) {
+		defer close(waitCh)
+		fn()
+	})
+	c.mu.RUnlock()
+	<-waitCh
+}
+
+func (c *Client) runHandlerAsync(fn func()) {
+	c.CBQueue.Push(func(delay time.Duration) {
+		fn()
+	})
+}
+
+func (c *Client) handle(reply *deliverprotocol.Reply) {
+	fmt.Printf("[DEAMON HANDLE RELY FROM DELIVER]\n")
+	if reply.Id > 0 {
+		c.requestsMu.RLock()
+		req, ok := c.requests[reply.Id]
+		c.requestsMu.RUnlock()
+		if ok {
+			if req.cb != nil {
+				req.cb(reply, nil)
+			}
+		}
+		c.removeRequest(reply.Id)
+	} else {
+		if reply.Push == nil {
+			// Ping from server, send pong if needed.
+			select {
+			case c.delayPing <- struct{}{}:
+			}
+			return
+		}
+		c.mu.Lock()
+		if c.state != StateConnected {
+			c.mu.Unlock()
+			return
+		}
+		c.mu.Unlock()
+		c.handlePush(reply.Push)
+	}
+}
+
+func (c *Client) handleMessage(msg *deliverprotocol.Message) error {
+	var handler MessageHandler
+	if c.events != nil && c.events.onMessage != nil {
+		handler = c.events.onMessage
+	}
+	if handler != nil {
+		event := MessageEvent{Data: msg.Data}
+		c.runHandlerSync(func() {
+			handler(event)
+		})
+	}
+	return nil
+}
+
+func (c *Client) handlePush(push *deliverprotocol.Push) {
+	channel := push.Channel
+	c.mu.RLock()
+	sub, ok := c.subs[channel]
+	c.mu.RUnlock()
+	switch {
+	case push.Message != nil:
+		_ = c.handleMessage(push.Message)
+	case push.Unsubscribe != nil:
+		if !ok {
+			c.handleServerUnsub(channel, push.Unsubscribe)
+			return
+		}
+		sub.handleUnsubscribe(push.Unsubscribe)
+	case push.Pub != nil:
+		if !ok {
+			c.handleServerPublication(channel, push.Pub)
+			return
+		}
+		sub.handlePublication(push.Pub)
+	case push.Join != nil:
+		if !ok {
+			c.handleServerJoin(channel, push.Join)
+			return
+		}
+		sub.handleJoin(push.Join.Info)
+	case push.Leave != nil:
+		if !ok {
+			c.handleServerLeave(channel, push.Leave)
+			return
+		}
+		sub.handleLeave(push.Leave.Info)
+	case push.Subscribe != nil:
+		if ok {
+			// Client-side subscription exists.
+			return
+		}
+		c.handleServerSub(channel, push.Subscribe)
+		return
+	case push.Disconnect != nil:
+		code := push.Disconnect.Code
+		reconnect := code < 3500 || code >= 5000 || (code >= 4000 && code < 4500)
+		if reconnect {
+			c.moveToConnecting(code, push.Disconnect.Reason)
+		} else {
+			c.moveToDisconnected(code, push.Disconnect.Reason)
+		}
+	default:
+	}
+}
+
+func (c *Client) handleServerPublication(channel string, pub *deliverprotocol.Publication) {
+	c.mu.Lock()
+	serverSub, ok := c.serverSubs[channel]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	if serverSub.Recoverable && pub.Offset > 0 {
+		serverSub.Offset = pub.Offset
+	}
+	c.mu.Unlock()
+
+	var handler ServerPublicationHandler
+	if c.events != nil && c.events.onServerPublication != nil {
+		handler = c.events.onServerPublication
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			handler(ServerPublicationEvent{Channel: channel, Publication: pubFromProto(pub)})
+		})
+	}
+}
+
+func (c *Client) handleServerJoin(channel string, join *deliverprotocol.Join) {
+	c.mu.Lock()
+	_, ok := c.serverSubs[channel]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+
+	var handler ServerJoinHandler
+	if c.events != nil && c.events.onServerJoin != nil {
+		handler = c.events.onServerJoin
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			handler(ServerJoinEvent{Channel: channel, ClientInfo: infoFromProto(join.Info)})
+		})
+	}
+}
+
+func (c *Client) handleServerLeave(channel string, leave *deliverprotocol.Leave) {
+	c.mu.Lock()
+	_, ok := c.serverSubs[channel]
+	if !ok {
+		c.mu.Unlock()
+		return
+	}
+	c.mu.Unlock()
+
+	var handler ServerLeaveHandler
+	if c.events != nil && c.events.onServerLeave != nil {
+		handler = c.events.onServerLeave
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			handler(ServerLeaveEvent{Channel: channel, ClientInfo: infoFromProto(leave.Info)})
+		})
+	}
+}
+
+func (c *Client) handleServerSub(channel string, sub *deliverprotocol.Subscribe) {
+	c.mu.Lock()
+	_, ok := c.serverSubs[channel]
+	if ok {
+		c.mu.Unlock()
+		return
+	}
+	c.serverSubs[channel] = &serverSub{
+		Offset:      sub.Offset,
+		Epoch:       sub.Epoch,
+		Recoverable: sub.Recoverable,
+	}
+	c.mu.Unlock()
+
+	var handler ServerSubscribedHandler
+	if c.events != nil && c.events.onServerSubscribe != nil {
+		handler = c.events.onServerSubscribe
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			ev := ServerSubscribedEvent{
+				Channel:     channel,
+				Positioned:  sub.GetPositioned(),
+				Recoverable: sub.GetRecoverable(),
+				Data:        sub.GetData(),
+			}
+			if ev.Positioned || ev.Recoverable {
+				ev.StreamPosition = &StreamPosition{
+					Epoch:  sub.GetEpoch(),
+					Offset: sub.GetOffset(),
+				}
+			}
+			handler(ev)
+		})
+	}
+}
+
+func (c *Client) handleServerUnsub(channel string, _ *deliverprotocol.Unsubscribe) {
+	c.mu.Lock()
+	_, ok := c.serverSubs[channel]
+	if ok {
+		delete(c.serverSubs, channel)
+	}
+	c.mu.Unlock()
+	if !ok {
+		return
+	}
+
+	var handler ServerUnsubscribedHandler
+	if c.events != nil && c.events.onServerUnsubscribed != nil {
+		handler = c.events.onServerUnsubscribed
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			handler(ServerUnsubscribedEvent{Channel: channel})
+		})
+	}
+}
+
+func (c *Client) getReconnectDelay() time.Duration {
+	return c.reconnectStrategy.timeBeforeNextAttempt(c.reconnectAttempts)
+}
+
 func (c *Client) startReconnecting() error {
-	log.Debug().Msg("startReconnecting")
 	c.mu.Lock()
 	c.round++
 	round := c.round
@@ -574,17 +770,14 @@ func (c *Client) startReconnecting() error {
 
 	wsConfig := websocketConfig{
 		NetDialContext:    c.config.NetDialContext,
-		TLSConfig:         c.config.TLSConfig,
 		HandshakeTimeout:  c.config.HandshakeTimeout,
 		EnableCompression: c.config.EnableCompression,
-		CookieJar:         c.config.CookieJar,
 		Header:            c.config.Header,
 	}
 
 	u := c.endpoints[round%len(c.endpoints)]
 	t, err := newWebsocketTransport(u, c.protocolType, wsConfig)
 	if err != nil {
-		log.Error().Stack().Err(err).Msg("reconnect 1")
 		c.handleError(TransportError{err})
 		c.mu.Lock()
 		if c.state != StateConnecting {
@@ -601,9 +794,9 @@ func (c *Client) startReconnecting() error {
 	}
 
 	if refreshRequired || (token == "" && getTokenFunc != nil) {
+		// Try to refresh token.
 		newToken, err := c.refreshToken()
 		if err != nil {
-			log.Error().Stack().Err(err).Msg("reconnect 2")
 			if errors.Is(err, ErrUnauthorized) {
 				c.moveToDisconnected(disconnectedUnauthorized, "unauthorized")
 				return nil
@@ -646,7 +839,7 @@ func (c *Client) startReconnecting() error {
 
 	go c.reader(t, disconnectCh)
 
-	err = c.sendConnect(func(res *protocol.ConnectResult, err error) {
+	err = c.sendConnect(func(res *deliverprotocol.ConnectResult, err error) {
 		c.mu.Lock()
 		if c.state != StateConnecting {
 			c.mu.Unlock()
@@ -657,8 +850,6 @@ func (c *Client) startReconnecting() error {
 			c.handleError(ConnectError{err})
 			_ = t.Close()
 			if isTokenExpiredError(err) {
-				log.Error().Stack().Err(err).Msg("reconnect 3")
-
 				c.mu.Lock()
 				defer c.mu.Unlock()
 				if c.state != StateConnecting {
@@ -672,14 +863,12 @@ func (c *Client) startReconnecting() error {
 				})
 				return
 			} else if isServerError(err) && !isTemporaryError(err) {
-				log.Error().Stack().Err(err).Msg("reconnect 5")
 				var serverError *Error
 				if errors.As(err, &serverError) {
 					c.moveToDisconnected(serverError.Code, serverError.Message)
 				}
 				return
 			} else {
-				log.Error().Stack().Err(err).Msg("reconnect 4")
 				c.mu.Lock()
 				defer c.mu.Unlock()
 				if c.state != StateConnecting {
@@ -806,14 +995,11 @@ func (c *Client) startReconnecting() error {
 		}
 
 		if res.Ping > 0 {
-			c.sendPong = res.Pong
-			log.Info().Msg(fmt.Sprintf("ping interval %d\n", res.Ping))
 			go c.waitServerPing(disconnectCh, res.Ping)
 		}
 		c.resubscribe()
 	})
 	if err != nil {
-		log.Error().Stack().Err(err).Msg("reconnect 5")
 		_ = t.Close()
 		c.reconnectAttempts++
 		reconnectDelay := c.getReconnectDelay()
@@ -826,225 +1012,40 @@ func (c *Client) startReconnecting() error {
 	return err
 }
 
+func (c *Client) startConnecting() error {
+	c.mu.Lock()
+	if c.state == StateClosed {
+		c.mu.Unlock()
+		return ErrClientClosed
+	}
+	if c.state == StateConnected || c.state == StateConnecting {
+		c.mu.Unlock()
+		return nil
+	}
+	if c.closeCh == nil {
+		c.closeCh = make(chan struct{})
+	}
+	c.state = StateConnecting
+	c.mu.Unlock()
+
+	var handler ConnectingHandler
+	if c.events != nil && c.events.onConnecting != nil {
+		handler = c.events.onConnecting
+	}
+	if handler != nil {
+		c.runHandlerSync(func() {
+			event := ConnectingEvent{Code: connectingConnectCalled, Reason: "connect called"}
+			handler(event)
+		})
+	}
+
+	return c.startReconnecting()
+}
+
 func (c *Client) resubscribe() {
 	for _, sub := range c.subs {
 		sub.resubscribe()
 	}
-}
-
-func (c *Client) waitServerPing(disconnectCh chan struct{}, pingInterval uint32) {
-	log.Info().Msg("wait server ping")
-	timeout := c.config.MaxServerPingDelay + time.Duration(pingInterval)*time.Second
-	for {
-		select {
-		case <-c.delayPing:
-			log.Info().Msg("reciver ping from server")
-		case <-time.After(timeout):
-			log.Error().Msg("time out server ping")
-			go c.handleDisconnect(&disconnect{Code: connectingNoPing, Reason: "no ping", Reconnect: true})
-		case <-disconnectCh:
-			return
-		}
-	}
-}
-
-// TODO
-func (c *Client) sendRefresh() {
-	// token, err := c.refreshToken()
-	// if err != nil {
-	// 	if errors.Is(err, ErrUnauthorized) {
-	// 		c.moveToDisconnected(disconnectedUnauthorized, "unauthorized")
-	// 		return
-	// 	}
-	// 	c.handleError(RefreshError{err})
-	// 	c.mu.Lock()
-	// 	defer c.mu.Unlock()
-	// 	c.handleRefreshError()
-	// 	return
-	// }
-	// c.mu.Lock()
-	// c.token = token
-	// c.mu.Unlock()
-
-	// cmd := &protocol.Command{
-	// 	Id: c.nextCmdID(),
-	// }
-	// params := &protocol.RefreshRequest{
-	// 	Token: c.token,
-	// }
-	// cmd.Refresh = params
-
-	// _ = c.sendAsync(cmd, func(r *protocol.Reply, err error) {
-	// 	if err != nil {
-	// 		c.handleError(RefreshError{err})
-	// 		c.mu.Lock()
-	// 		defer c.mu.Unlock()
-	// 		c.handleRefreshError()
-	// 		return
-	// 	}
-	// 	if r.Error != nil {
-	// 		c.mu.Lock()
-	// 		if c.state != StateConnected {
-	// 			c.mu.Unlock()
-	// 			return
-	// 		}
-	// 		if r.Error.Temporary {
-	// 			c.handleError(RefreshError{err})
-	// 			c.refreshTimer = time.AfterFunc(10*time.Second, c.sendRefresh)
-	// 			c.mu.Unlock()
-	// 		} else {
-	// 			c.mu.Unlock()
-	// 			c.moveToDisconnected(r.Error.Code, r.Error.Message)
-	// 		}
-	// 		return
-	// 	}
-	// 	expires := r.Refresh.Expires
-	// 	ttl := r.Refresh.Ttl
-	// 	if expires {
-	// 		c.mu.Lock()
-	// 		if c.state == StateConnected {
-	// 			c.refreshTimer = time.AfterFunc(time.Duration(ttl)*time.Second, c.sendRefresh)
-	// 		}
-	// 		c.mu.Unlock()
-	// 	}
-	// })
-}
-
-func (c *Client) send(cmd *protocol.Command) error {
-	transport := c.transport
-	if transport == nil {
-		return ErrClientDisconnected
-	}
-	err := transport.Write(cmd, c.config.WriteTimeout)
-	if err != nil {
-		log.Error().Stack().Err(err).Msg("send cmd to server")
-		go c.handleDisconnect(&disconnect{Code: connectingTransportClosed, Reason: "write error", Reconnect: true})
-		return io.EOF
-	}
-	return nil
-}
-
-func (c *Client) removeRequest(id uint32) {
-	c.requestsMu.Lock()
-	defer c.requestsMu.Unlock()
-	delete(c.requests, id)
-}
-
-type disconnect struct {
-	Code      uint32
-	Reason    string
-	Reconnect bool
-}
-
-func (c *Client) nextCmdID() uint32 {
-	return atomic.AddUint32(&c.cmdID, 1)
-}
-
-func (c *Client) sendAsync(cmd *protocol.Command, cb func(*protocol.Reply, error)) error {
-	c.addRequest(cmd.Id, cb)
-
-	err := c.send(cmd)
-	if err != nil {
-		log.Error().Stack().Err(err).Msg("send cmd")
-		return err
-	}
-	go func() {
-		c.mu.Lock()
-		closeCh := c.closeCh
-		c.mu.Unlock()
-		defer c.removeRequest(cmd.Id)
-		select {
-		case <-time.After(c.config.ReadTimeout):
-			c.requestsMu.RLock()
-			req, ok := c.requests[cmd.Id]
-			c.requestsMu.RUnlock()
-			if !ok {
-				return
-			}
-			log.Debug().Msg("timeout sendAsync")
-			req.cb(nil, ErrTimeout)
-		case <-closeCh:
-			log.Debug().Msg("close chan")
-			c.requestsMu.RLock()
-			req, ok := c.requests[cmd.Id]
-			c.requestsMu.RUnlock()
-			if !ok {
-				return
-			}
-			req.cb(nil, ErrClientDisconnected)
-		}
-	}()
-	return nil
-}
-
-func (c *Client) sendConnect(fn func(*protocol.ConnectResult, error)) error {
-	cmd := &protocol.Command{
-		Id: c.nextCmdID(),
-	}
-
-	req := &protocol.ConnectRequest{}
-	req.Token = c.token
-	req.Name = c.config.Name
-	req.Version = c.config.Version
-	req.Data = c.data
-
-	if len(c.serverSubs) > 0 {
-		subs := make(map[string]*protocol.SubscribeRequest)
-		for channel, serverSub := range c.serverSubs {
-			if !serverSub.Recoverable {
-				continue
-			}
-			subs[channel] = &protocol.SubscribeRequest{
-				Recover: true,
-				Epoch:   serverSub.Epoch,
-				Offset:  serverSub.Offset,
-			}
-		}
-		req.Subs = subs
-	}
-	cmd.Connect = req
-
-	return c.sendAsync(cmd, func(reply *protocol.Reply, err error) {
-		if err != nil {
-			fn(nil, err)
-			return
-		}
-		if reply.Error != nil {
-			fn(nil, errorFromProto(reply.Error))
-			return
-		}
-		fn(reply.Connect, nil)
-	})
-}
-
-type StreamPosition struct {
-	Offset uint64
-	Epoch  string
-}
-
-type serverSub struct {
-	Offset      uint64
-	Epoch       string
-	Recoverable bool
-}
-
-type request struct {
-	cb func(*protocol.Reply, error)
-}
-
-type reconnectStrategy interface {
-	timeBeforeNextAttempt(attempt int) time.Duration
-}
-
-type connectFuture struct {
-	fn      func(error)
-	closeCh chan struct{}
-}
-
-func (c *Client) addRequest(id uint32, cb func(*protocol.Reply, error)) {
-	c.requestsMu.Lock()
-	defer c.requestsMu.Unlock()
-	c.requests[id] = request{cb}
 }
 
 func isTokenExpiredError(err error) bool {
@@ -1068,112 +1069,95 @@ func isTemporaryError(err error) bool {
 	return false
 }
 
-func (c *Client) NewSubscription(channel string, config ...SubscriptionConfig) (*Subscription, error) {
+func (c *Client) refreshToken() (string, error) {
+	handler := c.config.GetToken
+	if handler == nil {
+		c.handleError(ConfigurationError{Err: errors.New("GetToken must be set to handle expired token")})
+		return "", ErrUnauthorized
+	}
+	return handler(ConnectionTokenEvent{})
+}
+
+func (c *Client) sendRefresh() {
+	token, err := c.refreshToken()
+	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			c.moveToDisconnected(disconnectedUnauthorized, "unauthorized")
+			return
+		}
+		c.handleError(RefreshError{err})
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.handleRefreshError()
+		return
+	}
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	var sub *Subscription
-	if _, ok := c.subs[channel]; ok {
-		return nil, ErrDuplicateSubscription
-	}
-	sub = newSubscription(c, channel, config...)
-	c.subs[channel] = sub
-	return sub, nil
-}
+	c.token = token
+	c.mu.Unlock()
 
-func (c *Client) isClosed() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.state == StateClosed
-}
-
-func (c *Client) isConnected() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.state == StateConnected
-}
-
-// Disconnect client from server. It's still possible to connect again later. If
-// you don't need Client anymore – use Client.Close.
-func (c *Client) Disconnect() error {
-	if c.isClosed() {
-		return ErrClientClosed
-	}
-	c.moveToDisconnected(disconnectedDisconnectCalled, "disconnect called")
-	return nil
-}
-
-func (c *Client) handleMessage(msg *protocol.Message) error {
-	var handler MessageHandler
-	if c.events != nil && c.events.onMessage != nil {
-		handler = c.events.onMessage
-	}
-	if handler != nil {
-		event := MessageEvent{Data: msg.Data}
-		c.runHandlerSync(func() {
-			handler(event)
-		})
-	}
-	return nil
-}
-
-type UnsubscribeResult struct{}
-
-func (c *Client) isSubscribed(channel string) bool {
-	c.mu.RLock()
-	_, ok := c.subs[channel]
-	c.mu.RUnlock()
-	return ok
-}
-
-func (c *Client) sendUnsubscribe(channel string, fn func(UnsubscribeResult, error)) {
-	params := &protocol.UnsubscribeRequest{
-		Channel: channel,
-	}
-
-	cmd := &protocol.Command{
+	cmd := &deliverprotocol.Command{
 		Id: c.nextCmdID(),
 	}
-	cmd.Unsubscribe = params
+	params := &deliverprotocol.RefreshRequest{
+		Token: c.token,
+	}
+	cmd.Refresh = params
 
-	err := c.sendAsync(cmd, func(r *protocol.Reply, err error) {
+	_ = c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
 		if err != nil {
-			fn(UnsubscribeResult{}, err)
+			c.handleError(RefreshError{err})
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			c.handleRefreshError()
 			return
 		}
 		if r.Error != nil {
-			fn(UnsubscribeResult{}, errorFromProto(r.Error))
+			c.mu.Lock()
+			if c.state != StateConnected {
+				c.mu.Unlock()
+				return
+			}
+			if r.Error.Temporary {
+				c.handleError(RefreshError{err})
+				c.refreshTimer = time.AfterFunc(10*time.Second, c.sendRefresh)
+				c.mu.Unlock()
+			} else {
+				c.mu.Unlock()
+				c.moveToDisconnected(r.Error.Code, r.Error.Message)
+			}
 			return
 		}
-		fn(UnsubscribeResult{}, nil)
+		expires := r.Refresh.Expires
+		ttl := r.Refresh.Ttl
+		if expires {
+			c.mu.Lock()
+			if c.state == StateConnected {
+				c.refreshTimer = time.AfterFunc(time.Duration(ttl)*time.Second, c.sendRefresh)
+			}
+			c.mu.Unlock()
+		}
 	})
-	if err != nil {
-		fn(UnsubscribeResult{}, err)
-	}
 }
 
-func (c *Client) unsubscribe(channel string, fn func(UnsubscribeResult, error)) {
-	if !c.isSubscribed(channel) {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// Lock must be held outside.
+func (c *Client) handleRefreshError() {
 	if c.state != StateConnected {
 		return
 	}
-	c.sendUnsubscribe(channel, fn)
+	c.refreshTimer = time.AfterFunc(10*time.Second, c.sendRefresh)
 }
 
-func (c *Client) sendSubRefresh(channel string, token string, fn func(*protocol.SubRefreshResult, error)) {
-	cmd := &protocol.Command{
+func (c *Client) sendSubRefresh(channel string, token string, fn func(*deliverprotocol.SubRefreshResult, error)) {
+	cmd := &deliverprotocol.Command{
 		Id: c.nextCmdID(),
 	}
-	params := &protocol.SubRefreshRequest{
+	params := &deliverprotocol.SubRefreshRequest{
 		Channel: channel,
 		Token:   token,
 	}
 	cmd.SubRefresh = params
 
-	_ = c.sendAsync(cmd, func(r *protocol.Reply, err error) {
+	_ = c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
 		if err != nil {
 			fn(nil, err)
 			return
@@ -1186,8 +1170,52 @@ func (c *Client) sendSubRefresh(channel string, token string, fn func(*protocol.
 	})
 }
 
-func (c *Client) sendSubscribe(channel string, data []byte, recover bool, streamPos StreamPosition, token string, positioned bool, recoverable bool, joinLeave bool, fn func(res *protocol.SubscribeResult, err error)) error {
-	params := &protocol.SubscribeRequest{
+func (c *Client) sendConnect(fn func(*deliverprotocol.ConnectResult, error)) error {
+	cmd := &deliverprotocol.Command{
+		Id: c.nextCmdID(),
+	}
+
+	req := &deliverprotocol.ConnectRequest{}
+	req.Token = c.token
+	req.Name = c.config.Name
+	req.Data = c.data
+
+	if len(c.serverSubs) > 0 {
+		subs := make(map[string]*deliverprotocol.SubscribeRequest)
+		for channel, serverSub := range c.serverSubs {
+			if !serverSub.Recoverable {
+				continue
+			}
+			subs[channel] = &deliverprotocol.SubscribeRequest{
+				Recover: true,
+				Epoch:   serverSub.Epoch,
+				Offset:  serverSub.Offset,
+			}
+		}
+		req.Subs = subs
+	}
+	cmd.Connect = req
+
+	return c.sendAsync(cmd, func(reply *deliverprotocol.Reply, err error) {
+		if err != nil {
+			fn(nil, err)
+			return
+		}
+		if reply.Error != nil {
+			fn(nil, errorFromProto(reply.Error))
+			return
+		}
+		fn(reply.Connect, nil)
+	})
+}
+
+type StreamPosition struct {
+	Offset uint64
+	Epoch  string
+}
+
+func (c *Client) sendSubscribe(channel string, data []byte, recover bool, streamPos StreamPosition, token string, positioned bool, recoverable bool, joinLeave bool, fn func(res *deliverprotocol.SubscribeResult, err error)) error {
+	params := &deliverprotocol.SubscribeRequest{
 		Channel: channel,
 	}
 
@@ -1204,12 +1232,12 @@ func (c *Client) sendSubscribe(channel string, data []byte, recover bool, stream
 	params.Recoverable = recoverable
 	params.JoinLeave = joinLeave
 
-	cmd := &protocol.Command{
+	cmd := &deliverprotocol.Command{
 		Id: c.nextCmdID(),
 	}
 	cmd.Subscribe = params
 
-	return c.sendAsync(cmd, func(reply *protocol.Reply, err error) {
+	return c.sendAsync(cmd, func(reply *deliverprotocol.Reply, err error) {
 		if err != nil {
 			fn(nil, err)
 			return
@@ -1222,153 +1250,26 @@ func (c *Client) sendSubscribe(channel string, data []byte, recover bool, stream
 	})
 }
 
-// OnConnecting is a function to handle connecting event.
-func (c *Client) OnConnecting(handler ConnectingHandler) {
-	c.events.onConnecting = handler
-}
-
-// OnDisconnected is a function to handle moveToDisconnected event.
-func (c *Client) OnDisconnected(handler DisconnectHandler) {
-	c.events.onDisconnected = handler
-}
-
-// OnError is a function that will receive unhandled errors for logging.
-func (c *Client) OnError(handler ErrorHandler) {
-	c.events.onError = handler
-}
-
-// OnSubscribed sets function to handle server-side subscription subscribe events.
-func (c *Client) OnSubscribed(handler ServerSubscribedHandler) {
-	c.events.onServerSubscribe = handler
-}
-
-// OnSubscribing sets function to handle server-side subscription subscribing events.
-func (c *Client) OnSubscribing(handler ServerSubscribingHandler) {
-	c.events.onServerSubscribing = handler
-}
-
-// OnUnsubscribed sets function to handle unsubscribe from server-side subscriptions.
-func (c *Client) OnUnsubscribed(handler ServerUnsubscribedHandler) {
-	c.events.onServerUnsubscribed = handler
-}
-
-// OnJoin sets function to handle Join event from server-side subscriptions.
-func (c *Client) OnJoin(handler ServerJoinHandler) {
-	c.events.onServerJoin = handler
-}
-
-// OnLeave sets function to handle Leave event from server-side subscriptions.
-func (c *Client) OnLeave(handler ServerLeaveHandler) {
-	c.events.onServerLeave = handler
-}
-
-// OnPublication sets function to handle Publications from server-side subscriptions.
-func (c *Client) OnPublication(handler ServerPublicationHandler) {
-	c.events.onServerPublication = handler
-}
-
-func (c *Client) Close() {
-	if c.isClosed() {
-		return
-	}
-	c.moveToDisconnected(disconnectedDisconnectCalled, "disconnect called")
-	c.moveToClosed()
-}
-
-func (c *Client) moveToClosed() {
-	c.mu.Lock()
-	if c.state == StateClosed {
-		c.mu.Unlock()
-		return
-	}
-	c.state = StateClosed
-
-	subsToUnsubscribe := make([]*Subscription, 0, len(c.subs))
-	for _, s := range c.subs {
-		s.mu.Lock()
-		if s.state == SubStateUnsubscribed {
-			s.mu.Unlock()
-			continue
-		}
-		s.mu.Unlock()
-		subsToUnsubscribe = append(subsToUnsubscribe, s)
-	}
-	serverSubsToUnsubscribe := make([]string, 0, len(c.serverSubs))
-	for ch := range c.serverSubs {
-		serverSubsToUnsubscribe = append(serverSubsToUnsubscribe, ch)
-	}
-	c.mu.Unlock()
-
-	for _, s := range subsToUnsubscribe {
-		s.moveToUnsubscribed(unsubscribedClientClosed, "client closed")
-	}
-
-	var serverUnsubscribedHandler ServerUnsubscribedHandler
-	if c.events != nil && c.events.onServerUnsubscribed != nil {
-		serverUnsubscribedHandler = c.events.onServerUnsubscribed
-	}
-	if serverUnsubscribedHandler != nil {
-		c.runHandlerAsync(func() {
-			for _, ch := range serverSubsToUnsubscribe {
-				serverUnsubscribedHandler(ServerUnsubscribedEvent{Channel: ch})
-			}
-		})
-	}
-
-	c.mu.Lock()
-	c.cbQueue.close()
-	c.cbQueue = nil
-	c.mu.Unlock()
-}
-
-func (c *Client) publish(ctx context.Context, channel string, data []byte, fn func(PublishResult, error)) {
-	c.onConnect(func(err error) {
-		select {
-		case <-ctx.Done():
-			fn(PublishResult{}, ctx.Err())
-			return
-		default:
-		}
-		if err != nil {
-			fn(PublishResult{}, err)
-			return
-		}
-		c.sendPublish(channel, data, fn)
-	})
-}
-
-func (c *Client) sendPublish(channel string, data []byte, fn func(PublishResult, error)) {
-	params := &protocol.PublishRequest{
-		Channel: channel,
-		Data:    protocol.Raw(data),
-	}
-
-	cmd := &protocol.Command{
-		Id: c.nextCmdID(),
-	}
-	cmd.Publish = params
-	err := c.sendAsync(cmd, func(r *protocol.Reply, err error) {
-		if err != nil {
-			fn(PublishResult{}, err)
-			return
-		}
-		if r.Error != nil {
-			fn(PublishResult{}, errorFromProto(r.Error))
-			return
-		}
-		fn(PublishResult{}, nil)
-	})
-	if err != nil {
-		fn(PublishResult{}, err)
-	}
-}
-
 func (c *Client) nextFutureID() uint64 {
 	return atomic.AddUint64(&c.futureID, 1)
 }
 
+type connectFuture struct {
+	fn      func(error)
+	closeCh chan struct{}
+}
+
 func newConnectFuture(fn func(error)) connectFuture {
 	return connectFuture{fn: fn, closeCh: make(chan struct{})}
+}
+
+// lock must be held outside.
+func (c *Client) resolveConnectFutures(err error) {
+	for _, fut := range c.connectFutures {
+		fut.fn(err)
+		close(fut.closeCh)
+	}
+	c.connectFutures = make(map[uint64]connectFuture)
 }
 
 func (c *Client) onConnect(fn func(err error)) {
@@ -1401,20 +1302,321 @@ func (c *Client) onConnect(fn func(err error)) {
 	}
 }
 
-func (c *Client) Publish(ctx context.Context, channel string, data []byte) (PublishResult, error) {
+type PublishResult struct{}
+
+func (c *Client) Publish(channel string, data []byte) (PublishResult, error) {
 	if c.isClosed() {
 		return PublishResult{}, ErrClientClosed
 	}
 	resCh := make(chan PublishResult, 1)
 	errCh := make(chan error, 1)
-	c.publish(ctx, channel, data, func(result PublishResult, err error) {
+	c.publish(channel, data, func(result PublishResult, err error) {
+		resCh <- result
+		errCh <- err
+	})
+	select {
+	case res := <-resCh:
+		fmt.Println("------------PublishResult-----", res)
+		return res, <-errCh
+	}
+}
+
+func (c *Client) publish(channel string, data []byte, fn func(PublishResult, error)) {
+	c.onConnect(func(err error) {
+		if err != nil {
+			fn(PublishResult{}, err)
+			return
+		}
+		c.sendPublish(channel, data, fn)
+	})
+}
+
+func (c *Client) sendPublish(channel string, data []byte, fn func(PublishResult, error)) {
+	params := &deliverprotocol.PublishRequest{
+		Channel: channel,
+		Data:    deliverprotocol.Raw(data),
+	}
+
+	cmd := &deliverprotocol.Command{
+		Id: c.nextCmdID(),
+	}
+	cmd.Publish = params
+	err := c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
+		if err != nil {
+			fn(PublishResult{}, err)
+			return
+		}
+		if r.Error != nil {
+			fn(PublishResult{}, errorFromProto(r.Error))
+			return
+		}
+		fn(PublishResult{}, nil)
+	})
+	if err != nil {
+		fn(PublishResult{}, err)
+	}
+}
+
+// PresenceResult contains the result of presence op.
+type PresenceResult struct {
+	Clients map[string]ClientInfo
+}
+
+// Presence for a channel without being subscribed.
+func (c *Client) Presence(ctx context.Context, channel string) (PresenceResult, error) {
+	if c.isClosed() {
+		return PresenceResult{}, ErrClientClosed
+	}
+	resCh := make(chan PresenceResult, 1)
+	errCh := make(chan error, 1)
+	c.presence(ctx, channel, func(result PresenceResult, err error) {
 		resCh <- result
 		errCh <- err
 	})
 	select {
 	case <-ctx.Done():
-		return PublishResult{}, ctx.Err()
+		return PresenceResult{}, ctx.Err()
 	case res := <-resCh:
 		return res, <-errCh
 	}
+}
+
+func (c *Client) presence(ctx context.Context, channel string, fn func(PresenceResult, error)) {
+	c.onConnect(func(err error) {
+		select {
+		case <-ctx.Done():
+			fn(PresenceResult{}, ctx.Err())
+			return
+		default:
+		}
+		if err != nil {
+			fn(PresenceResult{}, err)
+			return
+		}
+		c.sendPresence(channel, fn)
+	})
+}
+
+func (c *Client) sendPresence(channel string, fn func(PresenceResult, error)) {
+	params := &deliverprotocol.PresenceRequest{
+		Channel: channel,
+	}
+
+	cmd := &deliverprotocol.Command{
+		Id: c.nextCmdID(),
+	}
+	cmd.Presence = params
+
+	err := c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
+		if err != nil {
+			fn(PresenceResult{}, err)
+			return
+		}
+		if r.Error != nil {
+			fn(PresenceResult{}, errorFromProto(r.Error))
+			return
+		}
+
+		p := make(map[string]ClientInfo)
+
+		for uid, info := range r.Presence.Presence {
+			p[uid] = infoFromProto(info)
+		}
+		fn(PresenceResult{Clients: p}, nil)
+	})
+	if err != nil {
+		fn(PresenceResult{}, err)
+	}
+}
+
+// PresenceStats represents short presence information.
+type PresenceStats struct {
+	NumClients int
+	NumUsers   int
+}
+
+// PresenceStatsResult wraps presence stats.
+type PresenceStatsResult struct {
+	PresenceStats
+}
+
+// PresenceStats for a channel without being subscribed.
+func (c *Client) PresenceStats(ctx context.Context, channel string) (PresenceStatsResult, error) {
+	if c.isClosed() {
+		return PresenceStatsResult{}, ErrClientClosed
+	}
+	resCh := make(chan PresenceStatsResult, 1)
+	errCh := make(chan error, 1)
+	c.presenceStats(ctx, channel, func(result PresenceStatsResult, err error) {
+		resCh <- result
+		errCh <- err
+	})
+	select {
+	case <-ctx.Done():
+		return PresenceStatsResult{}, ctx.Err()
+	case res := <-resCh:
+		return res, <-errCh
+	}
+}
+
+func (c *Client) presenceStats(ctx context.Context, channel string, fn func(PresenceStatsResult, error)) {
+	c.onConnect(func(err error) {
+		select {
+		case <-ctx.Done():
+			fn(PresenceStatsResult{}, ctx.Err())
+			return
+		default:
+		}
+		if err != nil {
+			fn(PresenceStatsResult{}, err)
+			return
+		}
+		c.sendPresenceStats(channel, fn)
+	})
+}
+
+func (c *Client) sendPresenceStats(channel string, fn func(PresenceStatsResult, error)) {
+	params := &deliverprotocol.PresenceStatsRequest{
+		Channel: channel,
+	}
+
+	cmd := &deliverprotocol.Command{
+		Id: c.nextCmdID(),
+	}
+	cmd.PresenceStats = params
+
+	err := c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
+		if err != nil {
+			fn(PresenceStatsResult{}, err)
+			return
+		}
+		if r.Error != nil {
+			fn(PresenceStatsResult{}, errorFromProto(r.Error))
+			return
+		}
+		fn(PresenceStatsResult{PresenceStats{
+			NumClients: int(r.PresenceStats.NumClients),
+			NumUsers:   int(r.PresenceStats.NumUsers),
+		}}, nil)
+	})
+	if err != nil {
+		fn(PresenceStatsResult{}, err)
+		return
+	}
+}
+
+type UnsubscribeResult struct{}
+
+func (c *Client) unsubscribe(channel string, fn func(UnsubscribeResult, error)) {
+	if !c.isSubscribed(channel) {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.state != StateConnected {
+		return
+	}
+	c.sendUnsubscribe(channel, fn)
+}
+
+func (c *Client) sendUnsubscribe(channel string, fn func(UnsubscribeResult, error)) {
+	params := &deliverprotocol.UnsubscribeRequest{
+		Channel: channel,
+	}
+
+	cmd := &deliverprotocol.Command{
+		Id: c.nextCmdID(),
+	}
+	cmd.Unsubscribe = params
+
+	err := c.sendAsync(cmd, func(r *deliverprotocol.Reply, err error) {
+		if err != nil {
+			fn(UnsubscribeResult{}, err)
+			return
+		}
+		if r.Error != nil {
+			fn(UnsubscribeResult{}, errorFromProto(r.Error))
+			return
+		}
+		fn(UnsubscribeResult{}, nil)
+	})
+	if err != nil {
+		fn(UnsubscribeResult{}, err)
+	}
+}
+
+func (c *Client) sendAsync(cmd *deliverprotocol.Command, cb func(*deliverprotocol.Reply, error)) error {
+	c.addRequest(cmd.Id, cb)
+
+	err := c.send(cmd)
+	if err != nil {
+		return err
+	}
+	go func() {
+		c.mu.Lock()
+		closeCh := c.closeCh
+		c.mu.Unlock()
+		defer c.removeRequest(cmd.Id)
+		select {
+		case <-time.After(c.config.ReadTimeout):
+			c.requestsMu.RLock()
+			req, ok := c.requests[cmd.Id]
+			c.requestsMu.RUnlock()
+			if !ok {
+				return
+			}
+			fmt.Println("-----------timeout----", cmd.String())
+			req.cb(nil, ErrTimeout)
+		case <-closeCh:
+			c.requestsMu.RLock()
+			req, ok := c.requests[cmd.Id]
+			c.requestsMu.RUnlock()
+			if !ok {
+				return
+			}
+			req.cb(nil, ErrClientDisconnected)
+		}
+	}()
+	return nil
+}
+
+func (c *Client) send(cmd *deliverprotocol.Command) error {
+	transport := c.transport
+	if transport == nil {
+		return ErrClientDisconnected
+	}
+	err := transport.Write(cmd, c.config.WriteTimeout)
+	if err != nil {
+		go c.handleDisconnect(&disconnect{Code: connectingTransportClosed, Reason: "write error", Reconnect: true})
+		return io.EOF
+	}
+	return nil
+}
+
+type request struct {
+	cb func(*deliverprotocol.Reply, error)
+}
+
+func (c *Client) addRequest(id uint32, cb func(*deliverprotocol.Reply, error)) {
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	c.requests[id] = request{cb}
+}
+
+func (c *Client) removeRequest(id uint32) {
+	c.requestsMu.Lock()
+	defer c.requestsMu.Unlock()
+	delete(c.requests, id)
+}
+
+type disconnect struct {
+	Code      uint32
+	Reason    string
+	Reconnect bool
+}
+
+type serverSub struct {
+	Offset      uint64
+	Epoch       string
+	Recoverable bool
 }

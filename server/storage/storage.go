@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -47,13 +48,43 @@ func Get() *sql.DB {
 	return db
 }
 
-func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
+func GetClients(userID string, name string) ([]*models.Client, error) {
+	query := `
+		SELECT id, name, user_id
+		FROM clients
+		WHERE user_id = $1 AND name = $2`
+
+	rows, err := Get().Query(query, userID, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clients []*models.Client
+
+	for rows.Next() {
+		var client models.Client
+		err := rows.Scan(&client.ID, &client.Name, &client.UserID)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, &client)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return clients, nil
+}
+
+func CreateWorkflow(userID string, w *workflow.WorkflowFile, rawData string) (int64, error) {
 	ctx := context.Background()
 	tx, err := Get().BeginTx(ctx, nil)
 	if err != nil {
 		return -1, err
 	}
-	rawData, err := json.Marshal(w)
+
 	if err != nil {
 		return -1, err
 	}
@@ -135,7 +166,6 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 			clients,
 			retries,
 			executor,
-			duration,
 			workflow_id,
 			status,
 			payload,
@@ -143,6 +173,7 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 		) VALUES `
 		values := make([]string, 0)
 		w.Tasks.Range(func(key string, value *workflow.Task) error {
+			fmt.Printf("CLIENT--- %+v\n", value.Clients)
 			deps, err := json.Marshal(value.Deps)
 			if err != nil {
 				return err
@@ -151,7 +182,7 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 			if err != nil {
 				return err
 			}
-			values = append(values, fmt.Sprintf("('%s','%s','%s','%s','%s',%d,'%s','%s',%d,%d,'%s','%s')",
+			values = append(values, fmt.Sprintf("('%s','%s','%s','%s','%s',%d,'%s',%d,%d,'%s','%s')",
 				key,
 				string(deps),
 				value.Schedule,
@@ -159,7 +190,6 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 				string(clients),
 				value.Retries,
 				value.Executor,
-				value.Duration,
 				wid,
 				models.TaksPending,
 				value.Payload,
@@ -181,7 +211,9 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 			listens,
 			flows,
 			workflow_id,
-			status
+			status,
+			queue,
+			standard_name
 		) VALUES`
 		values := make([]string, 0)
 		w.Brokers.Range(func(key string, value *workflow.Broker) error {
@@ -196,12 +228,14 @@ func CreateWorkflow(userID string, w *workflow.WorkflowFile) (int64, error) {
 				return err
 			}
 
-			values = append(values, fmt.Sprintf("('%s','%s','%s',%d,%d)",
+			values = append(values, fmt.Sprintf("('%s','%s','%s',%d,%d,%t,'%s')",
 				key,
 				listens,
 				flows,
 				wid,
 				models.BrokerPending,
+				value.Queue,
+				strings.ToLower(key),
 			))
 
 			return nil
@@ -260,7 +294,7 @@ func DropWorkflow(userID string, id string) (int64, error) {
 }
 
 func ListWorkflow(userID string, query map[string]string) ([]*models.Workflow, error) {
-	sqlStr := `SELECT id, namespace, name,status, created_at `
+	sqlStr := `SELECT id, namespace, name,status, created_at, raw_data FROM workflows `
 	whereQ := make([]string, 0)
 	whereQ = append(whereQ, fmt.Sprintf(" user_id = %s ", userID))
 	if len(whereQ) > 0 {
@@ -279,31 +313,47 @@ func ListWorkflow(userID string, query map[string]string) ([]*models.Workflow, e
 			&w.Name,
 			&w.Status,
 			&w.CreatedAt,
+			&w.RawData,
 		)
 		workflows = append(workflows, &w)
 	}
 	return workflows, nil
 }
 
-func SetClient(client *models.Client) error {
-	fmt.Println("----- RUn here---")
-	var existingName string
-	err := Get().QueryRow("SELECT name FROM clients WHERE name = $1", client.Name).Scan(&existingName)
+func GetWorkflows() ([]int64, error) {
+	sqlStr := `SELECT id FROM workflows `
+	rows, err := Get().Query(sqlStr)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int64, 0)
+	for rows.Next() {
+		var id int64
+		rows.Scan(
+			&id,
+		)
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
 
+func SetClient(client *models.Client) (int64, error) {
+	var existingName string
+	err := Get().QueryRow("SELECT id, name FROM clients WHERE name = $1", client.Name).Scan(&client.ID, &existingName)
+	fmt.Println("SET CLIENT ---")
 	if err == sql.ErrNoRows {
-		_, err = Get().Exec("INSERT INTO clients(name, kairos_name, user_id) VALUES($1, $2, $3)",
-			client.Name, client.KairosName, client.UserID)
-		return err
+		err = Get().QueryRow("INSERT INTO clients(name, user_id, created_at, active_since) VALUES($1, $2, $3,$4) RETURNING id",
+			client.Name, client.UserID, client.CreatedAt, client.ActiveSince).Scan(&client.ID)
+		return client.ID, err
 	}
 
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	_, err = db.Exec("UPDATE clients SET kairos_name = $1, user_id = $2 WHERE name = $3",
-		client.KairosName, client.UserID, client.Name)
+	_, err = db.Exec("UPDATE clients SET user_id = $1, active_since= $2 WHERE name = $3", client.UserID, client.ActiveSince, client.Name)
 
-	return err
+	return client.ID, err
 }
 
 type TaskQuery struct {
@@ -312,7 +362,7 @@ type TaskQuery struct {
 
 func DetailWorkflow(workflowID int64) (*workflow.Workflow, error) {
 	query := `
-		SELECT id, namespace, name, status, version, created_at, updated_at
+		SELECT id, namespace, name, status, version, created_at, updated_at, user_id
 		FROM workflows
 		WHERE id = $1
 	`
@@ -322,7 +372,9 @@ func DetailWorkflow(workflowID int64) (*workflow.Workflow, error) {
 
 	err := row.Scan(
 		&w.ID, &w.Namespace, &w.Name, &w.Status, &w.Version,
-		&w.CreatedAt, &w.UpdatedAt)
+		&w.CreatedAt, &w.UpdatedAt, &w.UserID,
+	)
+
 	if err != nil {
 		fmt.Println("err 1")
 		return nil, err
@@ -340,21 +392,33 @@ func DetailWorkflow(workflowID int64) (*workflow.Workflow, error) {
 
 	for _, t := range taskM {
 		task := workflow.Task{
-			ID:        t.ID,
-			Name:      t.Name,
-			Schedule:  t.Schedule,
-			Timezone:  t.Timezone,
-			Retries:   t.Retries,
-			Executor:  t.Executor,
-			Payload:   t.Payload,
-			ExpiresAt: t.ExpiresAt,
+			ID:         t.ID,
+			WorkflowID: workflowID,
+			Name:       t.Name,
+			Schedule:   t.Schedule,
+			Timezone:   t.Timezone,
+			Retries:    t.Retries,
+			Executor:   t.Executor,
+			Payload:    t.Payload,
+			ExpiresAt:  t.ExpiresAt,
+			Metadata:   map[string]string{},
 		}
-		fmt.Println("taskID", t.ID)
 		json.Unmarshal([]byte(t.Deps), &task.Deps)
 		json.Unmarshal([]byte(t.Clients), &task.Clients)
 		json.Unmarshal([]byte(t.Clients), &task.Clients)
+		for _, c := range task.Clients {
+			clients, err := GetClients(fmt.Sprint(w.UserID), c)
+			if err != nil {
+				return nil, err
+			}
+			if len(clients) > 1 {
+				return nil, fmt.Errorf(" more than one client ")
+			}
+			task.Metadata[fmt.Sprint(clients[0].Name)] = fmt.Sprint(clients[0].ID)
 
+		}
 		w.Tasks.Set(t.Name, &task)
+
 	}
 
 	brokerM, err := GetBrokers(&BrokerQuery{workflowID: workflowID})
@@ -367,8 +431,9 @@ func DetailWorkflow(workflowID int64) (*workflow.Workflow, error) {
 	}
 	for _, b := range brokerM {
 		broker := workflow.Broker{
-			ID:   b.ID,
-			Name: b.Name,
+			ID:    b.ID,
+			Name:  b.Name,
+			Queue: b.Queue,
 		}
 
 		json.Unmarshal([]byte(b.Listens), &broker.Listens)
@@ -392,6 +457,21 @@ func DetailWorkflow(workflowID int64) (*workflow.Workflow, error) {
 
 		w.Vars.Set(v.Key, &_v)
 	}
+
+	clientM, err := GetAllClient(fmt.Sprint(w.UserID))
+	if err != nil {
+		fmt.Println("err 6")
+		return nil, err
+	}
+
+	w.Clients = make([]*workflow.Client, 0)
+	for _, c := range clientM {
+		w.Clients = append(w.Clients, &workflow.Client{
+			ID:   c.ID,
+			Name: c.Name,
+		})
+	}
+
 	return &w, err
 }
 
@@ -418,7 +498,7 @@ func DetailWorkflowModel(workflowID int64) (*models.Workflow, error) {
 
 func GetTasks(q *TaskQuery) ([]*models.Task, error) {
 	query := `
-		SELECT id, name, deps, schedule, timezone, clients, retries, executor, duration, workflow_id, status, payload, expires_at
+		SELECT id, name, deps, schedule, timezone, clients, retries, executor, workflow_id, status, payload, expires_at
 		FROM tasks
 		WHERE workflow_id = $1
 	`
@@ -435,7 +515,7 @@ func GetTasks(q *TaskQuery) ([]*models.Task, error) {
 		var task models.Task
 		err := rows.Scan(
 			&task.ID, &task.Name, &task.Deps, &task.Schedule, &task.Timezone, &task.Clients, &task.Retries,
-			&task.Executor, &task.Duration, &task.WorkflowID, &task.Status, &task.Payload, &task.ExpiresAt,
+			&task.Executor, &task.WorkflowID, &task.Status, &task.Payload, &task.ExpiresAt,
 		)
 		if err != nil {
 			return nil, err
@@ -456,7 +536,7 @@ type BrokerQuery struct {
 
 func GetBrokers(q *BrokerQuery) ([]*models.Broker, error) {
 	query := `
-		SELECT id, name, listens, flows, workflow_id, status
+		SELECT id, name, listens, flows, workflow_id, status, queue
 		FROM brokers
 		WHERE workflow_id = $1
 	`
@@ -472,7 +552,7 @@ func GetBrokers(q *BrokerQuery) ([]*models.Broker, error) {
 	for rows.Next() {
 		var broker models.Broker
 		err := rows.Scan(
-			&broker.ID, &broker.Name, &broker.Listens, &broker.Flows, &broker.WorkflowID, &broker.Status,
+			&broker.ID, &broker.Name, &broker.Listens, &broker.Flows, &broker.WorkflowID, &broker.Status, &broker.Queue,
 		)
 		if err != nil {
 			return nil, err
@@ -494,7 +574,7 @@ type ClientQuery struct {
 
 func GetClient(q *ClientQuery) (*models.Client, error) {
 	query := `
-		SELECT id, kairos_name, name, user_id
+		SELECT id, name, user_id
 		FROM clients
 		WHERE name = $1 AND user_id = $2
 	`
@@ -502,7 +582,6 @@ func GetClient(q *ClientQuery) (*models.Client, error) {
 
 	err := Get().QueryRow(query, q.Name, q.UserID).Scan(
 		&client.ID,
-		&client.KairosName,
 		&client.Name,
 		&client.UserID,
 	)
@@ -512,6 +591,36 @@ func GetClient(q *ClientQuery) (*models.Client, error) {
 	}
 
 	return &client, err
+}
+
+func GetAllClient(userID string) ([]*models.Client, error) {
+	query := `
+		SELECT id, name, user_id, active_since, created_at
+		FROM clients
+		WHERE user_id = $1
+	`
+
+	rows, err := db.Query(query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var clients []*models.Client
+
+	for rows.Next() {
+		var client models.Client
+		if err := rows.Scan(&client.ID, &client.Name, &client.UserID, &client.ActiveSince, &client.CreatedAt); err != nil {
+			return nil, err
+		}
+		clients = append(clients, &client)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return clients, nil
 }
 
 type VarsQuery struct {
@@ -549,6 +658,368 @@ func GetVars(q *VarsQuery) ([]*models.Vars, error) {
 	}
 
 	return vars, nil
+}
+
+func LogMessageFlow(mf *models.MessageFlow) (int64, error) {
+	if mf.Flow == models.DeliverFlow {
+		var stauts int
+		err := db.QueryRow("SELECT id,status FROM message_flows WHERE workflow_id = $1 AND deliver_id = $2 AND created_at = $3",
+			mf.WorkflowID, mf.DeliverID, mf.CreatedAt).Scan(&mf.ID, &stauts)
+		if err == sql.ErrNoRows {
+			return InsertMessageFlow(mf)
+		}
+		if err == nil && stauts == workflow.Delivering {
+			if _, err = db.Exec("UPDATE message_flows SET status=$1,elapsed_time=$2,response_size=$3  WHERE id=$4",
+				mf.Status, mf.ElapsedTime, mf.ResponseSize, mf.ID); err != nil {
+				return mf.ID, err
+			}
+
+		}
+		return mf.ID, err
+	}
+	return InsertMessageFlow(mf)
+}
+
+func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
+
+	query := `
+		INSERT INTO message_flows 
+		(	status, 
+			sender_id, 
+			sender_type, 
+			receiver_id, 
+			receiver_type, 
+			workflow_id, 
+			message,
+			attemp, 
+			created_at, 
+			flow,
+			deliver_id,
+			elapsed_time,
+			request_size,
+			response_size
+		 )
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,$12,$13,$14)
+		RETURNING id`
+
+	err := db.QueryRow(query,
+		mf.Status,
+		mf.SenderID,
+		mf.SenderType,
+		mf.ReceiverID,
+		mf.ReceiverType,
+		mf.WorkflowID,
+		mf.Message,
+		mf.Attemp,
+		mf.CreatedAt,
+		mf.Flow,
+		mf.DeliverID,
+		mf.ElapsedTime,
+		mf.RequestSize,
+		mf.ResponseSize,
+	).Scan(&mf.ID)
+	if err != nil {
+		fmt.Println("ERR 1")
+		return -1, err
+	}
+
+	return mf.ID, nil
+}
+
+func InsertChannel(channel *models.Channel) error {
+	query := `
+		INSERT INTO channels (user_id, name)
+		VALUES ($1, $2)
+		RETURNING id`
+
+	err := Get().QueryRow(
+		query,
+		channel.UserID, channel.Name,
+	).Scan(&channel.ID)
+
+	return err
+}
+
+func SetBrokerQueue(brokerQueue *models.BrokerQueue) error {
+	_, err := Get().Exec("INSERT INTO broker_queues(key, value, workflow_id, used, created_at) VALUES($1, $2, $3, $4, $5)",
+		brokerQueue.Key, brokerQueue.Value, brokerQueue.WorkflowID, brokerQueue.Used, brokerQueue.CreatedAt)
+	return err
+}
+
+func GetKVQueue(key string, workflowID int64) (*models.BrokerQueue, error) {
+	fmt.Printf("Key = %s, workflowID= %d \n", key, workflowID)
+	rows, err := db.Query("SELECT id, value FROM broker_queues WHERE key = $1 AND workflow_id = $2 AND used = false ORDER BY created_at DESC LIMIT 1", key, workflowID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bq models.BrokerQueue
+	for rows.Next() {
+		err := rows.Scan(&bq.ID, &bq.Value)
+		if err != nil {
+			return nil, err
+		}
+
+	}
+	if bq.ID == 0 {
+		return nil, errors.New("no row")
+	}
+	bq.Key = key
+	return &bq, nil
+}
+
+func GetKVQueues(keys map[string]bool, workflowID int64) ([]*models.BrokerQueue, error) {
+	bqs := make([]*models.BrokerQueue, 0)
+	for k := range keys {
+		bq, err := GetKVQueue(k, workflowID)
+		if err != nil {
+			return nil, err
+		}
+		bqs = append(bqs, bq)
+	}
+
+	return bqs, nil
+}
+
+func UsedKVQueue(ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	idsString := strings.Trim(strings.Join(strings.Fields(fmt.Sprint(ids)), ","), "[]")
+
+	_, err := db.Exec("UPDATE broker_queues SET used = true WHERE id IN (" + idsString + ")")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildPlaceholders(count int) string {
+	placeholders := make([]byte, count*2-1)
+	for i := range placeholders {
+		placeholders[i] = '$'
+		if i%2 == 1 {
+			placeholders[i] = ','
+		}
+	}
+	return string(placeholders)
+}
+
+type ChannelOptions struct {
+	UserID string
+	Name   string
+}
+
+func GetChannels(opt *ChannelOptions) ([]*models.Channel, error) {
+	query := "SELECT id, user_id, name, created_at FROM channels "
+
+	var values []interface{}
+	var index int
+	q := make([]string, 0)
+	if opt.UserID != "" {
+		index++
+		q = append(q, fmt.Sprintf(" user_id = $%d ", index))
+		values = append(values, opt.UserID)
+	}
+
+	if opt.Name != "" {
+		index++
+		q = append(q, fmt.Sprintf(" name = $%d ", index))
+		values = append(values, opt.Name)
+	}
+
+	if len(q) > 0 {
+		query += " WHERE " + strings.Join(q, " AND ")
+	}
+
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	var channels []*models.Channel
+	rows, err := stmt.Query(values...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var channel models.Channel
+		if err := rows.Scan(&channel.ID, &channel.UserID, &channel.Name, &channel.CreatedAt); err != nil {
+			return nil, err
+		}
+		channels = append(channels, &channel)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return channels, nil
+}
+
+func CreateChannel(c *models.Channel) (int64, error) {
+	query := "INSERT INTO channels (user_id, name, created_at) VALUES ($1, $2, $3) RETURNING id"
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return -1, err
+	}
+	defer stmt.Close()
+
+	err = stmt.QueryRow(c.UserID, c.Name, c.CreatedAt).Scan(&c.ID)
+	if err != nil {
+		return -1, err
+	}
+
+	return c.ID, nil
+}
+
+func GetInfoUser(userID string) (*models.User, error) {
+	query := "SELECT id, username, email, avatar  FROM users WHERE id = $1"
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+	var user models.User
+	err = stmt.QueryRow(userID).Scan(&user.ID, &user.Username, &user.Email, &user.Avatar)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func addChannelPermission(tx *sql.Tx, certID int64, role int, channelID int64) error {
+	_, err := tx.Exec(`
+		INSERT INTO channel_permissions (cert_id, role, channel_id)
+		VALUES ($1, $2, $3) RETURNING id, role, channel_id
+	`, certID, role, channelID)
+	return err
+}
+
+func createCertificate(tx *sql.Tx, name string, userID int64, apiKey string, expireAt int64, createdAt int64) (int64, error) {
+	var id int64
+	err := tx.QueryRow(`
+		INSERT INTO certificates (user_id, api_key, secret_key, expire_at, created_at,name)
+		VALUES ($1, $2, $3, $4, $5,$6) RETURNING id
+	`, userID, apiKey, "", expireAt, createdAt, name).Scan(&id)
+	if err != nil {
+		return -1, err
+	}
+	return id, nil
+}
+
+func CreateCertificate(name string, userID int64, apiKey string, expireAt int64, pers []*models.ChannelPermission, cb func(int64) (string, error)) (int64, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return -1, err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = tx.Rollback()
+		} else {
+			err = tx.Commit()
+		}
+	}()
+
+	certID, err := createCertificate(tx, name, userID, apiKey, expireAt, helper.GetTimeNow())
+	fmt.Println("create Cert", err)
+	if err != nil {
+		return -1, err
+	}
+
+	secretKey, err := cb(certID)
+	if err != nil {
+		return -1, err
+	}
+
+	_, err = tx.Exec(`
+		UPDATE certificates
+		SET secret_key = $1
+		WHERE id = $2
+	`, secretKey, certID)
+
+	for _, cp := range pers {
+		err = addChannelPermission(tx, certID, cp.Role, cp.ChannelID)
+		if err != nil {
+			return -1, err
+		}
+	}
+
+	return certID, nil
+}
+
+type ChannelPermit struct {
+	ID   int64
+	Name string
+	Role int32
+}
+
+func GetChannelInfoByCertID(certID int64) ([]*ChannelPermit, error) {
+
+	rows, err := Get().Query(`
+		SELECT c.id, c.name, cp.role
+		FROM channels c
+		JOIN channel_permissions cp ON c.id = cp.channel_id
+		WHERE cp.cert_id = $1
+	`, certID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var channelPermits []*ChannelPermit
+	for rows.Next() {
+		var permit ChannelPermit
+		err := rows.Scan(&permit.ID, &permit.Name, &permit.Role)
+		if err != nil {
+			return nil, err
+		}
+		channelPermits = append(channelPermits, &permit)
+	}
+
+	return channelPermits, nil
+}
+
+func GetCertificatesByUserID(userID int64) ([]*models.Certificate, error) {
+	rows, err := db.Query(`
+		SELECT id, user_id, api_key, secret_key, expire_at, created_at,name
+		FROM certificates
+		WHERE user_id = $1
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var certificates []*models.Certificate
+	for rows.Next() {
+		var certificate models.Certificate
+		err := rows.Scan(&certificate.ID, &certificate.UserID, &certificate.APIKey, &certificate.SecretKey, &certificate.ExpireAt, &certificate.CreatedAt, &certificate.Name)
+		if err != nil {
+			return nil, err
+		}
+		certificates = append(certificates, &certificate)
+	}
+
+	return certificates, nil
+}
+
+func CreateClient(client *models.Client) (int64, error) {
+	err := db.QueryRow("INSERT INTO clients (name, user_id, active_since, created_at) VALUES ($1, $2, $3, $4) RETURNING id",
+		client.Name, client.UserID, client.ActiveSince, client.CreatedAt).Scan(&client.ID)
+
+	if err != nil {
+		return -1, err
+	}
+
+	return client.ID, nil
 }
 
 type Storage interface {

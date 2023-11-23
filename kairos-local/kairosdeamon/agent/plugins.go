@@ -45,8 +45,6 @@ func (p *Plugins) DiscoverPlugins() error {
 		return err
 	}
 
-	// Next, look in the same directory as the Dkron executable, usually
-	// /usr/local/bin. If found, this replaces what we found in the config path.
 	exePath, err := osext.Executable()
 	if err != nil {
 		logrus.WithError(err).Error("Error loading exe directory")
@@ -107,7 +105,6 @@ func getPluginName(file string) (string, bool) {
 }
 
 func (p *Plugins) pluginFactory(path string, pluginType string) (interface{}, error) {
-	// Build the plugin client configuration and init the plugin
 	var config plugin.ClientConfig
 	config.Cmd = exec.Command(path)
 	config.HandshakeConfig = kplugin.Handshake
@@ -126,8 +123,6 @@ func (p *Plugins) pluginFactory(path string, pluginType string) (interface{}, er
 
 	client := plugin.NewClient(&config)
 
-	// Request the RPC client so we can get the provider
-	// so we can build the actual RPC-implemented provider.
 	rpcClient, err := client.Client()
 	if err != nil {
 		return nil, err

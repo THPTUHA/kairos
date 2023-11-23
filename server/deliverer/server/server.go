@@ -3,34 +3,50 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/logger"
 	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/THPTUHA/kairos/server/deliverer"
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
+	"github.com/THPTUHA/kairos/server/messaging"
+	"github.com/THPTUHA/kairos/server/plugin/proto"
+	"github.com/THPTUHA/kairos/server/storage/models"
 	"github.com/gorilla/mux"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
 )
 
+type Reply struct {
+	ID   int64
+	Data string
+}
+
 type Message struct {
 	Cmd     int
 	Payload string
 }
-
 type DelivererServer struct {
 	node *deliverer.Node
 	sub  *natsSub
 
 	logger *logrus.Entry
 }
+
+const (
+	DeliverBorkerCmd = iota
+	DeleteWorkerCmd
+	ReceiveDeliverTaskCmd
+)
 
 const (
 	ConnectServerCmd = iota
@@ -59,7 +75,9 @@ func main() {
 func (s *DelivererServer) Start(signals chan os.Signal) {
 	auth.Init("kairosauthac", "kairosauthrf")
 	router := mux.NewRouter().StrictSlash(true)
-	router.Handle("/pubsub", deliverer.NewWebsocketHandler(s.node, deliverer.WebsocketConfig{}))
+	router.Handle("/pubsub", deliverer.NewWebsocketHandler(s.node, deliverer.WebsocketConfig{
+		CheckOrigin: s.checkSameHost,
+	}))
 
 	fmt.Printf("Deliver running on %d \n", Port)
 
@@ -79,21 +97,18 @@ func handleLog(e deliverer.LogEntry) {
 
 func createServer() (*DelivererServer, error) {
 	log := logger.InitLogger(logrus.DebugLevel.String(), "deliverer")
-	node, err := createNode()
+	var d DelivererServer
+	err := d.createNode()
 	if err != nil {
 		return nil, err
 	}
 
-	sub := createSub(log)
-
-	return &DelivererServer{
-		node:   node,
-		sub:    sub,
-		logger: log,
-	}, nil
+	d.createSub(log)
+	d.logger = log
+	return &d, nil
 }
 
-func createSub(log *logrus.Entry) *natsSub {
+func (d *DelivererServer) createSub(log *logrus.Entry) {
 	sub := NewNatsSub(&natsSubConfig{
 		url:           nats.DefaultURL,
 		name:          "deliverer",
@@ -101,107 +116,190 @@ func createSub(log *logrus.Entry) *natsSub {
 		maxReconnects: 10,
 		logger:        log,
 	})
-	return sub
+	d.sub = sub
 }
 
 func (s *DelivererServer) startSub(signals chan os.Signal) {
 	subList := make(map[string]nats.MsgHandler)
-	subList["deliver"] = func(msg *nats.Msg) {
-		var task workflow.Task
-		err := json.Unmarshal(msg.Data, &task)
+	subList[messaging.DELIVERER_TASK] = func(msg *nats.Msg) {
+		var cmd workflow.CmdTask
+		err := json.Unmarshal(msg.Data, &cmd)
 		if err != nil {
-			s.logger.WithField("deliver", "reciver data").Error(err)
+			s.logger.WithField("deliver", "receiver data").Error(err)
 			return
 		}
-		data, err := json.Marshal(task)
-		if err != nil {
-			s.logger.WithField("deliver", "reciver data").Error(err)
-			return
-		}
-
-		for _, c := range task.Clients {
-			ch := task.Domains[c]
-			s.logger.WithField("deliver", "send to client").Debug(ch)
-			s.node.Publish(ch, data)
-		}
-
-		s.logger.WithField("deliver", "reciver data").Debug(fmt.Sprintf("%+v", task))
+		s.node.Publish(cmd.Channel, msg.Data)
+		s.logger.WithField("deliver", "receiver deliver cmd").Debug(fmt.Sprintf("id=%d channel=%s", cmd.DeliverID, cmd.Channel))
 	}
 
+	subList[messaging.MONITOR_WORKFLOW] = func(msg *nats.Msg) {
+		var cmd workflow.MonitorWorkflow
+		err := json.Unmarshal(msg.Data, &cmd)
+		if err != nil {
+			s.logger.WithField("deliver", "receiver data").Error(err)
+			return
+		}
+		s.node.Publish(fmt.Sprintf("kairosuser-%d", cmd.UserID), msg.Data)
+		fmt.Printf("[ DELIVER MONITOR] %+v \n", cmd)
+	}
 	s.sub.Subscribes(subList, signals)
 }
 
-func createNode() (*deliverer.Node, error) {
+type ChannelRole struct {
+	Name string
+	Role int32
+}
+
+func (d *DelivererServer) createNode() error {
 	node, err := deliverer.New(deliverer.Config{
 		LogLevel:   deliverer.LogLevelDebug,
 		LogHandler: handleLog,
 	})
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	node.OnConnecting(func(ctx context.Context, e deliverer.ConnectEvent) (deliverer.ConnectReply, error) {
 		user, err := auth.ExtractAccessStr(e.Token)
 		if err != nil {
+			fmt.Println("ERRR 0", err)
 			return deliverer.ConnectReply{}, err
 		}
-		fmt.Println("----", user.KairosName)
+
+		subs := make(map[string]deliverer.SubscribeOptions)
+		channels := make([]*ChannelRole, 0)
+		id := ""
+		switch user.UserType {
+		case models.KairosUser:
+			id = fmt.Sprintf("kairosuser-%s", user.UserID)
+			channels = append(channels, &ChannelRole{
+				Name: id,
+				Role: models.ReadWriteRole,
+			})
+		case models.ClientUser:
+			id = fmt.Sprintf("kairosdeamon-%s", user.ClientID)
+			channels = append(channels, &ChannelRole{
+				Name: id,
+				Role: models.ReadWriteRole,
+			})
+		case models.ChannelUser:
+			// TODO add premission
+			certID, _ := strconv.ParseInt(user.ClientID, 10, 64)
+			req := proto.ChannelPermitRequest{
+				CertID: certID,
+			}
+			data, err := json.Marshal(&req)
+			if err != nil {
+				fmt.Println("Errr 01", err)
+				return deliverer.ConnectReply{}, err
+			}
+
+			reply, err := d.sub.Con.Request(fmt.Sprintf("%s.%d", messaging.INFOMATION, proto.Command_ChannelPermitRequest), data, 5*time.Second)
+			if err != nil {
+				fmt.Println("Errr 02", err)
+				return deliverer.ConnectReply{}, err
+			}
+			var res proto.ChannelPermitReply
+			err = json.Unmarshal(reply.Data, &res)
+			if err != nil {
+				fmt.Println("Errr 03", err)
+				return deliverer.ConnectReply{}, err
+			}
+
+			fmt.Printf("Reply %+v\n", res.ChannelPermits)
+			// TODO change role here
+			for _, cp := range res.ChannelPermits {
+				channels = append(channels, &ChannelRole{
+					Name: fmt.Sprintf("%s-%d", cp.ChannelName, cp.ChannelID),
+					Role: cp.Role,
+				})
+			}
+		}
+
+		if len(channels) == 0 {
+			return deliverer.ConnectReply{}, errors.New("Not identified")
+		}
+
 		credentials := &deliverer.Credentials{
-			UserID:   user.KairosName,
-			ExpireAt: time.Now().Unix() + 1000,
+			UserID:   id,
+			ExpireAt: time.Now().Unix() + 300000,
+		}
+
+		fmt.Println("Connect user", id)
+		for _, c := range channels {
+			subs[c.Name] = deliverer.SubscribeOptions{
+				Role: c.Role,
+			}
 		}
 
 		return deliverer.ConnectReply{
 			ClientSideRefresh: true,
 			Credentials:       credentials,
+			Subscriptions:     subs,
 		}, nil
 	})
 
 	node.OnConnect(func(client *deliverer.Client) {
 		log.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
-		msg, err := json.Marshal(&Message{
-			Cmd:     SubscribeServerCmd,
-			Payload: client.UserID(),
-		})
-
-		if err != nil {
-			log.Printf("error connect: %s\n", err)
-		}
-
-		err = client.Send([]byte(msg))
-		if err != nil {
-			if err == io.EOF {
-				log.Printf("error sending message: %s\n", err)
-				return
-			}
-			log.Printf("error sending message: %s\n", err)
-			return
-		}
 
 		client.OnSubscribe(func(e deliverer.SubscribeEvent, cb deliverer.SubscribeCallback) {
 			log.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
 			cb(deliverer.SubscribeReply{
 				Options: deliverer.SubscribeOptions{
-					EnableRecovery: true,
-					Data:           []byte(`{"user_count_id": "` + client.UserID() + `"}`),
+					Data: []byte(`{"user_count_id": "` + client.UserID() + `"}`),
 				},
 			}, nil)
 		})
 
 		client.OnPublish(func(e deliverer.PublishEvent, cb deliverer.PublishCallback) {
 			log.Printf("client %s publishes into channel %s: %s", client.UserID(), e.Channel, string(e.Data))
+			var cmd workflow.CmdReplyTask
+			err := json.Unmarshal(e.Data, &cmd)
+			if err != nil {
+				d.logger.WithField("onpublish", "receiver data").Error(err)
+				return
+			}
+			go func() {
+				d.reply(fmt.Sprint(cmd.UserID), string(e.Data))
+			}()
+			node.Publish("abc-1", []byte(`{"a": "abc"}`))
+
+			// workflowID, cmd, payload, cb
 			cb(deliverer.PublishReply{}, nil)
 		})
 
 		client.OnDisconnect(func(e deliverer.DisconnectEvent) {
-			log.Printf("client %s disconnected", client.UserID())
+			log.Printf("client %s type disconnected", client.UserID())
 		})
 	})
 
 	if err := node.Run(); err != nil {
-		return nil, err
+		return err
 	}
+	d.node = node
 
-	return node, nil
+	return nil
+}
+
+func (d *DelivererServer) reply(natChan string, data string) {
+	fmt.Printf("[DELIVER REPLY NATS] Channel = %s, Data=%+v \n", natChan, data)
+	d.sub.Con.Publish(natChan, []byte(data))
+}
+
+func (s *DelivererServer) checkSameHost(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		s.logger.Error(fmt.Errorf("failed to parse Origin header %q: %w", origin, err))
+		return false
+	}
+	if strings.Contains(r.Host, "localhost") && strings.Contains(u.Host, "localhost") {
+		return true
+	}
+	s.logger.Error(fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host))
+	return false
 }

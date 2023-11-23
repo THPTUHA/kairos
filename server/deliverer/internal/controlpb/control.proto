@@ -32,11 +32,6 @@ message Node {
     uint32 num_subs = 10;
 }
 
-message Metrics {
-    double interval = 1;
-    map<string, double> items = 2;
-}
-
 message Subscribe {
     string user = 1;
     string channel = 2;
@@ -78,17 +73,6 @@ message Disconnect {
     string session = 7;
 }
 
-message SurveyRequest {
-    uint64 id = 1;
-    string op = 2;
-    bytes data = 3;
-}
-
-message SurveyResponse {
-    uint64 id = 1;
-    uint32 code = 2;
-    bytes data = 3;
-}
 
 message Notification {
     string op = 1;

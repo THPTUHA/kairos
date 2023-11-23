@@ -1,6 +1,9 @@
 package helper
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 func AutoRedirctUrl(url string) string {
 	return fmt.Sprintf(`
@@ -13,4 +16,16 @@ func AutoRedirctUrl(url string) string {
 		</script>
 		</body>
 	`, url)
+}
+
+func GetTimeNow() int64 {
+	location, err := time.LoadLocation("Asia/Ho_Chi_Minh")
+	if err != nil {
+		fmt.Println("Lỗi khi tải múi giờ: ", err)
+		return 0
+	}
+
+	now := time.Now()
+
+	return now.In(location).Unix()
 }

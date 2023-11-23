@@ -2,7 +2,6 @@ package deliverer
 
 import (
 	"context"
-	"time"
 )
 
 // Publication is a data sent to a channel.
@@ -30,6 +29,7 @@ type ClientInfo struct {
 	// ChanInfo is additional information about connection in context of
 	// channel subscription.
 	ChanInfo []byte
+	ChanRole int32
 }
 
 // StreamPosition contains fields to describe position in stream.
@@ -62,15 +62,6 @@ type BrokerEventHandler interface {
 
 // PublishOptions define some fields to alter behaviour of Publish operation.
 type PublishOptions struct {
-	// HistoryTTL sets history ttl to expire inactive history streams.
-	// Current Broker implementations only work with seconds resolution for TTL.
-	HistoryTTL time.Duration
-	// HistorySize sets history size limit to prevent infinite stream growth.
-	HistorySize int
-	// HistoryMetaTTL allows overriding default (set in Config.HistoryMetaTTL)
-	// history meta information expiration time upon publish.
-	HistoryMetaTTL time.Duration
-	// ClientInfo to include into Publication. By default, no ClientInfo will be appended.
 	ClientInfo *ClientInfo
 	// Tags to set Publication.Tags.
 	Tags map[string]string
@@ -87,15 +78,6 @@ type HistoryFilter struct {
 	Limit int
 	// Reverse direction.
 	Reverse bool
-}
-
-// HistoryOptions define some fields to alter History method behaviour.
-type HistoryOptions struct {
-	// Filter for history publications.
-	Filter HistoryFilter
-	// MetaTTL allows overriding default (set in Config.HistoryMetaTTL) history
-	// meta information expiration time.
-	MetaTTL time.Duration
 }
 
 // Broker is responsible for PUB/SUB mechanics.
@@ -131,16 +113,6 @@ type Broker interface {
 	// then message should be delivered to all running nodes, if nodeID is set then
 	// message should be delivered only to node with specified ID.
 	PublishControl(data []byte, nodeID, shardKey string) error
-
-	// History used to extract Publications from history stream.
-	// Publications returned according to HistoryFilter which allows to set several
-	// filtering options. StreamPosition returned describes current history stream
-	// top offset and epoch.
-	History(ch string, opts HistoryOptions) ([]*Publication, StreamPosition, error)
-	// RemoveHistory removes history from channel. This is in general not
-	// needed as history expires automatically (based on history_lifetime)
-	// but sometimes can be useful for application logic.
-	RemoveHistory(ch string) error
 }
 
 type Closer interface {

@@ -1,5 +1,22 @@
 
+export const SetStatusWorkflow = 0
+export interface MonitorWorkflow {
+    cmd :number;
+    data: any;
+}
 export interface Workflow {
+    id: number;
+    key: number;
+    version: string;
+    name:string;
+    namesapce: string;
+    created_at: string;
+    raw_data: string;
+    file: WorkflowFile;
+    status: number;
+}
+
+export interface WorkflowFile {
     version: string;
     
 }

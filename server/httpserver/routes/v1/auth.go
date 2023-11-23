@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Auth(ginApp *gin.RouterGroup) {
+func Auth(ginApp *gin.RouterGroup, ctr *controllers.Controller) {
 
 	secret := []byte("secret")
 	sessionName := "kairossession"
@@ -18,5 +18,5 @@ func Auth(ginApp *gin.RouterGroup) {
 	auth.Setup("http://localhost:8001/apis/v1/auth", scopes, secret)
 	ginApp.Use(auth.Session(sessionName))
 
-	ginApp.GET("/login", controllers.Login)
+	ginApp.GET("/login", ctr.Login)
 }

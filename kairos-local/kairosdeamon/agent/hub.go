@@ -3,11 +3,14 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/config"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/events"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/pubsub"
+	"github.com/THPTUHA/kairos/pkg/helper"
 	"github.com/THPTUHA/kairos/pkg/logger"
+	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/sirupsen/logrus"
 )
 
@@ -18,128 +21,85 @@ type hubError struct {
 
 type Hub struct {
 	ErrorCh chan *hubError
-	EventCh chan *events.Event
-	Client  *pubsub.Client
-	taskCh  chan *TaskEvent
 
-	logger *logrus.Entry
+	Client     *pubsub.Client
+	clientName string
+	userID     int64
+	taskCh     chan *workflow.CmdTask
+	channel    string
+	eventCh    chan *events.Event
+	config     *config.Configs
+	logger     *logrus.Entry
 }
 
-func NewHub(eventCh chan *events.Event) *Hub {
-	// init get config here
+func NewHub(eventCh chan *events.Event, config *config.Configs) *Hub {
 	return &Hub{
-		EventCh: eventCh,
+		config:  config,
+		eventCh: eventCh,
 		logger:  logger.InitLogger(config.LogLevel, "hub"),
 	}
 }
 
-func (hub *Hub) Run() {
-	for {
-		select {
-		case e := <-hub.EventCh:
-			switch e.Cmd {
-			case events.ConnectServerCmd:
-				err := hub.handleConnectServer()
-				if err != nil {
-					hub.ErrorCh <- &hubError{
-						msg: "connect server error",
-					}
-				}
-			case events.SubscribeServerCmd:
-				err := hub.handleSubscribeServer(e.Payload)
-				if err != nil {
-					hub.ErrorCh <- &hubError{
-						msg: "subscribe server error",
-					}
-				}
-			}
-		}
-	}
-}
-
-func (hub *Hub) AddEventTask(ch chan *TaskEvent) {
+func (hub *Hub) AddEventTask(ch chan *workflow.CmdTask) {
 	hub.taskCh = ch
 }
 
-func (hub *Hub) handleSubscribeServer(channel string) error {
-	hub.logger.Debug("channel: " + channel)
-	sub, err := hub.Client.NewSubscription(channel, pubsub.SubscriptionConfig{
-		Recoverable: true,
-		JoinLeave:   true,
-	})
-
+func (hub *Hub) Publish(cmd *workflow.CmdReplyTask) {
+	cmd.RunIn = fmt.Sprintf("%s%s", hub.clientName, workflow.SubClient)
+	cmd.SendAt = helper.GetTimeNow()
+	cmd.UserID = hub.userID
+	data, err := json.Marshal(cmd)
+	fmt.Printf("[HUB PUBLISH REPLY] %+v\n", cmd)
 	if err != nil {
-		hub.logger.WithField("sub", "create sub").Error(err)
-		return err
+		hub.logger.WithField("hub", "publish").Error(err)
 	}
-
-	sub.OnSubscribed(func(e pubsub.SubscribedEvent) {
-		hub.logger.WithField("hub", "sub").Debug("onsubscribed")
-		var te TaskEvent
-		err := json.Unmarshal(e.Data, &te)
-		if err != nil {
-			hub.ErrorCh <- &hubError{
-				msg: "ubmarshal onSubscribed",
-				err: err,
-			}
-			return
-		}
-		return
-		// nguy hiểm
-		// hub.taskCh <- &te
-	})
-
-	sub.OnPublication(func(e pubsub.PublicationEvent) {
-		var task interface{}
-		json.Unmarshal(e.Data, &task)
-		fmt.Printf(" publication reciver task = %+v", task)
-		// TODO xử lý recieve task
-	})
-
-	err = sub.Subscribe()
-	if err != nil {
-		hub.logger.WithField("sub", "cannot sub").Error(err)
-		return err
-	}
-	return nil
+	hub.Client.Publish(hub.channel, data)
 }
 
-func (hub *Hub) handleConnectServer() error {
-	hub.logger.Debug("start connect server")
-	client := pubsub.NewClient(config.PubSubEnpoint, pubsub.Config{
-		Token: config.Token,
+func (hub *Hub) HandleConnectServer(auth *config.Auth) error {
+	// TODO check token ,nếu ko có thì đăng xuát và yêu cầu kết nối
+	hub.logger.Debug("start connect server", auth.UserID)
+	hub.clientName = auth.ClientName
+	hub.userID, _ = strconv.ParseInt(auth.UserID, 10, 64)
+	client := pubsub.NewClient(hub.config.PubSubEnpoint, pubsub.Config{
+		Token: auth.Token,
 	})
 	hub.Client = client
+	hub.channel = fmt.Sprintf("kairosdeamon-%s", auth.ClientID)
+	fmt.Println(" CHANNEL ---", hub.channel)
 	err := client.Connect()
 	if err != nil {
 		return err
 	}
 
-	client.OnMessage(func(e pubsub.MessageEvent) {
-		var event events.Event
-		err := json.Unmarshal(e.Data, &event)
-		if err != nil {
-			hub.ErrorCh <- &hubError{
-				msg: "ubmarshal onMessage",
-				err: err,
-			}
-			return
-		}
-		hub.logger.WithFields(logrus.Fields{
-			"cmd":  event.Cmd,
-			"data": event.Payload,
-		}).Debug("recivier message from server")
-		hub.EventCh <- &event
+	client.OnConnected(func(e pubsub.ConnectedEvent) {
 
 	})
 
-	client.OnConnected(func(e pubsub.ConnectedEvent) {
-		channel := e.ClientID
-		hub.logger.WithField("client", "onconnected").Debug(channel)
-
+	client.OnPublication(func(e pubsub.ServerPublicationEvent) {
+		var cmd workflow.CmdTask
+		json.Unmarshal(e.Data, &cmd)
+		if cmd.Task != nil {
+			fmt.Printf("[HUB ONPUBLICATION] task= %+v\n, cmd=%d \n", cmd.Task, cmd.Cmd)
+			if err != nil {
+				hub.logger.WithField("task", "publication receiver task").Error(err)
+				return
+			}
+			func() {
+				hub.taskCh <- &cmd
+			}()
+		}
 	})
 
 	return nil
+}
+
+func (hub *Hub) IsConnect() bool {
+	return hub.Client != nil && hub.Client.State() == pubsub.StateConnected
+}
+
+func (hub *Hub) Disconnect() error {
+	return hub.Client.Disconnect()
 }
 
 func (hub *Hub) handleError() {

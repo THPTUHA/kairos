@@ -1,0 +1,50 @@
+version: '1'
+name: debug
+vars:
+  PAYLOADA: |
+    {
+      "method": "GET",
+      "url": "http://example.com",
+      "headers": "[]",
+      "body": "",
+      "timeout": "30",
+      "expectCode": "200",
+      "expectBody": ""
+    }
+  MY_URL: http://beta.nexta.vn
+tasks:
+  a:
+    schedule: '@every 15s'
+    timezone: Asia/Ho_Chi_Minh
+    executor: http
+    clients:
+      - client1
+    payload: |
+      {{.PAYLOADA}} 
+  b:
+    schedule: '@every 10s'
+    deps:
+      - a_task
+    timezone: Asia/Ho_Chi_Minh
+    executor: http
+    clients:
+      - client2
+    payload: |
+      {
+        "method": "GET",
+        "url": "{{.A_TASK_OUTPUT}}",
+        "headers": "[]",
+        "body": "",
+        "timeout": "30",
+        "expectCode": "200",
+        "expectBody": ""
+      }
+brokers:
+  brok:
+    listens:
+      - a_task
+    flows: |
+      {{if .A_TASK_SUCCESS }}
+        {{set .A_TASK_OUTPUT .MY_URL}}
+        {{send .A_TASK .B_TASK}}
+      {{endif}}

@@ -3,6 +3,9 @@ httpserver:
   max_worklow_concurrent: 100000
 pubsub:
   port: 8002
+nats:
+  url: nats://127.0.0.1:4222
+  name: httpserver
 auth:
   hmacsecret: kairosauthac
   hmrfsecret: kairosauthrf

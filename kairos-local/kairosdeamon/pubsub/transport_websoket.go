@@ -2,7 +2,6 @@ package pubsub
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,9 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/centrifugal/protocol"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
 )
 
 // websocketConfig configures Websocket transport.
@@ -21,10 +19,6 @@ type websocketConfig struct {
 	// NetDialContext specifies the dial function for creating TCP connections. If
 	// NetDialContext is nil, net.DialContext is used.
 	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-
-	// TLSConfig specifies the TLS configuration to use with tls.Client.
-	// If nil, the default configuration is used.
-	TLSConfig *tls.Config
 
 	// HandshakeTimeout specifies the duration for the handshake to complete.
 	HandshakeTimeout time.Duration
@@ -34,12 +28,6 @@ type websocketConfig struct {
 	// guarantee that compression will be supported. Currently only "no context
 	// takeover" modes are supported.
 	EnableCompression bool
-
-	// CookieJar specifies the cookie jar.
-	// If CookieJar is nil, cookies are not sent in requests and ignored
-	// in responses.
-	CookieJar http.CookieJar
-
 	// Header specifies custom HTTP Header to send.
 	Header http.Header
 }
@@ -47,16 +35,16 @@ type websocketConfig struct {
 type websocketTransport struct {
 	mu             sync.Mutex
 	conn           *websocket.Conn
-	protocolType   protocol.Type
-	commandEncoder protocol.CommandEncoder
-	replyCh        chan *protocol.Reply
+	protocolType   deliverprotocol.Type
+	commandEncoder deliverprotocol.CommandEncoder
+	replyCh        chan *deliverprotocol.Reply
 	config         websocketConfig
 	disconnect     *disconnect
 	closed         bool
 	closeCh        chan struct{}
 }
 
-func newWebsocketTransport(url string, protocolType protocol.Type, config websocketConfig) (transport, error) {
+func newWebsocketTransport(url string, protocolType deliverprotocol.Type, config websocketConfig) (transport, error) {
 	wsHeaders := config.Header
 
 	dialer := &websocket.Dialer{}
@@ -65,10 +53,8 @@ func newWebsocketTransport(url string, protocolType protocol.Type, config websoc
 
 	dialer.HandshakeTimeout = config.HandshakeTimeout
 	dialer.EnableCompression = config.EnableCompression
-	dialer.TLSClientConfig = config.TLSConfig
-	dialer.Jar = config.CookieJar
 
-	if protocolType == protocol.TypeProtobuf {
+	if protocolType == deliverprotocol.TypeProtobuf {
 		dialer.Subprotocols = []string{"centrifuge-protobuf"}
 	}
 
@@ -82,7 +68,7 @@ func newWebsocketTransport(url string, protocolType protocol.Type, config websoc
 
 	t := &websocketTransport{
 		conn:           conn,
-		replyCh:        make(chan *protocol.Reply),
+		replyCh:        make(chan *deliverprotocol.Reply),
 		config:         config,
 		closeCh:        make(chan struct{}),
 		commandEncoder: newCommandEncoder(protocolType),
@@ -108,7 +94,7 @@ func extractDisconnectWebsocket(err error) *disconnect {
 					case websocket.CloseMessageTooBig:
 						code = disconnectMessageSizeLimit
 					default:
-						// We expose codes defined by Centrifuge protocol, hiding
+						// We expose codes defined by Centrifuge deliverprotocol, hiding
 						// details about transport-specific error codes. We may have extra
 						// optional transportCode field in the future.
 						code = connectingTransportClosed
@@ -132,11 +118,11 @@ func (t *websocketTransport) reader() {
 	for {
 		_, data, err := t.conn.ReadMessage()
 		if err != nil {
+			fmt.Printf("[WEBSOCKER ERR] %s \n", err)
 			disconnect := extractDisconnectWebsocket(err)
 			t.disconnect = disconnect
 			return
 		}
-		//println("<----", strings.Trim(string(data), "\n"))
 	loop:
 		for {
 			decoder := newReplyDecoder(t.protocolType, data)
@@ -149,13 +135,12 @@ func (t *websocketTransport) reader() {
 					t.disconnect = &disconnect{Code: disconnectBadProtocol, Reason: "decode error", Reconnect: false}
 					return
 				}
+				fmt.Printf("[RELY RECIVER FROM WEBSOCKEt] %s\n", reply.String())
 				select {
 				case <-t.closeCh:
+					fmt.Println("Close websocket")
 					return
 				case t.replyCh <- reply:
-					// Send is blocking here, but slow client will be disconnected
-					// eventually with `no ping` reason – so we will exit from this
-					// goroutine.
 				}
 			}
 		}
@@ -174,20 +159,20 @@ func (t *websocketTransport) Close() error {
 	return t.conn.Close()
 }
 
-func (t *websocketTransport) Read() (*protocol.Reply, *disconnect, error) {
+func (t *websocketTransport) Read() (*deliverprotocol.Reply, *disconnect, error) {
 	reply, ok := <-t.replyCh
+	fmt.Printf("[RECIVER REPLY FROM REPLYCH] %s\n", reply.String())
 	if !ok {
 		return nil, t.disconnect, io.EOF
 	}
 	return reply, nil, nil
 }
 
-func (t *websocketTransport) Write(cmd *protocol.Command, timeout time.Duration) error {
+func (t *websocketTransport) Write(cmd *deliverprotocol.Command, timeout time.Duration) error {
 	data, err := t.commandEncoder.Encode(cmd)
 	if err != nil {
 		return err
 	}
-	log.Debug().Msg("websocket transport encode")
 	return t.writeData(data, timeout)
 }
 
@@ -197,13 +182,8 @@ func (t *websocketTransport) writeData(data []byte, timeout time.Duration) error
 	if timeout > 0 {
 		_ = t.conn.SetWriteDeadline(time.Now().Add(timeout))
 	}
-	//println("---->", strings.Trim(string(data), "\n"))
 	var err error
-	if t.protocolType == protocol.TypeJSON {
-		err = t.conn.WriteMessage(websocket.TextMessage, data)
-	} else {
-		err = t.conn.WriteMessage(websocket.BinaryMessage, data)
-	}
+	err = t.conn.WriteMessage(websocket.TextMessage, data)
 	if timeout > 0 {
 		_ = t.conn.SetWriteDeadline(time.Time{})
 	}

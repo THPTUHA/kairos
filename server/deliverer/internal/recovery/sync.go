@@ -4,7 +4,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/centrifugal/protocol"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
 // PubSubSync wraps logic to synchronize recovery with PUB/SUB.
@@ -19,7 +19,7 @@ type subscribeState struct {
 	inSubscribe     uint32
 	pubBufferMu     sync.Mutex
 	pubBufferLocked bool
-	pubBuffer       []*protocol.Publication
+	pubBuffer       []*deliverprotocol.Publication
 }
 
 // NewPubSubSync creates new PubSubSyncer.
@@ -52,7 +52,7 @@ func (c *PubSubSync) StartBuffering(channel string) {
 	atomic.StoreUint32(&s.inSubscribe, 1)
 }
 
-func (c *PubSubSync) LockBufferAndReadBuffered(channel string) []*protocol.Publication {
+func (c *PubSubSync) LockBufferAndReadBuffered(channel string) []*deliverprotocol.Publication {
 	c.subSyncMu.Lock()
 	s, ok := c.subSync[channel]
 	if !ok {
@@ -62,14 +62,14 @@ func (c *PubSubSync) LockBufferAndReadBuffered(channel string) []*protocol.Publi
 	s.pubBufferLocked = true
 	c.subSyncMu.Unlock()
 	s.pubBufferMu.Lock() // Since this point and until StopBuffering pubBufferMu will be locked so that SyncPublication waits till pubBufferMu unlocking.
-	pubs := make([]*protocol.Publication, len(s.pubBuffer))
+	pubs := make([]*deliverprotocol.Publication, len(s.pubBuffer))
 	copy(pubs, s.pubBuffer)
 	s.pubBuffer = nil
 	return pubs
 }
 
 // SyncPublication ...
-func (c *PubSubSync) SyncPublication(channel string, pub *protocol.Publication, syncedFn func()) {
+func (c *PubSubSync) SyncPublication(channel string, pub *deliverprotocol.Publication, syncedFn func()) {
 	c.subSyncMu.Lock()
 	s, ok := c.subSync[channel]
 	if !ok {

@@ -21,15 +21,10 @@ import (
 )
 
 const (
-	// timeout seconds
-	timeout = 30
-	// maxBufSize limits how much data we collect from a handler.
-	// This is to prevent Serf's memory from growing to an enormous
-	// amount due to a faulty handler.
+	timeout    = 30
 	maxBufSize = 256000
 )
 
-// HTTP process http request
 type HTTP struct {
 }
 
@@ -55,13 +50,11 @@ func (s *HTTP) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*pr
 	return resp, nil
 }
 
-// ExecuteImpl do http request
 func (s *HTTP) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	output, _ := circbuf.NewBuffer(maxBufSize)
 	var debug bool
 	if args.Config["debug"] != "" {
 		debug = true
-		log.Printf("config  %#v\n\n", args.Config)
 		output.Write([]byte(fmt.Sprintf("Config: %#v\n", args.Config)))
 	}
 
@@ -117,25 +110,21 @@ func (s *HTTP) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 		log.Printf("response body  %#v\n\n", string(out))
 	}
 
-	// write the response to output
 	_, err = output.Write(out)
 	if err != nil {
 		return output.Bytes(), err
 	}
 
-	// match response code
 	if args.Config["expectCode"] != "" && !strings.Contains(args.Config["expectCode"]+",", fmt.Sprintf("%d,", resp.StatusCode)) {
 		return output.Bytes(), errors.New("received response code does not match the expected code")
 	}
 
-	// match response
 	if args.Config["expectBody"] != "" {
 		if m, _ := regexp.MatchString(args.Config["expectBody"], string(out)); !m {
 			return output.Bytes(), errors.New("received response body did not match the expected body")
 		}
 	}
 
-	// Warn if buffer is overritten
 	if output.TotalWritten() > output.Size() {
 		log.Printf("'%s %s': generated %d bytes of output, truncated to %d",
 			args.Config["method"], args.Config["url"],
@@ -145,8 +134,6 @@ func (s *HTTP) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	return output.Bytes(), nil
 }
 
-// createClient always returns a new http client. Any errors returned are
-// errors in the configuration.
 func createClient(config map[string]string) (http.Client, []error) {
 	var errs []error
 
@@ -183,7 +170,6 @@ func createClient(config map[string]string) (http.Client, []error) {
 	}, errs
 }
 
-// loadCertPool creates a CertPool using the given file
 func loadCertPool(filename string) (*x509.CertPool, error) {
 	certsFile, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -198,8 +184,6 @@ func loadCertPool(filename string) (*x509.CertPool, error) {
 	return roots, nil
 }
 
-// atoiOrDefault returns the integer value of s, or a default value
-// if s could not be converted, along with an error.
 func atoiOrDefault(s string, _default int) (int, error) {
 	i, err := strconv.Atoi(s)
 	if err == nil {

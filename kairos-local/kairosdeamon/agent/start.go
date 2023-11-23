@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/config"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/events"
 	"github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog/log"
@@ -19,8 +20,8 @@ const (
 	gracefulTimeout = 3 * time.Hour
 )
 
-func AgentStart(eventCh chan *events.Event) error {
-	config := DefaultConfig()
+func AgentStart(eventCh chan *events.Event, conf *config.Configs) error {
+	config := DefaultConfig(conf)
 	p := &Plugins{
 		LogLevel: config.LogLevel,
 		NodeName: config.NodeName,
@@ -36,8 +37,8 @@ func AgentStart(eventCh chan *events.Event) error {
 		Processors: p.Processors,
 		Executors:  p.Executors,
 	}
-	hub := NewHub(eventCh)
-	agentServer = NewAgent(config, WithPlugins(plugins))
+	hub := NewHub(eventCh, conf)
+	agentServer = NewAgent(config, WithPlugins(plugins), WithEventCh(eventCh))
 	agentServer.AddHub(hub)
 	if err := agentServer.Start(); err != nil {
 		return err

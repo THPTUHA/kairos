@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package proto;
+option go_package = "github.com/THPTUHA/kairos/server/plugin/proto";
+
+message Command{
+    enum Type {
+        ChannelPermitRequest = 0;
+    }
+    ChannelPermitRequest channlePremit= 1;
+}
+
+message ChannelPermitRequest{
+    int64 certID = 1;
+}
+
+message CommandReply{
+    ChannelPermitReply channlePremit = 1;
+}
+
+message ChannelPermitReply{
+    repeated ChannelPermit channelPermits = 1;
+}
+
+message ChannelPermit{
+    int64 channelID = 1;
+    string channelName = 2;
+    int32 role = 3;
+}

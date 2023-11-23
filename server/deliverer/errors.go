@@ -3,7 +3,7 @@ package deliverer
 import (
 	"fmt"
 
-	"github.com/centrifugal/protocol"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
 type Error struct {
@@ -12,8 +12,8 @@ type Error struct {
 	Temporary bool
 }
 
-func (e *Error) toProto() *protocol.Error {
-	return &protocol.Error{
+func (e *Error) toProto() *deliverprotocol.Error {
+	return &deliverprotocol.Error{
 		Code:      e.Code,
 		Message:   e.Message,
 		Temporary: e.Temporary,

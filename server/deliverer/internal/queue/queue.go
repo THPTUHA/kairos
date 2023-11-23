@@ -3,13 +3,13 @@ package queue
 import (
 	"sync"
 
-	"github.com/centrifugal/protocol"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
 type Item struct {
 	Data      []byte
 	Channel   string
-	FrameType protocol.FrameType
+	FrameType deliverprotocol.FrameType
 }
 
 // Queue is an unbounded queue of Item.
@@ -137,4 +137,35 @@ func (q *Queue) Size() int {
 	s := q.size
 	q.mu.RUnlock()
 	return s
+}
+
+func (q *Queue) CloseRemaining() []Item {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
+		return []Item{}
+	}
+	rem := make([]Item, 0, q.cnt)
+	for q.cnt > 0 {
+		i := q.nodes[q.head]
+		q.head = (q.head + 1) % len(q.nodes)
+		q.cnt--
+		rem = append(rem, i)
+	}
+	q.closed = true
+	q.cnt = 0
+	q.nodes = nil
+	q.size = 0
+	q.cond.Broadcast()
+	return rem
+}
+
+func (q *Queue) Close() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.closed = true
+	q.cnt = 0
+	q.nodes = nil
+	q.size = 0
+	q.cond.Broadcast()
 }

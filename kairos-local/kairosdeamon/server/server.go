@@ -22,12 +22,13 @@ type DeamonServer struct {
 	router  *gin.Engine
 	logger  *logrus.Entry
 	eventCh chan *events.Event
+	config  *config.Configs
 }
 
 func (server *DeamonServer) initialize() error {
 	server.eventCh = make(chan *events.Event)
 	server.router = routers.Setup(server.eventCh)
-	server.logger = logger.InitLogger(config.LogLevel, config.NodeName)
+	server.logger = logger.InitLogger(server.config.LogLevel, server.config.NodeName)
 	return nil
 }
 
@@ -38,7 +39,7 @@ func (server *DeamonServer) start() {
 	)
 
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", config.ServerPort),
+		Addr:    fmt.Sprintf(":%d", server.config.ServerPort),
 		Handler: server.router,
 	}
 
@@ -55,7 +56,7 @@ func (server *DeamonServer) start() {
 	}()
 
 	go func() {
-		agent.AgentStart(server.eventCh)
+		agent.AgentStart(server.eventCh, server.config)
 	}()
 
 	log.Info().Msg("Starting the deamon...")
@@ -66,8 +67,10 @@ func (server *DeamonServer) start() {
 
 var deamon DeamonServer
 
-func Start() {
-	deamon = DeamonServer{}
+func Start(config *config.Configs) {
+	deamon = DeamonServer{
+		config: config,
+	}
 	err := deamon.initialize()
 
 	if err != nil {

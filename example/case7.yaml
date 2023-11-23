@@ -1,0 +1,48 @@
+version: '1'
+name: debug
+vars:
+  PAYLOADA: |
+    {
+      "method": "GET",
+      "url": "http://example.com",
+      "headers": "[]",
+      "body": "",
+      "timeout": "30",
+      "expectCode": "200",
+      "expectBody": ""
+    }
+  MY_URL: "http://beta.nexta.vn"
+tasks:
+  a:
+    schedule: "@every 2s"
+    timezone: "Asia/Ho_Chi_Minh"
+    executor: pub
+    payload: |
+      [
+        {
+          "sub":"client1_client",
+          "data": {
+            "ok": "baby"
+          }
+        },
+        {
+          "sub":"client2_client",
+          "data": {
+            "hello": "world"
+          }
+        }
+      ]
+  b: 
+    schedule: "@every 3s"
+    timezone: "Asia/Ho_Chi_Minh"
+    executor: webhook
+    payload: |
+      {
+        "method": "GET",
+        "url": "http://example.com",
+        "headers": "[]",
+        "body": "",
+        "timeout": "30",
+        "expectCode": "200",
+        "expectBody": ""
+      }

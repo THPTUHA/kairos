@@ -6,7 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/THPTUHA/kairos/server/httpserver/events"
+	"github.com/THPTUHA/kairos/server/storage"
+	"github.com/THPTUHA/kairos/server/storage/models"
+	"github.com/go-redis/redis"
 	"github.com/panjf2000/ants"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
@@ -17,9 +21,12 @@ type Configs struct {
 	Logger                *logrus.Entry
 }
 
+var redisClient *redis.Client
+
 type Runner struct {
 	mu     sync.RWMutex
 	wfMap  map[int64]*Worker
+	sched  *Scheduler
 	config Configs
 }
 
@@ -27,11 +34,13 @@ func NewRunner(config Configs) *Runner {
 	return &Runner{
 		config: config,
 		wfMap:  make(map[int64]*Worker),
+		sched:  NewScheduler(config.Logger),
 	}
 }
 
 func (r *Runner) Start(signals chan os.Signal) {
 	var wg sync.WaitGroup
+	// connectRedis()
 	p, _ := ants.NewPoolWithFunc(r.config.MaxWorkflowConcurrent, func(wf interface{}) {
 		wfe := wf.(*events.WfEvent)
 
@@ -40,15 +49,25 @@ func (r *Runner) Start(signals chan os.Signal) {
 			log.Debug().Msg(fmt.Sprintf("Add workflow id = %d to worker", wfe.Workflow.ID))
 			r.mu.Lock()
 			worker := NewWorker(wfe.Workflow.ID, wfe.Workflow, &WorkerConfig{
+				DeliverDelay:         1 * time.Second,
 				MaxAttempDeliverTask: 10,
-				DeliverTaskChan:      "deliver",
 				TimeoutRetryDeliver:  2 * time.Second,
+				DeliverTimeout:       5 * time.Second,
 				Logger:               r.config.Logger,
-			})
+			}, r.sched)
+			worker.status = workflow.Pending
+			worker.workflow.Status = workflow.Pending
 			r.wfMap[wfe.Workflow.ID] = worker
 			r.mu.Unlock()
 
-			worker.Run()
+			err := worker.Run()
+			if err != nil {
+				fmt.Println("Worker run err", err)
+				r.mu.Lock()
+				delete(r.wfMap, wfe.Workflow.ID)
+				r.mu.Unlock()
+				return
+			}
 
 			r.mu.Lock()
 			delete(r.wfMap, wfe.Workflow.ID)
@@ -74,7 +93,7 @@ func (r *Runner) Start(signals chan os.Signal) {
 	defer p.Release()
 
 	go func() {
-		for wf := range events.WfChan {
+		for wf := range events.Get() {
 			log.Debug().Msg(fmt.Sprintf("Start workflow name=%s  namespace=%s", wf.Workflow.Name, wf.Workflow.Namespace))
 			wg.Add(1)
 			err := p.Invoke(wf)
@@ -84,7 +103,65 @@ func (r *Runner) Start(signals chan os.Signal) {
 		}
 	}()
 
+	err := r.startInitWorkflow(true)
+	if err != nil {
+		fmt.Printf("[INIT WORKFLOW ERR] ERR = %s \n", err.Error())
+		return
+	}
+
 	wg.Wait()
 	<-signals
 	log.Info().Msg("exist runner")
 }
+
+func (r *Runner) startInitWorkflow(isFirst bool) error {
+	if isFirst {
+		ids, err := storage.GetWorkflows()
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("[INIT WORKFLOW IDS] %+v \n", ids)
+
+		for _, id := range ids {
+			fmt.Printf("[INIT WORKFLOW ] %d \n", id)
+			wf, err := storage.DetailWorkflow(id)
+			if err != nil {
+				return err
+			}
+			if err = wf.Compile(); err != nil {
+				return err
+			}
+
+			events.Get() <- &events.WfEvent{
+				Cmd:      events.WfCmdCreate,
+				Workflow: wf,
+			}
+		}
+	}
+	return nil
+}
+
+func (r *Runner) SetWfStatus(wfs []*models.Workflow) {
+	for _, wf := range wfs {
+		we := r.wfMap[wf.ID]
+		if we != nil {
+			wf.Status = we.workflow.Status
+		}
+	}
+}
+
+// func connectRedis() error {
+// 	client := redis.NewClient(&redis.Options{
+// 		Addr:     "localhost:6379",
+// 		Password: "",
+// 		DB:       0,
+// 	})
+// 	_, err := client.Ping().Result()
+// 	if err != nil {
+// 		fmt.Printf("[RUNNER CONNECT REDIS ERR] %+v\n", err)
+// 		return err
+// 	}
+// 	redisClient = client
+// 	return nil
+// }

@@ -1,0 +1,37 @@
+version: '1'
+name: noti
+vars:
+  MY_NOTI: |
+    {
+      "cmd": "noti",
+      "content": "Noti content"
+    }
+  USER_A_NOTI: |
+    {
+      "cmd": "notiA",
+      "content": "Noti contentA"
+    }
+  CHANNEL_USER: noti_channel:1
+tasks:
+  a:
+    schedule: '0 20 * * *'
+    timezone: Asia/Ho_Chi_Minh
+    executor: schedule
+    payload: |
+      {{.MY_NOTI}} 
+  b:
+    schedule: '0 20 * * *'
+    timezone: Asia/Ho_Chi_Minh
+    executor: schedule
+    payload: |
+      {{.USER_A_NOTI}} 
+brokers:
+  brok:
+    listens: [a_task, b_task]
+    flows: |
+    {{wait .A_TASK}}
+      {{send .A_TASK .NOTI_CHANNEL}}
+    {{endhas}}
+    {{wait .B_TASK}}
+      {{send .B_TASK .USER_A_NOTI}}
+    {{endhas}}

@@ -5,11 +5,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Workflow(ginApp *gin.RouterGroup) {
+func Workflow(ginApp *gin.RouterGroup, ctr *controllers.Controller) {
 	routeGroup := ginApp.Group("/workflow")
-	routeGroup.POST("/apply", controllers.CreateWorkflow)
-	routeGroup.DELETE("/:id/drop", controllers.DropWorkflow)
-	routeGroup.GET("/list", controllers.ListWorkflow)
-	routeGroup.GET("/:id/detail", controllers.DetailWorkflow)
+	routeGroup.POST("/apply", ctr.CreateWorkflow)
+	routeGroup.DELETE("/:id/drop", ctr.DropWorkflow)
+	routeGroup.GET("/list", ctr.ListWorkflow)
+	routeGroup.GET("/:id/detail", ctr.DetailWorkflow)
 
 }

@@ -1,6 +1,6 @@
 package pubsub
 
-import "github.com/centrifugal/protocol"
+import "github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 
 // ClientInfo contains information about client connection.
 type ClientInfo struct {
@@ -29,21 +29,21 @@ type Publication struct {
 	Tags map[string]string
 }
 
-func newCommandEncoder(enc protocol.Type) protocol.CommandEncoder {
-	if enc == protocol.TypeJSON {
-		return protocol.NewJSONCommandEncoder()
+func newCommandEncoder(enc deliverprotocol.Type) deliverprotocol.CommandEncoder {
+	if enc == deliverprotocol.TypeJSON {
+		return deliverprotocol.NewJSONCommandEncoder()
 	}
-	return protocol.NewProtobufCommandEncoder()
+	return deliverprotocol.NewProtobufCommandEncoder()
 }
 
-func newReplyDecoder(enc protocol.Type, data []byte) protocol.ReplyDecoder {
-	if enc == protocol.TypeJSON {
-		return protocol.NewJSONReplyDecoder(data)
+func newReplyDecoder(enc deliverprotocol.Type, data []byte) deliverprotocol.ReplyDecoder {
+	if enc == deliverprotocol.TypeJSON {
+		return deliverprotocol.NewJSONReplyDecoder(data)
 	}
-	return protocol.NewProtobufReplyDecoder(data)
+	return deliverprotocol.NewProtobufReplyDecoder(data)
 }
 
-func infoFromProto(v *protocol.ClientInfo) ClientInfo {
+func infoFromProto(v *deliverprotocol.ClientInfo) ClientInfo {
 	info := ClientInfo{
 		Client: v.GetClient(),
 		User:   v.GetUser(),
@@ -57,7 +57,7 @@ func infoFromProto(v *protocol.ClientInfo) ClientInfo {
 	return info
 }
 
-func pubFromProto(pub *protocol.Publication) Publication {
+func pubFromProto(pub *deliverprotocol.Publication) Publication {
 	p := Publication{
 		Offset: pub.GetOffset(),
 		Data:   pub.Data,
@@ -70,6 +70,6 @@ func pubFromProto(pub *protocol.Publication) Publication {
 	return p
 }
 
-func errorFromProto(err *protocol.Error) *Error {
+func errorFromProto(err *deliverprotocol.Error) *Error {
 	return &Error{Code: err.Code, Message: err.Message, Temporary: err.Temporary}
 }

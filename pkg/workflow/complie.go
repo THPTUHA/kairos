@@ -3,6 +3,7 @@ package workflow
 import (
 	"os"
 	"regexp"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -42,4 +43,67 @@ func extractVariables(templateString string) []string {
 	}
 
 	return variables
+}
+
+func extractVariableNames(jsonStr string) ([]string, error) {
+	re := regexp.MustCompile(`{{(.*?)}}`)
+	matches := re.FindAllStringSubmatch(jsonStr, -1)
+	var variableNames []string
+	for _, match := range matches {
+		if len(match) > 1 {
+			variableNames = append(variableNames, strings.ToLower(match[1]))
+		}
+	}
+	return variableNames, nil
+}
+
+func validateDynamicParam(str string) (bool, error) {
+	if str == "" {
+		return true, nil
+	}
+
+	return true, nil
+}
+
+func (w *WorkflowFile) Compile() error {
+	err := w.Vars.Range(func(_ string, value *Var) error {
+		return value.Compile()
+	})
+	if err != nil {
+		return err
+	}
+	err = w.Brokers.Range(func(_ string, b *Broker) error {
+		return b.Compile(w.Vars)
+	})
+	if err != nil {
+		return err
+	}
+	vars := GetKeyValueVars(w.Vars)
+	err = w.Tasks.Range(func(_ string, t *Task) error {
+		err := t.Compile(vars)
+		return err
+	})
+	return err
+}
+
+func (w *Workflow) Compile() error {
+	err := w.Vars.Range(func(_ string, value *Var) error {
+		err := value.Compile()
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	err = w.Brokers.Range(func(_ string, b *Broker) error {
+		return b.Compile(w.Vars)
+	})
+	if err != nil {
+		return err
+	}
+	vars := GetKeyValueVars(w.Vars)
+	err = w.Tasks.Range(func(_ string, t *Task) error {
+		err := t.Compile(vars)
+		return err
+	})
+	return err
 }

@@ -1,19 +1,15 @@
 package deliverer
 
 import (
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 	"sync"
 	"time"
 
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 	"github.com/THPTUHA/kairos/server/deliverer/internal/cancelctx"
 	"github.com/THPTUHA/kairos/server/deliverer/internal/timers"
-	"github.com/centrifugal/protocol"
 	"github.com/gorilla/websocket"
-	"github.com/rs/zerolog/log"
 )
 
 // WebsocketConfig represents config for WebsocketHandler.
@@ -63,7 +59,7 @@ type WebsocketConfig struct {
 	PingPongConfig
 }
 
-// WebsocketHandler handles WebSocket client connections. WebSocket protocol
+// WebsocketHandler handles WebSocket client connections. WebSocket deliverprotocol
 // is a bidirectional connection between a client and a server for low-latency
 // communication.
 type WebsocketHandler struct {
@@ -78,7 +74,7 @@ func NewWebsocketHandler(node *Node, config WebsocketConfig) *WebsocketHandler {
 	upgrade := &websocket.Upgrader{
 		ReadBufferSize:    config.ReadBufferSize,
 		EnableCompression: config.Compression,
-		Subprotocols:      []string{"json"},
+		Subprotocols:      []string{"centrifuge-json", "centrifuge-protobuf"},
 	}
 	if config.UseWriteBufferPool {
 		upgrade.WriteBufferPool = writeBufferPool
@@ -87,9 +83,8 @@ func NewWebsocketHandler(node *Node, config WebsocketConfig) *WebsocketHandler {
 	}
 	if config.CheckOrigin != nil {
 		upgrade.CheckOrigin = config.CheckOrigin
-	} else {
-		upgrade.CheckOrigin = sameHostOriginCheck(node)
 	}
+
 	return &WebsocketHandler{
 		node:    node,
 		config:  config,
@@ -97,84 +92,10 @@ func NewWebsocketHandler(node *Node, config WebsocketConfig) *WebsocketHandler {
 	}
 }
 
-var framePingInterval = 25 * time.Second
-
-type websocketTransportOptions struct {
-	protoType          ProtocolType
-	pingPong           PingPongConfig
-	writeTimeout       time.Duration
-	compressionMinSize int
-}
-
-func newWebsocketTransport(conn *websocket.Conn, opts websocketTransportOptions, graceCh chan struct{}, useNativePingPong bool) *websocketTransport {
-	transport := &websocketTransport{
-		conn:    conn,
-		closeCh: make(chan struct{}),
-		graceCh: graceCh,
-		opts:    opts,
-	}
-	if useNativePingPong {
-		transport.addPing()
-	}
-	return transport
-}
-
-// HandleReadFrame is a helper to read Centrifuge commands from frame-based io.Reader and
-// process them. Frame-based means that EOF treated as the end of the frame, not the entire
-// connection close.
-func HandleReadFrame(c *Client, r io.Reader) bool {
-	protoType := c.Transport().Protocol().toProto()
-	decoder := protocol.GetStreamCommandDecoder(protoType, r)
-	defer protocol.PutStreamCommandDecoder(protoType, decoder)
-
-	hadCommands := false
-
-	for {
-		cmd, cmdProtocolSize, err := decoder.Decode()
-		if cmd != nil {
-			hadCommands = true
-			proceed := c.HandleCommand(cmd, cmdProtocolSize)
-			if !proceed {
-				return false
-			}
-		}
-		if err != nil {
-			log.Error().Stack().Err(err).Msg(fmt.Sprintf("HandleReadFrame %v", hadCommands))
-			if err == io.EOF {
-				if !hadCommands {
-					c.node.logger.log(newLogEntry(LogLevelInfo, "empty request received", map[string]any{"client": c.ID(), "user": c.UserID()}))
-					c.Disconnect(DisconnectBadRequest)
-					return false
-				}
-				break
-			} else {
-				c.node.logger.log(newLogEntry(LogLevelInfo, "error reading command", map[string]any{"client": c.ID(), "user": c.UserID(), "error": err.Error()}))
-				c.Disconnect(DisconnectBadRequest)
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+
 	var protoType = ProtocolTypeJSON
 	var useFramePingPong bool
-
-	if r.URL.RawQuery != "" {
-		query := r.URL.Query()
-		if query.Get("format") == "protobuf" || query.Get("cf_protocol") == "protobuf" {
-			protoType = ProtocolTypeProtobuf
-		}
-		if query.Get("cf_ws_frame_ping_pong") == "true" {
-			// This is a way for tools like Postman, wscat and others to maintain
-			// active connection to the Centrifuge-based server without the need to
-			// respond to app-level pings. We rely on native websocket ping/pong
-			// frames in this case.
-			useFramePingPong = true
-		}
-	}
-
 	compression := s.config.Compression
 	compressionLevel := s.config.CompressionLevel
 	compressionMinSize := s.config.CompressionMinSize
@@ -202,11 +123,6 @@ func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 	if messageSizeLimit > 0 {
 		conn.SetReadLimit(int64(messageSizeLimit))
-	}
-
-	subProtocol := conn.Subprotocol()
-	if subProtocol == "centrifuge-protobuf" {
-		protoType = ProtocolTypeProtobuf
 	}
 
 	if useFramePingPong {
@@ -257,12 +173,10 @@ func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		for {
 			_, r, err := conn.NextReader()
 			if err != nil {
-				log.Error().Stack().Err(err).Msg("next read")
 				break
 			}
 			proceed := HandleReadFrame(c, r)
 			if !proceed {
-				log.Debug().Msg("next read")
 				break
 			}
 		}
@@ -275,7 +189,6 @@ func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		_ = conn.SetReadDeadline(time.Now().Add(closeFrameWait))
 		for {
 			if _, _, err := conn.NextReader(); err != nil {
-				log.Error().Stack().Err(err).Msg("for next read")
 				close(graceCh)
 				break
 			}
@@ -283,43 +196,47 @@ func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	}()
 }
 
-const (
-	numSubLocks            = 16384
-	numSubDissolverWorkers = 64
-)
+// HandleReadFrame is a helper to read Centrifuge commands from frame-based io.Reader and
+// process them. Frame-based means that EOF treated as the end of the frame, not the entire
+// connection close.
+func HandleReadFrame(c *Client, r io.Reader) bool {
+	protoType := c.Transport().Protocol().toProto()
+	decoder := deliverprotocol.GetStreamCommandDecoder(protoType, r)
+	defer deliverprotocol.PutStreamCommandDecoder(protoType, decoder)
 
-func sameHostOriginCheck(n *Node) func(r *http.Request) bool {
-	return func(r *http.Request) bool {
-		err := checkSameHost(r)
-		if err != nil {
-			n.logger.log(newLogEntry(LogLevelInfo, "origin check failure", map[string]any{"error": err.Error()}))
-			return false
+	hadCommands := false
+
+	for {
+		cmd, cmdProtocolSize, err := decoder.Decode()
+		if cmd != nil {
+			hadCommands = true
+			proceed := c.HandleCommand(cmd, cmdProtocolSize)
+			if !proceed {
+				return false
+			}
 		}
-		return true
+		if err != nil {
+			if err == io.EOF {
+				if !hadCommands {
+					c.node.logger.log(newLogEntry(LogLevelInfo, "empty request received", map[string]any{"client": c.ID(), "user": c.UserID()}))
+					c.Disconnect(DisconnectBadRequest)
+					return false
+				}
+				break
+			} else {
+				c.node.logger.log(newLogEntry(LogLevelInfo, "error reading command", map[string]any{"client": c.ID(), "user": c.UserID(), "error": err.Error()}))
+				c.Disconnect(DisconnectBadRequest)
+				return false
+			}
+		}
 	}
-}
-
-func checkSameHost(r *http.Request) error {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return nil
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		return fmt.Errorf("failed to parse Origin header %q: %w", origin, err)
-	}
-	if strings.EqualFold(r.Host, u.Host) {
-		return nil
-	}
-	return fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host)
+	return true
 }
 
 const (
 	transportWebsocket = "websocket"
 )
 
-// websocketTransport is a wrapper struct over websocket connection to fit session
-// interface so client will accept it.
 type websocketTransport struct {
 	mu              sync.RWMutex
 	conn            *websocket.Conn
@@ -330,29 +247,106 @@ type websocketTransport struct {
 	nativePingTimer *time.Timer
 }
 
-func (t *websocketTransport) ping() {
+type websocketTransportOptions struct {
+	protoType          ProtocolType
+	pingPong           PingPongConfig
+	writeTimeout       time.Duration
+	compressionMinSize int
+}
+
+func newWebsocketTransport(conn *websocket.Conn, opts websocketTransportOptions, graceCh chan struct{}, useNativePingPong bool) *websocketTransport {
+	transport := &websocketTransport{
+		conn:    conn,
+		closeCh: make(chan struct{}),
+		graceCh: graceCh,
+		opts:    opts,
+	}
+	if useNativePingPong {
+		transport.addPing()
+	}
+	return transport
+}
+
+// Name returns name of transport.
+func (t *websocketTransport) Name() string {
+	return transportWebsocket
+}
+
+// Protocol returns transport deliverprotocol.
+func (t *websocketTransport) Protocol() ProtocolType {
+	return t.opts.protoType
+}
+
+// DisabledPushFlags ...
+func (t *websocketTransport) DisabledPushFlags() uint64 {
+	// Websocket sends disconnects in Close frames.
+	return PushFlagDisconnect
+}
+
+// PingPongConfig ...
+func (t *websocketTransport) PingPongConfig() PingPongConfig {
+	t.mu.RLock()
+	useNativePingPong := t.nativePingTimer != nil
+	t.mu.RUnlock()
+	if useNativePingPong {
+		return PingPongConfig{
+			PingInterval: -1,
+			PongTimeout:  -1,
+		}
+	}
+	return t.opts.pingPong
+}
+
+func (t *websocketTransport) writeData(data []byte) error {
+	if t.opts.compressionMinSize > 0 {
+		t.conn.EnableWriteCompression(len(data) > t.opts.compressionMinSize)
+	}
+	var messageType = websocket.TextMessage
+	if t.opts.writeTimeout > 0 {
+		_ = t.conn.SetWriteDeadline(time.Now().Add(t.opts.writeTimeout))
+	}
+	err := t.conn.WriteMessage(messageType, data)
+	if err != nil {
+		return err
+	}
+	if t.opts.writeTimeout > 0 {
+		_ = t.conn.SetWriteDeadline(time.Time{})
+	}
+	return nil
+}
+
+// Write data to transport.
+func (t *websocketTransport) Write(message []byte) error {
 	select {
 	case <-t.closeCh:
-		return
+		return nil
 	default:
-		deadline := time.Now().Add(framePingInterval / 2)
-		err := t.conn.WriteControl(websocket.PingMessage, nil, deadline)
-		if err != nil {
-			_ = t.Close(DisconnectWriteError)
-			return
+		protoType := t.Protocol().toProto()
+		if protoType == deliverprotocol.TypeJSON {
+			// Fast path for one JSON message.
+			return t.writeData(message)
 		}
-		t.addPing()
+		encoder := deliverprotocol.GetDataEncoder(protoType)
+		defer deliverprotocol.PutDataEncoder(protoType, encoder)
+		_ = encoder.Encode(message)
+		return t.writeData(encoder.Finish())
 	}
 }
 
-func (t *websocketTransport) addPing() {
-	t.mu.Lock()
-	if t.closed {
-		t.mu.Unlock()
-		return
+// WriteMany data to transport.
+func (t *websocketTransport) WriteMany(messages ...[]byte) error {
+	select {
+	case <-t.closeCh:
+		return nil
+	default:
+		protoType := t.Protocol().toProto()
+		encoder := deliverprotocol.GetDataEncoder(protoType)
+		defer deliverprotocol.PutDataEncoder(protoType, encoder)
+		for i := range messages {
+			_ = encoder.Encode(messages[i])
+		}
+		return t.writeData(encoder.Finish())
 	}
-	t.nativePingTimer = time.AfterFunc(framePingInterval, t.ping)
-	t.mu.Unlock()
 }
 
 const closeFrameWait = 5 * time.Second
@@ -393,102 +387,29 @@ func (t *websocketTransport) Close(disconnect Disconnect) error {
 	return t.conn.Close()
 }
 
-// Name returns name of transport.
-func (t *websocketTransport) Name() string {
-	return transportWebsocket
-}
+var framePingInterval = 25 * time.Second
 
-// Protocol returns transport protocol.
-func (t *websocketTransport) Protocol() ProtocolType {
-	return t.opts.protoType
-}
-
-// ProtocolVersion returns transport ProtocolVersion.
-func (t *websocketTransport) ProtocolVersion() ProtocolVersion {
-	return ProtocolVersion2
-}
-
-// Unidirectional returns whether transport is unidirectional.
-func (t *websocketTransport) Unidirectional() bool {
-	return false
-}
-
-// Emulation ...
-func (t *websocketTransport) Emulation() bool {
-	return false
-}
-
-// DisabledPushFlags ...
-func (t *websocketTransport) DisabledPushFlags() uint64 {
-	// Websocket sends disconnects in Close frames.
-	return PushFlagDisconnect
-}
-
-// PingPongConfig ...
-func (t *websocketTransport) PingPongConfig() PingPongConfig {
-	t.mu.RLock()
-	useNativePingPong := t.nativePingTimer != nil
-	t.mu.RUnlock()
-	if useNativePingPong {
-		return PingPongConfig{
-			PingInterval: -1,
-			PongTimeout:  -1,
-		}
-	}
-	return t.opts.pingPong
-}
-
-func (t *websocketTransport) writeData(data []byte) error {
-	if t.opts.compressionMinSize > 0 {
-		t.conn.EnableWriteCompression(len(data) > t.opts.compressionMinSize)
-	}
-	var messageType = websocket.TextMessage
-	if t.Protocol() == ProtocolTypeProtobuf {
-		messageType = websocket.BinaryMessage
-	}
-	if t.opts.writeTimeout > 0 {
-		_ = t.conn.SetWriteDeadline(time.Now().Add(t.opts.writeTimeout))
-	}
-	err := t.conn.WriteMessage(messageType, data)
-	if err != nil {
-		return err
-	}
-	if t.opts.writeTimeout > 0 {
-		_ = t.conn.SetWriteDeadline(time.Time{})
-	}
-	return nil
-}
-
-// Write data to transport.
-func (t *websocketTransport) Write(message []byte) error {
+func (t *websocketTransport) ping() {
 	select {
 	case <-t.closeCh:
-		return nil
+		return
 	default:
-		protoType := t.Protocol().toProto()
-		if protoType == protocol.TypeJSON {
-			// Fast path for one JSON message.
-			return t.writeData(message)
+		deadline := time.Now().Add(framePingInterval / 2)
+		err := t.conn.WriteControl(websocket.PingMessage, nil, deadline)
+		if err != nil {
+			_ = t.Close(DisconnectWriteError)
+			return
 		}
-		encoder := protocol.GetDataEncoder(protoType)
-		defer protocol.PutDataEncoder(protoType, encoder)
-		_ = encoder.Encode(message)
-		return t.writeData(encoder.Finish())
+		t.addPing()
 	}
 }
 
-// WriteMany data to transport.
-func (t *websocketTransport) WriteMany(messages ...[]byte) error {
-	select {
-	case <-t.closeCh:
-		return nil
-	default:
-		protoType := t.Protocol().toProto()
-		encoder := protocol.GetDataEncoder(protoType)
-		defer protocol.PutDataEncoder(protoType, encoder)
-		for i := range messages {
-			_ = encoder.Encode(messages[i])
-		}
-		return t.writeData(encoder.Finish())
+func (t *websocketTransport) addPing() {
+	t.mu.Lock()
+	if t.closed {
+		t.mu.Unlock()
+		return
 	}
+	t.nativePingTimer = time.AfterFunc(framePingInterval, t.ping)
+	t.mu.Unlock()
 }

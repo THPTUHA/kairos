@@ -17,28 +17,6 @@ type Unsubscribe struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// RPCEvent contains fields related to rpc request.
-type RPCEvent struct {
-	// Method is an optional string that contains RPC method name client wants to call.
-	// This is an optional field, by default clients send RPC without any method set.
-	Method string
-	// Data contains RPC untouched payload.
-	Data []byte
-}
-
-// RPCReply contains fields determining the reaction on rpc request.
-type RPCReply struct {
-	// Data to return in RPC reply to client.
-	Data []byte
-}
-
-// RPCCallback should be called as soon as handler decides what to do
-// with connection RPCEvent.
-type RPCCallback func(RPCReply, error)
-
-// RPCHandler must handle incoming command from client.
-type RPCHandler func(RPCEvent, RPCCallback)
-
 var (
 	unsubscribeClient = Unsubscribe{
 		Code:   UnsubscribeCodeClient,

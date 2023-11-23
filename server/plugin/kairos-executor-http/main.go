@@ -12,7 +12,6 @@ func main() {
 			"executor": &kplugin.ExecutorPlugin{Executor: &HTTP{}},
 		},
 
-		// A non-nil value here enables gRPC serving for this plugin...
 		GRPCServer: plugin.DefaultGRPCServer,
 	})
 }

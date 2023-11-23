@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/rs/zerolog/log"
@@ -27,18 +27,14 @@ func Init(hmacSecret string, hmrfSecret string) {
 }
 
 type AccessDetails struct {
-	TokenUuid  string
-	UserID     string
-	UserName   string
-	ClientName string
-	KairosName string
+	UserID   string
+	ClientID string
+	UserType int
 }
 
 type TokenDetails struct {
 	AccessToken string
 	TokenUuid   string
-	AtExpires   int64
-	RtExpires   int64
 }
 
 type TokenManager struct{}
@@ -48,51 +44,19 @@ func NewTokenService() *TokenManager {
 }
 
 type TokenInterface interface {
-	CreateToken(userId, userName string) (*TokenDetails, error)
+	CreateToken(userId string, userType int) (*TokenDetails, error)
 	ExtractAccess(*http.Request) (*AccessDetails, error)
 }
 
-func (t *TokenManager) CreateClientToken(userId, userName, clientName, kairosName string) (*TokenDetails, error) {
+func (t *TokenManager) CreateToken(userId, clientID, userType string) (*TokenDetails, error) {
 	td := &TokenDetails{}
-	td.AtExpires = time.Now().Add(time.Hour * 24 * 30).Unix() //expires after 30 min
 	td.TokenUuid = uuid.NewV4().String()
-
-	td.RtExpires = time.Now().Add(time.Hour * 24 * 7).Unix()
 
 	var err error
 	atClaims := jwt.MapClaims{}
-	atClaims["access_uuid"] = td.TokenUuid
 	atClaims["user_id"] = userId
-	atClaims["user_name"] = userName
-	atClaims["exp"] = td.AtExpires
-	atClaims["client_name"] = clientName
-	atClaims["kairos_name"] = kairosName
-
-	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
-	td.AccessToken, err = at.SignedString([]byte(cf.HmacSecret))
-	if err != nil {
-		return nil, err
-	}
-
-	if err != nil {
-		return nil, err
-	}
-	return td, nil
-}
-
-func (t *TokenManager) CreateToken(userId, userName string) (*TokenDetails, error) {
-	td := &TokenDetails{}
-	td.AtExpires = time.Now().Add(time.Hour * 24 * 30).Unix() //expires after 30 min
-	td.TokenUuid = uuid.NewV4().String()
-
-	td.RtExpires = time.Now().Add(time.Hour * 24 * 7).Unix()
-
-	var err error
-	atClaims := jwt.MapClaims{}
-	atClaims["access_uuid"] = td.TokenUuid
-	atClaims["user_id"] = userId
-	atClaims["user_name"] = userName
-	atClaims["exp"] = td.AtExpires
+	atClaims["client_id"] = clientID
+	atClaims["user_type"] = userType
 	at := jwt.NewWithClaims(jwt.SigningMethodHS256, atClaims)
 	td.AccessToken, err = at.SignedString([]byte(cf.HmacSecret))
 	if err != nil {
@@ -147,20 +111,17 @@ func Extract(token *jwt.Token) (*AccessDetails, error) {
 	claims, ok := token.Claims.(jwt.MapClaims)
 
 	if ok && token.Valid {
-		accessUuid, ok := claims["access_uuid"].(string)
 		userId, userOk := claims["user_id"].(string)
-		userName, userNameOk := claims["user_name"].(string)
-		clientName, _ := claims["client_name"].(string)
-		kairosName, _ := claims["kairos_name"].(string)
-		if !ok || !userOk || !userNameOk {
+		userType, userTypeOk := claims["user_type"].(string)
+		clientID, clientOk := claims["client_id"].(string)
+		if !ok || !userOk || !userTypeOk || !clientOk {
 			return nil, errors.New("unauthorized")
 		} else {
+			t, _ := strconv.Atoi(userType)
 			return &AccessDetails{
-				TokenUuid:  accessUuid,
-				UserID:     userId,
-				UserName:   userName,
-				ClientName: clientName,
-				KairosName: kairosName,
+				UserID:   userId,
+				UserType: t,
+				ClientID: clientID,
 			}, nil
 		}
 	}

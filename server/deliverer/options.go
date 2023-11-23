@@ -1,30 +1,33 @@
 package deliverer
 
-import "time"
-
 // PublishOption is a type to represent various Publish options.
 type PublishOption func(*PublishOptions)
 
 // SubscribeOption is a type to represent various Subscribe options.
 type SubscribeOption func(*SubscribeOptions)
 
-// WithHistory tells Broker to save message to history stream with provided size and ttl.
-func WithHistory(size int, ttl time.Duration, metaTTL ...time.Duration) PublishOption {
-	return func(opts *PublishOptions) {
-		opts.HistorySize = size
-		opts.HistoryTTL = ttl
-		if len(metaTTL) > 0 {
-			opts.HistoryMetaTTL = metaTTL[0]
-		}
-	}
+type RefreshOptions struct {
+	// Expired can close connection with expired reason.
+	Expired bool
+	// ExpireAt defines time in future when subscription should expire,
+	// zero value means no expiration.
+	ExpireAt int64
+	// Info defines custom channel information, zero value means no channel information.
+	Info []byte
+	// clientID to refresh.
+	clientID string
+	// sessionID to refresh.
+	sessionID string
 }
+
+// RefreshOption is a type to represent various Refresh options.
+type RefreshOption func(options *RefreshOptions)
 
 // SubscribeOptions define per-subscription options.
 type SubscribeOptions struct {
 	// ExpireAt defines time in future when subscription should expire,
 	// zero value means no expiration.
-	ExpireAt int64
-	// ChannelInfo defines custom channel information, zero value means no channel information.
+	ExpireAt    int64
 	ChannelInfo []byte
 	// EmitPresence turns on participating in channel presence - i.e. client
 	// subscription will emit presence updates to PresenceManager and will be visible
@@ -36,56 +39,47 @@ type SubscribeOptions struct {
 	// PushJoinLeave turns on receiving channel Join and Leave events by the client.
 	// Subscriptions which emit join/leave events should have EmitJoinLeave on.
 	PushJoinLeave bool
-	// When position is on client will additionally sync its position inside a stream
-	// to prevent publication loss. The loss can happen due to at most once guarantees
-	// of PUB/SUB model. Make sure you are enabling EnablePositioning in channels that
-	// maintain Publication history stream. When EnablePositioning is on Centrifuge will
-	// include StreamPosition information to subscribe response - for a client to be
-	// able to manually track its position inside a stream.
-	EnablePositioning bool
-	// EnableRecovery turns on automatic recovery for a channel. In this case
-	// client will try to recover missed messages upon resubscribe to a channel
-	// after reconnect to a server. This option also enables client position
-	// tracking inside a stream (i.e. enabling EnableRecovery will automatically
-	// enable EnablePositioning option) to prevent occasional publication loss.
-	// Make sure you are using EnableRecovery in channels that maintain Publication
-	// history stream.
-	EnableRecovery bool
 	// Data to send to a client with Subscribe Push.
 	Data []byte
 	// RecoverSince will try to subscribe a client and recover from a certain StreamPosition.
 	RecoverSince *StreamPosition
-
-	// HistoryMetaTTL allows to override default (set in Config.HistoryMetaTTL) history
-	// meta information expiration time.
-	HistoryMetaTTL time.Duration
-
 	// clientID to subscribe.
 	clientID string
-	// sessionID to subscribe.
-	sessionID string
 	// Source is a way to mark the source of Subscription - i.e. where it comes from. May be useful
 	// for inspection of a connection during its lifetime.
 	Source uint8
+	Role   int32
 }
+
+type UnsubscribeOptions struct {
+	// clientID to unsubscribe.
+	clientID string
+	// sessionID to unsubscribe.
+	sessionID string
+	// custom unsubscribe object.
+	unsubscribe *Unsubscribe
+}
+
+// UnsubscribeOption is a type to represent various Unsubscribe options.
+type UnsubscribeOption func(options *UnsubscribeOptions)
+
+type DisconnectOptions struct {
+	// Disconnect represents custom disconnect to use.
+	// By default, DisconnectForceNoReconnect will be used.
+	Disconnect *Disconnect
+	// ClientWhitelist contains client IDs to keep.
+	ClientWhitelist []string
+	// clientID to disconnect.
+	clientID string
+	// sessionID to disconnect.
+	sessionID string
+}
+
+// DisconnectOption is a type to represent various Disconnect options.
+type DisconnectOption func(options *DisconnectOptions)
 
 // NoLimit defines that limit should not be applied.
 const NoLimit = -1
-
-// HistoryOption is a type to represent various History options.
-type HistoryOption func(options *HistoryOptions)
-
-func WithHistoryFilter(filter HistoryFilter) HistoryOption {
-	return func(opts *HistoryOptions) {
-		opts.Filter = filter
-	}
-}
-
-func WithHistoryMetaTTL(metaTTL time.Duration) HistoryOption {
-	return func(opts *HistoryOptions) {
-		opts.MetaTTL = metaTTL
-	}
-}
 
 // WithExpireAt allows setting ExpireAt field.
 func WithExpireAt(expireAt int64) SubscribeOption {
@@ -122,33 +116,11 @@ func WithPushJoinLeave(enabled bool) SubscribeOption {
 	}
 }
 
-// WithPositioning ...
-func WithPositioning(enabled bool) SubscribeOption {
-	return func(opts *SubscribeOptions) {
-		opts.EnablePositioning = enabled
-	}
-}
-
-// WithRecovery ...
-func WithRecovery(enabled bool) SubscribeOption {
-	return func(opts *SubscribeOptions) {
-		opts.EnableRecovery = enabled
-	}
-}
-
 // WithSubscribeClient allows setting client ID that should be subscribed.
 // This option not used when Client.Subscribe called.
 func WithSubscribeClient(clientID string) SubscribeOption {
 	return func(opts *SubscribeOptions) {
 		opts.clientID = clientID
-	}
-}
-
-// WithSubscribeSession allows setting session ID that should be subscribed.
-// This option not used when Client.Subscribe called.
-func WithSubscribeSession(sessionID string) SubscribeOption {
-	return func(opts *SubscribeOptions) {
-		opts.sessionID = sessionID
 	}
 }
 
@@ -176,5 +148,25 @@ func WithSubscribeSource(source uint8) SubscribeOption {
 func WithClientInfo(info *ClientInfo) PublishOption {
 	return func(opts *PublishOptions) {
 		opts.ClientInfo = info
+	}
+}
+
+// WithRefreshExpired to set expired flag - connection will be closed with DisconnectExpired.
+func WithRefreshExpired(expired bool) RefreshOption {
+	return func(opts *RefreshOptions) {
+		opts.Expired = expired
+	}
+}
+
+func WithRefreshExpireAt(expireAt int64) RefreshOption {
+	return func(opts *RefreshOptions) {
+		opts.ExpireAt = expireAt
+	}
+}
+
+// WithRefreshInfo to override connection info.
+func WithRefreshInfo(info []byte) RefreshOption {
+	return func(opts *RefreshOptions) {
+		opts.Info = info
 	}
 }

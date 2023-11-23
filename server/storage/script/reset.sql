@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS clients;
-DROP TABLE IF EXISTS message_flow;
+DROP TABLE IF EXISTS message_flows;
 DROP TABLE IF EXISTS task_records;
+DROP TABLE IF EXISTS task_summary;
 DROP TABLE IF EXISTS brokers;
 DROP TABLE IF EXISTS vars;
 DROP TABLE IF EXISTS tasks;

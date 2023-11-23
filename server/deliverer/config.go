@@ -65,7 +65,6 @@ type Config struct {
 	// want to prevent a massive number of missed messages to be sent to a client when
 	// calling history without any limit explicitly set. By default, no limit used.
 	// This option does not affect Node.History method. See also RecoveryMaxPublicationLimit.
-	HistoryMaxPublicationLimit int
 	// RecoveryMaxPublicationLimit allows limiting the number of Publications that could be
 	// restored during the automatic recovery process. See also HistoryMaxPublicationLimit.
 	// By default, no limit used.
@@ -73,30 +72,7 @@ type Config struct {
 	// UseSingleFlight allows turning on mode where singleflight will be automatically used
 	// for Node.History (including recovery) and Node.Presence/Node.PresenceStats calls.
 	UseSingleFlight bool
-	// HistoryMetaTTL sets a time of stream meta key expiration in Redis. Stream
-	// meta key is a Redis HASH that contains top offset in channel and epoch value.
-	// In some cases – when channels created for а short time and then
-	// not used anymore – created stream meta keys can stay in memory while
-	// not actually useful. For example, you can have a personal user channel but
-	// after using your app for a while user left it forever. In long-term
-	// perspective this can be an unwanted memory leak. Setting a reasonable
-	// value to this option (usually much bigger than history retention period)
-	// can help. In this case unused channel stream metadata will eventually expire.
-	//
-	// Keep this value much larger than history stream TTL used when publishing.
-	// When zero Centrifuge uses default 30 days which we believe is more than enough
-	// for most use cases.
-	HistoryMetaTTL time.Duration
 
-	// MetricsNamespace is a Prometheus metrics namespace to use for internal metrics.
-	// If not set then the default namespace name "centrifuge" will be used.
-	MetricsNamespace string
-	// GetChannelNamespaceLabel if set will be used by Centrifuge to extract channel_namespace
-	// label for some channel related metrics. Make sure to maintain low cardinality of returned
-	// values to avoid issues with Prometheus performance. This function may introduce sufficient
-	// overhead since it's called in hot paths - so it should be fast. Usage of this function for
-	// specific metrics must be enabled over ChannelNamespaceLabelForTransportMessagesSent and
-	// ChannelNamespaceLabelForTransportMessagesReceived options.
 	GetChannelNamespaceLabel func(channel string) string
 	// ChannelNamespaceLabelForTransportMessagesSent enables using GetChannelNamespaceLabel
 	// function for extracting channel_namespace label for transport_messages_sent and

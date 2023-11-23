@@ -1,28 +1,23 @@
 package pubsub
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"sync/atomic"
-	"time"
 
+	"github.com/THPTUHA/kairos/pkg/helper"
 	"github.com/THPTUHA/kairos/server/deliverer"
 	"github.com/THPTUHA/kairos/server/httpserver/config"
-	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/gorilla/mux"
 )
 
 var userConnectNum int64
 
 func Start(config *config.Configs, pubsub chan *PubSubPayload) {
-	err := storage.Get().QueryRow("SELECT id FROM clients ORDER BY ID DESC LIMIT 1").Scan(&userConnectNum)
-	fmt.Println("userConnectNum", userConnectNum)
-	if err != nil && err != sql.ErrNoRows {
-		log.Fatalln(err)
-	}
+
+	userConnectNum = helper.GetTimeNow()
 	node, err := createPubSub(pubsub)
 	if err != nil {
 		log.Fatalln(err)
@@ -82,8 +77,7 @@ func createPubSub(pubsub chan *PubSubPayload) (*deliverer.Node, error) {
 			log.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
 			cb(deliverer.SubscribeReply{
 				Options: deliverer.SubscribeOptions{
-					EnableRecovery: true,
-					Data:           []byte(`{"user_count_id": "` + client.UserID() + `"}`),
+					Data: []byte(`{"user_count_id": "` + client.UserID() + `"}`),
 				},
 			}, nil)
 		})
@@ -111,9 +105,10 @@ func createPubSub(pubsub chan *PubSubPayload) (*deliverer.Node, error) {
 					payload.UserCountID,
 					[]byte(`{
 						"access_token": "`+payload.Data+`",
-						"user_count_id": "`+payload.UserCountID+`"
+						"user_count_id": "`+payload.UserCountID+`",
+						"user_id": "`+fmt.Sprint(payload.UserID)+`",
+						"client_id": "`+fmt.Sprint(payload.ClientID)+`"
 					}`),
-					deliverer.WithHistory(300, time.Minute),
 				)
 
 				if err != nil {

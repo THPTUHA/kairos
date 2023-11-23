@@ -1,0 +1,20 @@
+version: '1'
+name: noti
+vars:
+  MY_NOTI: |
+    {
+      "cmd": "noti",
+      "content": "Noti content"
+    }
+tasks:
+  a:
+    schedule: '0 20 * * *'
+    timezone: Asia/Ho_Chi_Minh
+    executor: schedule
+    payload: |
+     {{.MY_NOTI}}
+brokers:
+  brok:
+    listens:
+      - a_task
+    flows: [noti_channel]

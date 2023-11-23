@@ -11,6 +11,7 @@ type Event struct {
 
 type PubSubPayload struct {
 	UserID      int64
+	ClientID    int64
 	UserCountID string
 	Cmd         string
 	Data        string

@@ -3,13 +3,13 @@ package recovery
 import (
 	"sort"
 
-	"github.com/centrifugal/protocol"
+	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
 // uniquePublications returns slice of unique Publications.
-func uniquePublications(s []*protocol.Publication) []*protocol.Publication {
+func uniquePublications(s []*deliverprotocol.Publication) []*deliverprotocol.Publication {
 	keys := make(map[uint64]struct{})
-	list := make([]*protocol.Publication, 0, len(s))
+	list := make([]*deliverprotocol.Publication, 0, len(s))
 	for _, entry := range s {
 		val := entry.Offset
 		if _, value := keys[val]; !value {
@@ -23,7 +23,7 @@ func uniquePublications(s []*protocol.Publication) []*protocol.Publication {
 // MergePublications allows to merge recovered pubs with buffered pubs
 // collected during extracting recovered so result is ordered and with
 // duplicates removed.
-func MergePublications(recoveredPubs []*protocol.Publication, bufferedPubs []*protocol.Publication) ([]*protocol.Publication, bool) {
+func MergePublications(recoveredPubs []*deliverprotocol.Publication, bufferedPubs []*deliverprotocol.Publication) ([]*deliverprotocol.Publication, bool) {
 	if len(bufferedPubs) > 0 {
 		recoveredPubs = append(recoveredPubs, bufferedPubs...)
 	}

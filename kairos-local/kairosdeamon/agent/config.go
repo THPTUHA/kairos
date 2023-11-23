@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
@@ -10,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/config"
 	"github.com/hashicorp/go-sockaddr/template"
 	flag "github.com/spf13/pflag"
 )
@@ -25,62 +25,25 @@ type AgentConfig struct {
 	// HTTPAddr is the address on the UI web server will
 	// be bound. If not specified, this defaults to all interfaces.
 	HTTPAddr string `mapstructure:"http-addr"`
+	DevMode  bool
+	LogLevel string            `mapstructure:"log-level"`
+	Tags     map[string]string `mapstructure:"tags"`
 
-	// DevMode is used for development purposes only and limits the
-	// use of persistence or state.
-	DevMode bool
-
-	// debug|info|warn|error|fatal|panic
-	LogLevel string `mapstructure:"log-level"`
-
-	// Tags are used to attach key/value metadata to a node.
-	Tags map[string]string `mapstructure:"tags"`
-
-	// EncryptKey is the secret key to use for encrypting communication
-	// traffic for Serf. The secret key must be exactly 32-bytes, base64
-	// encoded.
-	EncryptKey string `mapstructure:"encrypt"`
-
-	// StartJoin is a list of addresses to attempt to join when the
-	// agent starts. If Serf is unable to communicate with any of these
-	// addresses, then the agent will error and exit.
-	StartJoin []string `mapstructure:"join"`
-
-	Port int `mapstructure:"port"`
-
-	// DataDir is the directory to store our state in
+	Port    int    `mapstructure:"port"`
 	DataDir string `mapstructure:"data-dir"`
 
-	// MailHost is the SMTP server host to use for email notifications.
-	MailHost string `mapstructure:"mail-host"`
-
-	// MailPort is the SMTP server port to use for email notifications.
-	MailPort uint16 `mapstructure:"mail-port"`
-
-	// MailUsername is the SMTP server username to use for email notifications.
-	MailUsername string `mapstructure:"mail-username"`
-
-	// MailPassword is the SMTP server password to use for email notifications.
-	MailPassword string `mapstructure:"mail-password"`
-
-	// MailFrom is the email sender to use for email notifications.
-	MailFrom string `mapstructure:"mail-from"`
-
-	// MailPayload is the email template body to use for email notifications.
-	MailPayload string `mapstructure:"mail-payload"`
-
-	// MailSubjectPrefix is the email subject prefix string to use for email notifications.
+	MailHost          string `mapstructure:"mail-host"`
+	MailPort          uint16 `mapstructure:"mail-port"`
+	MailUsername      string `mapstructure:"mail-username"`
+	MailPassword      string `mapstructure:"mail-password"`
+	MailFrom          string `mapstructure:"mail-from"`
+	MailPayload       string `mapstructure:"mail-payload"`
 	MailSubjectPrefix string `mapstructure:"mail-subject-prefix"`
 }
 
 var ErrResolvingHost = errors.New("error resolving hostname")
 
-const (
-	DefaultBindPort int = 8946
-	DefaultPort     int = 6868
-)
-
-func DefaultConfig() *AgentConfig {
+func DefaultConfig(c *config.Configs) *AgentConfig {
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Panic(err)
@@ -90,13 +53,22 @@ func DefaultConfig() *AgentConfig {
 
 	return &AgentConfig{
 		NodeName: hostname,
-		BindAddr: fmt.Sprintf("{{ GetPrivateIP }}:%d", DefaultBindPort),
-		HTTPAddr: ":8080",
+		BindAddr: fmt.Sprintf("{{ GetPrivateIP }}:%d", c.AgentDefaultPort),
+		HTTPAddr: fmt.Sprintf(":%d", c.AgentHTTPAddrPort),
 		LogLevel: "debug",
-		Port:     DefaultPort,
 		Tags:     tags,
-		DataDir:  "kairos.data",
+		DataDir:  c.AgentDataDir,
 	}
+
+	// return &AgentConfig{
+	// 	NodeName: hostname,
+	// 	BindAddr: fmt.Sprintf("{{ GetPrivateIP }}:%d", 8900),
+	// 	HTTPAddr: ":8081",
+	// 	LogLevel: "debug",
+	// 	Port:     8901,
+	// 	Tags:     tags,
+	// 	DataDir:  "kairos.data",
+	// }
 }
 
 func (c *AgentConfig) normalizeAddrs() error {
@@ -183,7 +155,6 @@ func normalizeAdvertise(addr string, bind string, defport int, dev bool) (string
 }
 
 func ConfigAgentFlagSet() *flag.FlagSet {
-	// c := DefaultConfig()
 	cmdFlags := flag.NewFlagSet("agent flagset", flag.ContinueOnError)
 	cmdFlags.Bool("server", false,
 		"This node is running in server mode")
@@ -205,31 +176,4 @@ func ParseSingleIPTemplate(ipTmpl string) (string, error) {
 	default:
 		return "", fmt.Errorf("multiple addresses found (%q), please configure one", out)
 	}
-}
-
-// AddrParts returns the parts of the BindAddr that should be
-// used to configure Serf.
-func (c *AgentConfig) AddrParts(address string) (string, int, error) {
-	checkAddr := address
-START:
-	_, _, err := net.SplitHostPort(checkAddr)
-	if ae, ok := err.(*net.AddrError); ok && ae.Err == "missing port in address" {
-		checkAddr = fmt.Sprintf("%s:%d", checkAddr, DefaultBindPort)
-		goto START
-	}
-	if err != nil {
-		return "", 0, err
-	}
-	// Get the address
-	addr, err := net.ResolveTCPAddr("tcp", checkAddr)
-	if err != nil {
-		return "", 0, err
-	}
-
-	return addr.IP.String(), addr.Port, nil
-}
-
-// EncryptBytes returns the encryption key configured.
-func (c *AgentConfig) EncryptBytes() ([]byte, error) {
-	return base64.StdEncoding.DecodeString(c.EncryptKey)
 }

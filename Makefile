@@ -1,6 +1,7 @@
 
 GOPATH=$(shell go env GOPATH)
-	
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 compile-proto:
 	@echo
 	@echo "==> Compiling Protobuf files <=="
@@ -9,15 +10,12 @@ compile-proto:
 			--go-grpc_out=server/plugin \
 			--go-grpc_opt=paths=source_relative  proto/*.proto
 
-	protoc  --go_out=.  --go_opt=paths=source_relative \
-			--go-grpc_out=server/deliverer/internal/controlpb \
-			--go-vtproto_out=server/deliverer/internal/controlpb/ --plugin protoc-gen-go-vtproto=${GOPATH}/bin/protoc-gen-go-vtproto \
-			--go-vtproto_opt=features=marshal+unmarshal+size \
-			server/deliverer/internal/controlpb/control.proto
 	 
 
 plugin:
-	cd server/plugin/kairos-executor-http && go build . -o /
+	cd server/plugin/kairos-executor-http && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-nats && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-file && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 
 agent:
 	@echo "==> Create agent <=="
@@ -29,7 +27,7 @@ migrate-create:
 	migrate create -ext sql -dir server/storage/migration/ -seq kairos
 resetdb:
 	psql -U kairos -d kairos -a -f server/storage/script/reset.sql 
-migrate-up:resetdb
+migrate-up:
 	migrate -path server/storage/migration -database postgresql://kairos:kairos@localhost:5432/kairos?sslmode=disable up
 
 migrate-down:

@@ -47,7 +47,7 @@ export const ObjectEditor = <T extends any>({ value, buttons, onChange }: Props<
                     Object.keys(value).map(x => (
                         <button
                             key={x}
-                            className='bg-green-500 rounded mx-2 px-2'
+                            className='rounded mx-2 px-2'
                             onClick={() => {
                                 const index = text.split('\n').findIndex((y, i) => (lang === 'yaml' ? y.startsWith(x + ':') : y.includes('"' + x + '":')));
 
@@ -77,7 +77,7 @@ export const ObjectEditor = <T extends any>({ value, buttons, onChange }: Props<
                     language={lang}
                     height={height + 'px'}
                     options={{
-                        readOnly: onChange === null,
+                        readOnly: onChange ? false : true,
                         minimap: { enabled: false },
                         lineNumbers: 'on',
                         guides: {

@@ -2,17 +2,20 @@ package controllers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/THPTUHA/kairos/pkg/orderedmap"
 	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/gin-gonic/gin"
 )
 
-func CreateWorkflow(c *gin.Context) {
+func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	var workflowFile workflow.WorkflowFile
 	err := c.BindJSON(&workflowFile)
@@ -34,14 +37,22 @@ func CreateWorkflow(c *gin.Context) {
 		workflowFile.Namespace = "default"
 	}
 
-	vars := workflow.GetKeyValueVars(workflowFile.Vars)
-	workflowFile.Tasks.Range(func(key string, value *workflow.Task) error {
-		value.Complie(vars)
-		return nil
-	})
+	rawData, err := json.Marshal(&workflowFile)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	// standar
+	tasks := orderedmap.New[string, *workflow.Task]()
 
 	err = workflowFile.Tasks.Range(func(key string, value *workflow.Task) error {
-		for _, c := range value.Clients {
+		key = strings.ToLower(key)
+		for idx, c := range value.Clients {
+			c = strings.ToLower(c)
+			value.Clients[idx] = c
 			_, err := storage.GetClient(&storage.ClientQuery{
 				UserID: userID.(string),
 				Name:   c,
@@ -54,9 +65,9 @@ func CreateWorkflow(c *gin.Context) {
 				return err
 			}
 		}
+		tasks.Set(key, value)
 		return nil
 	})
-
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
@@ -64,7 +75,41 @@ func CreateWorkflow(c *gin.Context) {
 		return
 	}
 
-	wid, err := storage.CreateWorkflow(userID.(string), &workflowFile)
+	workflowFile.Tasks = workflow.Tasks{
+		OrderedMap: tasks,
+	}
+
+	vars := orderedmap.New[string, *workflow.Var]()
+	workflowFile.Vars.Range(func(key string, value *workflow.Var) error {
+		vars.Set(strings.ToLower(key), value)
+		return nil
+	})
+	workflowFile.Vars = &workflow.Vars{
+		OrderedMap: vars,
+	}
+
+	brokers := orderedmap.New[string, *workflow.Broker]()
+	workflowFile.Brokers.Range(func(key string, value *workflow.Broker) error {
+		for idx, v := range value.Listens {
+			value.Listens[idx] = strings.ToLower(v)
+		}
+		brokers.Set(strings.ToLower(key), value)
+		return nil
+	})
+
+	workflowFile.Brokers = workflow.Brokers{
+		OrderedMap: brokers,
+	}
+
+	err = workflowFile.Compile()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"compile worlfow file error": err.Error(),
+		})
+		return
+	}
+
+	wid, err := storage.CreateWorkflow(userID.(string), &workflowFile, string(rawData))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
@@ -77,31 +122,33 @@ func CreateWorkflow(c *gin.Context) {
 	})
 
 	wf, _ := storage.DetailWorkflow(wid)
-	err = wf.Tasks.Range(func(key string, value *workflow.Task) error {
-		value.Domains = map[string]string{}
-		for _, c := range value.Clients {
-			client, err := storage.GetClient(&storage.ClientQuery{
-				UserID: userID.(string),
-				Name:   c,
-			})
 
-			if err != nil {
-				if err == sql.ErrNoRows {
-					return fmt.Errorf("Client %s not exist", c)
-				}
-				return err
-			}
-			value.Domains[c] = client.KairosName
-		}
-		return nil
-	})
-	events.WfChan <- &events.WfEvent{
+	// wf.Vars.Range(func(key string, value *workflow.Var) error {
+	// 	fmt.Println(key, value)
+	// 	return nil
+	// })
+
+	// wf.Tasks.Range(func(key string, value *workflow.Task) error {
+	// 	fmt.Println(key)
+	// 	fmt.Printf("%+v\n", value)
+	// 	return nil
+	// })
+
+	wf.Compile()
+	// fmt.Println("after comp")
+	// wf.Tasks.Range(func(key string, value *workflow.Task) error {
+	// 	fmt.Println(key)
+	// 	fmt.Printf("%+v\n", value)
+	// 	return nil
+	// })
+
+	events.Get() <- &events.WfEvent{
 		Cmd:      events.WfCmdCreate,
 		Workflow: wf,
 	}
 }
 
-func DropWorkflow(c *gin.Context) {
+func (ctr *Controller) DropWorkflow(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	id, exist := c.Params.Get("id")
 
@@ -125,13 +172,13 @@ func DropWorkflow(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Droping workflow",
 	})
-	events.WfChan <- &events.WfEvent{
+	events.Get() <- &events.WfEvent{
 		Cmd:      events.WfCmdDelete,
 		Workflow: &wf,
 	}
 }
 
-func ListWorkflow(c *gin.Context) {
+func (ctr *Controller) ListWorkflow(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	wfs, err := storage.ListWorkflow(userID.(string), nil)
 	if err != nil {
@@ -140,6 +187,7 @@ func ListWorkflow(c *gin.Context) {
 		})
 		return
 	}
+	ctr.wfRunner.SetWfStatus(wfs)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "List workflow",
@@ -147,7 +195,7 @@ func ListWorkflow(c *gin.Context) {
 	})
 }
 
-func StopWorkflow(c *gin.Context) {
+func (ctr *Controller) StopWorkflow(c *gin.Context) {
 	id, exist := c.Params.Get("id")
 
 	if !exist {
@@ -172,13 +220,13 @@ func StopWorkflow(c *gin.Context) {
 		"message": "Droping workflow",
 	})
 
-	events.WfChan <- &events.WfEvent{
+	events.Get() <- &events.WfEvent{
 		Cmd:      events.WfCmdDelete,
 		Workflow: &wf,
 	}
 }
 
-func StartWorkflow(c *gin.Context) {
+func (ctr *Controller) StartWorkflow(c *gin.Context) {
 	id, exist := c.Params.Get("id")
 
 	if !exist {
@@ -203,13 +251,13 @@ func StartWorkflow(c *gin.Context) {
 		"message": "Starting workflow",
 	})
 
-	events.WfChan <- &events.WfEvent{
+	events.Get() <- &events.WfEvent{
 		Cmd:      events.WfCmdStart,
 		Workflow: &wf,
 	}
 }
 
-func DetailWorkflow(c *gin.Context) {
+func (ctr *Controller) DetailWorkflow(c *gin.Context) {
 	id, exist := c.Params.Get("id")
 
 	if !exist {
@@ -239,5 +287,4 @@ func DetailWorkflow(c *gin.Context) {
 		"message":  "Detail workflow",
 		"workflow": wf,
 	})
-
 }

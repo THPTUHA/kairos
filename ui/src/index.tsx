@@ -4,16 +4,21 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
+import 'react-toastify/dist/ReactToastify.css';
+import 'react-responsive-modal/styles.css';
+import { ToastContainer } from 'react-toastify';
+import { RecoilRoot } from 'recoil';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
 root.render(
-  <React.StrictMode>
-    <BrowserRouter>
+  <BrowserRouter>
+    <RecoilRoot>
       <App />
-    </BrowserRouter>
-  </React.StrictMode>
+    </RecoilRoot>
+    <ToastContainer />
+  </BrowserRouter>
 );
 
 // If you want to start measuring performance in your app, pass a function

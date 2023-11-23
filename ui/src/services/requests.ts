@@ -9,8 +9,8 @@ const auth = (req: SuperAgentRequest) => {
 };
 
 const handle = (err: any) => {
-    if (err.status === 401 && !document.location.href.includes('login')) {
-        document.location.href = uiUrlWithParams('login', []);
+    if (err.status === 401 && !document.location.href.includes('home')) {
+        document.location.href = uiUrlWithParams('home', []);
     }
 };
 

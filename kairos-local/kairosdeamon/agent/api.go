@@ -7,21 +7,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	"github.com/tidwall/buntdb"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	pretty        = "pretty"
-	apiPathPrefix = "v1"
+	pretty = "pretty"
 )
 
-// Transport is the interface that wraps the ServeHTTP method.
 type Transport interface {
 	ServeHTTP()
 }
 
-// HTTPTransport stores pointers to an agent and a gin Engine.
 type HTTPTransport struct {
 	Engine *gin.Engine
 
@@ -53,46 +49,92 @@ func (h *HTTPTransport) ServeHTTP() {
 func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerFunc) {
 	v1 := r.Group("/v1")
 	v1.GET("/tasks", h.tasksHandler)
+	v1.GET("/:task/task", h.tasksGetHandler)
+	v1.DELETE("/:task/delete", h.tasksDeleteHandler)
 	v1.POST("/tasks", h.taskCreateOrUpdateHandler)
 	v1.GET("/view/:task/executions", h.executionsHandler)
+	v1.POST("/queue", h.queueTest)
+	v1.GET("/:task/queue", h.queueGetTest)
+}
+
+type Queue struct {
+	TaskID string `json:"task_id"`
+	V      string
+	K      string
+}
+
+func (h *HTTPTransport) queueTest(c *gin.Context) {
+	q := Queue{}
+	if err := c.BindJSON(&q); err != nil {
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
+		h.logger.Error(err)
+		return
+	}
+	err := h.agent.Store.SetQueue(q.TaskID, q.K, q.V)
+	if err != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Queue contains invalid value: %s.", err))
+		return
+	}
+
+	renderJSON(c, http.StatusCreated, &q)
+}
+
+func (h *HTTPTransport) queueGetTest(c *gin.Context) {
+	taskID := c.Param("task")
+	m := make(map[string]string)
+	err := h.agent.Store.GetQueue(taskID, &m)
+	if err != nil {
+		c.AbortWithStatus(http.StatusBadRequest)
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Queue contains invalid value: %s.", err))
+		return
+	}
+
+	renderJSON(c, http.StatusCreated, m)
 }
 
 func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
-	// Init the Task object with defaults
 	task := Task{}
 
-	// Parse values from JSON
 	if err := c.BindJSON(&task); err != nil {
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
 		h.logger.Error(err)
 		return
 	}
 
-	// Validate task
 	if err := task.Validate(); err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Task contains invalid value: %s.", err))
 		return
 	}
 
-	if err := h.agent.SetTask(&task); err != nil {
+	if err := h.agent.SetTaskAndSched(&task); err != nil {
 		s := status.Convert(err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		_, _ = c.Writer.WriteString(s.Message())
 		return
 	}
 
-	// Immediately run the task if so requested
-	// if _, exists := c.GetQuery("runoncreate"); exists {
-	// 	go func() {
-	// 		if _, err := h.agent.GRPCClient.RunTask(task.Key); err != nil {
-	// 			h.logger.WithError(err).Error("api: Unable to run task.")
-	// 		}
-	// 	}()
-	// }
-
 	c.Header("Location", fmt.Sprintf("%s/%s", c.Request.RequestURI, task.Name))
 	renderJSON(c, http.StatusCreated, &task)
+}
+
+func (h *HTTPTransport) tasksDeleteHandler(c *gin.Context) {
+	taskID := c.Param("task")
+	err := h.agent.DeleteTask(taskID)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+	}
+	renderJSON(c, http.StatusOK, nil)
+}
+
+func (h *HTTPTransport) tasksGetHandler(c *gin.Context) {
+	taskID := c.Param("task")
+	task, err := h.agent.GetTask(taskID)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+	}
+	renderJSON(c, http.StatusOK, task)
 }
 
 func (h *HTTPTransport) tasksHandler(c *gin.Context) {
@@ -161,26 +203,13 @@ func (h *HTTPTransport) executionsHandler(c *gin.Context) {
 		sort = "started_at"
 	}
 	order := c.DefaultQuery("_order", "DESC")
-	outputSizeLimit, err := strconv.Atoi(c.DefaultQuery("output_size_limit", ""))
-	if err != nil {
-		outputSizeLimit = -1
-	}
-
-	job, err := h.agent.Store.GetTask(taskID, nil)
-	fmt.Printf("TaskID = %d", taskID)
-	if err != nil {
-		_ = c.AbortWithError(http.StatusNotFound, err)
-		return
-	}
-
-	executions, err := h.agent.Store.GetExecutions(job.ID,
+	executions, err := h.agent.Store.GetExecutions(taskID,
 		&ExecutionOptions{
-			Sort:     sort,
-			Order:    order,
-			Timezone: job.GetTimeLocation(),
+			Sort:  sort,
+			Order: order,
 		},
 	)
-	if err == buntdb.ErrNotFound {
+	if err == ErrNotFound {
 		executions = make([]*Execution, 0)
 	} else if err != nil {
 		h.logger.Error(err)
@@ -190,14 +219,6 @@ func (h *HTTPTransport) executionsHandler(c *gin.Context) {
 	apiExecutions := make([]*apiExecution, len(executions))
 	for j, execution := range executions {
 		apiExecutions[j] = &apiExecution{execution, false}
-		if outputSizeLimit > -1 {
-			// truncate execution output
-			size := len(execution.Output)
-			if size > outputSizeLimit {
-				apiExecutions[j].Output = apiExecutions[j].Output[size-outputSizeLimit:]
-				apiExecutions[j].OutputTruncated = true
-			}
-		}
 	}
 
 	c.Header("X-Total-Count", strconv.Itoa(len(executions)))

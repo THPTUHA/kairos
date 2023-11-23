@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -68,9 +70,8 @@ func channelSubscribeAllowed(channel string) bool {
 
 func main() {
 	node, _ := deliverer.New(deliverer.Config{
-		LogLevel:       deliverer.LogLevelInfo,
-		LogHandler:     handleLog,
-		HistoryMetaTTL: 24 * time.Hour,
+		LogLevel:   deliverer.LogLevelInfo,
+		LogHandler: handleLog,
 	})
 
 	node.OnConnecting(func(ctx context.Context, e deliverer.ConnectEvent) (deliverer.ConnectReply, error) {
@@ -80,10 +81,9 @@ func main() {
 			// Subscribe to a personal server-side channel.
 			Subscriptions: map[string]deliverer.SubscribeOptions{
 				"#" + cred.UserID: {
-					EnableRecovery: true,
-					EmitPresence:   true,
-					EmitJoinLeave:  true,
-					PushJoinLeave:  true,
+					EmitPresence:  true,
+					EmitJoinLeave: true,
+					PushJoinLeave: true,
 				},
 			},
 		}, nil
@@ -93,14 +93,13 @@ func main() {
 		transport := client.Transport()
 		log.Printf("[user %s] connected via %s with protocol: %s", client.UserID(), transport.Name(), transport.Protocol())
 
-		// Event handler should not block, so start separate goroutine to
-		// periodically send messages to client.
 		go func() {
 			for {
 				select {
 				case <-client.Context().Done():
 					return
 				case <-time.After(5 * time.Second):
+					fmt.Println("SEND MESSAGE to client")
 					err := client.Send([]byte(`{"time": "` + strconv.FormatInt(time.Now().Unix(), 10) + `"}`))
 					if err != nil {
 						if err == io.EOF {
@@ -130,11 +129,10 @@ func main() {
 
 			cb(deliverer.SubscribeReply{
 				Options: deliverer.SubscribeOptions{
-					EnableRecovery: true,
-					EmitPresence:   true,
-					EmitJoinLeave:  true,
-					PushJoinLeave:  true,
-					Data:           []byte(`{"msg": "welcome"}`),
+					EmitPresence:  true,
+					EmitJoinLeave: true,
+					PushJoinLeave: true,
+					Data:          []byte(`{"msg": "welcome"}`),
 				},
 			}, nil)
 		})
@@ -154,15 +152,15 @@ func main() {
 				return
 			}
 			msg.Timestamp = time.Now().Unix()
-			data, _ := json.Marshal(msg)
+			// data, _ := json.Marshal(msg)
 
-			result, err := node.Publish(
-				e.Channel, data,
-				deliverer.WithHistory(300, time.Minute),
-				deliverer.WithClientInfo(e.ClientInfo),
-			)
+			// result, err := node.Publish(
+			// 	e.Channel, data,
+			// 	deliverer.WithHistory(300, time.Minute),
+			// 	deliverer.WithClientInfo(e.ClientInfo),
+			// )
 
-			cb(deliverer.PublishReply{Result: &result}, err)
+			cb(deliverer.PublishReply{}, err)
 		})
 
 		client.OnPresence(func(e deliverer.PresenceEvent, cb deliverer.PresenceCallback) {
@@ -199,7 +197,6 @@ func main() {
 			_, err := node.Publish(
 				"#42",
 				[]byte(`{"personal": "`+strconv.Itoa(i)+`"}`),
-				deliverer.WithHistory(300, time.Minute),
 			)
 			if err != nil {
 				log.Printf("error publishing to personal channel: %s", err)
@@ -216,13 +213,12 @@ func main() {
 			_, err := node.Publish(
 				"chat:index",
 				[]byte(`{"input": "Publish from server `+strconv.Itoa(i)+`"}`),
-				deliverer.WithHistory(300, time.Minute),
 			)
 			if err != nil {
 				log.Printf("error publishing to channel: %s", err)
 			}
 			i++
-			time.Sleep(10000 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
 
@@ -231,7 +227,12 @@ func main() {
 	websocketHandler := deliverer.NewWebsocketHandler(node, deliverer.WebsocketConfig{
 		ReadBufferSize:     1024,
 		UseWriteBufferPool: true,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return strings.Contains(origin, "localhost")
+		},
 	})
+
 	mux.Handle("/connection/websocket", authMiddleware(websocketHandler))
 
 	server := &http.Server{

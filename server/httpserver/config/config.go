@@ -21,6 +21,10 @@ type Configs struct {
 	PubSub struct {
 		Port int `yaml:"port"`
 	}
+	Nats struct {
+		URL  string `yaml:"url"`
+		Name string `yaml:"name"`
+	}
 	DB struct {
 		Postgres struct {
 			Username     string `yaml:"username"`

@@ -25,8 +25,15 @@ const (
 	DeleteWorker = iota
 )
 
-var WfChan chan *WfEvent
+var wfChan chan *WfEvent
 
 func Init() {
-	WfChan = make(chan *WfEvent)
+	wfChan = make(chan *WfEvent)
+}
+
+func Get() chan *WfEvent {
+	if wfChan == nil {
+		Init()
+	}
+	return wfChan
 }

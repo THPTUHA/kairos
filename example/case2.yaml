@@ -1,0 +1,42 @@
+version: '1'
+name: debug
+vars:
+  PAYLOADA: |
+    {
+      "method": "GET",
+      "url": "http://example.com",
+      "headers": "[]",
+      "body": "",
+      "timeout": "30",
+      "expectCode": "200",
+      "expectBody": ""
+    }
+tasks:
+  a:
+    schedule: "@every 5s"
+    timezone: "Asia/Ho_Chi_Minh"
+    executor: http
+    clients: [client1]
+    payload: |
+      {{.PAYLOADA}} 
+  b:
+    schedule: "@every 2s"
+    deps: [a_task]
+    timezone: "Asia/Ho_Chi_Minh"
+    executor: http
+    clients: [client2]
+    payload: |
+      {
+        "method": "GET",
+        "url": "{{.A_TASK_OUTPUT}}",
+        "headers": "[]",
+        "body": "",
+        "timeout": "30",
+        "expectCode": "200",
+        "expectBody": ""
+      }
+
+brokers:
+  brok:
+    listens: [a_task]
+    flows: [client2_client]

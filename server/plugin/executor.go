@@ -16,17 +16,14 @@ type Executor interface {
 	Execute(args *proto.ExecuteRequest, cb StatusHelper) (*proto.ExecuteResponse, error)
 }
 
-// ExecutorPluginConfig is the plugin config
 type ExecutorPluginConfig map[string]string
 
 type ExecutorServer struct {
-	// This is the real implementation
 	proto.ExecutorServer
 	Impl   Executor
 	broker *plugin.GRPCBroker
 }
 
-// Execute is where the magic happens
 func (m ExecutorServer) Execute(ctx context.Context, req *proto.ExecuteRequest) (*proto.ExecuteResponse, error) {
 	conn, err := m.broker.Dial(req.StatusServer)
 	if err != nil {
@@ -38,7 +35,6 @@ func (m ExecutorServer) Execute(ctx context.Context, req *proto.ExecuteRequest) 
 	return m.Impl.Execute(req, a)
 }
 
-// GRPCStatusHelperClient is an implementation of status updates over RPC.
 type GRPCStatusHelperClient struct{ client proto.StatusHelperClient }
 
 func (m *GRPCStatusHelperClient) Update(b []byte, c bool) (int64, error) {
@@ -52,9 +48,6 @@ func (m *GRPCStatusHelperClient) Update(b []byte, c bool) (int64, error) {
 	return resp.R, err
 }
 
-// This is the implementation of plugin.Plugin so we can serve/consume this.
-// We also implement GRPCPlugin so that this plugin can be served over
-// gRPC.
 type ExecutorPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
 	Executor Executor
@@ -69,9 +62,7 @@ func (p *ExecutorPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBrok
 	return &ExecutorClient{client: proto.NewExecutorClient(c), broker: broker}, nil
 }
 
-// GRPCStatusHelperServer is the gRPC server that GRPCClient talks to.
 type GRPCStatusHelperServer struct {
-	// This is the real implementation
 	proto.StatusHelperServer
 	Impl StatusHelper
 }
@@ -89,15 +80,12 @@ type Broker interface {
 	AcceptAndServe(id uint32, s func([]grpc.ServerOption) *grpc.Server)
 }
 
-// Here is the gRPC client that GRPCClient talks to.
 type ExecutorClient struct {
-	// This is the real implementation
 	client proto.ExecutorClient
 	broker Broker
 }
 
 func (m *ExecutorClient) Execute(args *proto.ExecuteRequest, cb StatusHelper) (*proto.ExecuteResponse, error) {
-	// This is where the magic conversion to Proto happens
 	statusHelperServer := &GRPCStatusHelperServer{Impl: cb}
 
 	initChan := make(chan bool, 1)
@@ -113,18 +101,14 @@ func (m *ExecutorClient) Execute(args *proto.ExecuteRequest, cb StatusHelper) (*
 	brokerID := m.broker.NextId()
 	go func() {
 		m.broker.AcceptAndServe(brokerID, serverFunc)
-		// AcceptAndServe might terminate without calling serverFunc
-		// To prevent eternal blocking, send 'init done' signal
 		initChan <- true
 	}()
 
-	// Wait for s to be initialized in the goroutine
 	<-initChan
 
 	args.StatusServer = brokerID
 	r, err := m.client.Execute(context.Background(), args)
 
-	/* In some cases the server cannot start (ex: too many open files), so, the s pointer is nil */
 	if s != nil {
 		s.Stop()
 	}

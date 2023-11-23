@@ -19,11 +19,18 @@ type natsSubConfig struct {
 
 type natsSub struct {
 	config *natsSubConfig
+	Con    *nats.Conn
 }
 
 func NewNatsSub(config *natsSubConfig) *natsSub {
+	nc, err := nats.Connect(config.url, optNats(config)...)
+	if err != nil {
+		config.logger.Error(err)
+		return nil
+	}
 	return &natsSub{
 		config: config,
+		Con:    nc,
 	}
 }
 
@@ -36,19 +43,14 @@ func optNats(o *natsSubConfig) []nats.Option {
 }
 
 func (ns *natsSub) Subscribes(subs map[string]nats.MsgHandler, signals chan os.Signal) {
-	nc, err := nats.Connect(*&ns.config.url, optNats(ns.config)...)
-	if err != nil {
-		ns.config.logger.Error(err)
-		return
-	}
 	for subject, cb := range subs {
-		_, err := nc.Subscribe(subject, cb)
+		_, err := ns.Con.Subscribe(subject, cb)
 		if err != nil {
 			ns.config.logger.Error(err)
 			return
 		}
 	}
-	nc.Flush()
+	// ns.con.Flush()
 	<-signals
 	ns.config.logger.Warn("stop subscribe nat")
 }

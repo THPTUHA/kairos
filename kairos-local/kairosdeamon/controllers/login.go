@@ -18,19 +18,22 @@ import (
 type LoginResponse struct {
 	AccessToken string `json:"access_token"`
 	UserCountID string `json:"user_count_id"`
+	UserID      string `json:"user_id"`
+	ClientID    string `json:"client_id"`
 }
 
 type MessageResponse struct {
 	UserCountID string `json:"user_count_id"`
 }
 
-// TODO lưu lại kairos name client
 func Login(eventCh chan *events.Event) func(c *gin.Context) {
 	return func(c *gin.Context) {
+		var auth config.Auth
 		clientName := c.Query("name")
 		var wait sync.WaitGroup
 		wait.Add(1)
-		clientPS := pubsub.NewClient(fmt.Sprintf("%s?name=%s", config.ServerPubSubEnpoint, clientName), pubsub.Config{})
+		cf, _ := config.Get()
+		clientPS := pubsub.NewClient(fmt.Sprintf("%s?name=%s", cf.ServerPubSubEnpoint, clientName), pubsub.Config{})
 		clientPS.OnConnected(func(e pubsub.ConnectedEvent) {
 		})
 
@@ -43,10 +46,7 @@ func Login(eventCh chan *events.Event) func(c *gin.Context) {
 			}
 			log.Info().Msg(fmt.Sprintf("UserCountID %s", mr.UserCountID))
 
-			sub, err := clientPS.NewSubscription(mr.UserCountID, pubsub.SubscriptionConfig{
-				Recoverable: true,
-				JoinLeave:   true,
-			})
+			sub, err := clientPS.NewSubscription(mr.UserCountID, pubsub.SubscriptionConfig{})
 
 			if err != nil {
 				wait.Done()
@@ -58,7 +58,7 @@ func Login(eventCh chan *events.Event) func(c *gin.Context) {
 
 			sub.OnSubscribed(func(e pubsub.SubscribedEvent) {
 				log.Printf("Subscribed on channel %s, (was recovering: %v, recovered: %v)", sub.Channel, e.WasRecovering, e.Recovered)
-				utils.OpenBrowser(fmt.Sprintf("%s?user_count_id=%s", config.LoginEndpoint, mr.UserCountID))
+				utils.OpenBrowser(fmt.Sprintf("%s?user_count_id=%s", cf.LoginEndpoint, mr.UserCountID))
 			})
 
 			sub.OnPublication(func(e pubsub.PublicationEvent) {
@@ -77,13 +77,10 @@ func Login(eventCh chan *events.Event) func(c *gin.Context) {
 					items[1] = items[0]
 				}
 
-				config.KairosName = items[0]
-				config.ClientName = items[1]
-				config.Token = lr.AccessToken
-
-				log.Info().Msg(fmt.Sprintf("LoginResponse = %s, KariosName = %s, ClientName =%s\n",
-					lr.AccessToken, config.KairosName, config.ClientName))
-
+				auth.ClientName = items[1]
+				auth.Token = lr.AccessToken
+				auth.ClientID = lr.ClientID
+				auth.UserID = lr.UserID
 				wait.Done()
 			})
 
@@ -106,8 +103,11 @@ func Login(eventCh chan *events.Event) func(c *gin.Context) {
 		}
 		wait.Wait()
 		clientPS.Disconnect()
+		// TODO add token, clientName, kairosName as meta data
+		d, _ := json.Marshal(auth)
 		eventCh <- &events.Event{
-			Cmd: events.ConnectServerCmd,
+			Cmd:     events.ConnectServerCmd,
+			Payload: string(d),
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"message": "login success",

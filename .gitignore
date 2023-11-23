@@ -2,3 +2,6 @@ tmp
 cerd.json
 kairos.data
 kairos-executor-http
+
+kairos.boltdb
+kairos1.boltdb

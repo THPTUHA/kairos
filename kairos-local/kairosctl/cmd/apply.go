@@ -42,16 +42,26 @@ func applyRun() error {
 
 	wf, _ := workflow.ComplieFile(applyConfig.File)
 
-	a, err := json.Marshal(wf)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	var newWf workflow.WorkflowFile
-	err = json.Unmarshal(a, &newWf)
-	if err != nil {
-		return err
-	}
-	fmt.Println(string(a))
+	// _, err := json.Marshal(wf)
+	// if err != nil {
+	// 	fmt.Println("fuck 1", err)
+	// 	return err
+	// }
+	// var newWf workflow.WorkflowFile
+	// err = json.Unmarshal(a, &newWf)
+	// if err != nil {
+	// 	fmt.Println("fuck 2", err)
+	// 	return err
+	// }
+
+	wf.Brokers.Range(func(key string, value *workflow.Broker) error {
+		d, err := json.Marshal(value.Flows)
+		fmt.Println(string(d), err)
+		var e workflow.BrokerFlows
+		err = json.Unmarshal(d, &e)
+		fmt.Println("dd", e, err)
+		return nil
+	})
 	// var collection workflow.Collection
 	// collection.Namespace = wfyml.Collection.Namespace
 	// collection.RawData = string(file)

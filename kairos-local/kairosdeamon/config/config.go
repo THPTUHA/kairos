@@ -1,14 +1,32 @@
 package config
 
-var (
-	ServerPort          = 3111
-	LoginEndpoint       = "http://localhost:8001/apis/v1/login"
-	ServerPubSubEnpoint = "ws://localhost:8002/server/pubsub"
-	PubSubEnpoint       = "ws://localhost:8003/pubsub"
-	Token               = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjhmMWY4ZmYzLTk1MTAtNGJkNi05MGIxLWE2ODUxMzlhYzMyNSIsImV4cCI6MTcwMTk3MTk4NCwidXNlcl9pZCI6IjIiLCJ1c2VyX25hbWUiOiJuZ3V5ZW5taW5obmdoaWFkZXZAZ21haWwuY29tIn0.0RgPW3IEyyLhP-jhs1njDWJYL_pli1JvpAHwUfn5NKI"
-	LogLevel            = "debug"
-	NodeName            = "kairosdeamon"
+// var (
+// 	ServerPort          = 3111
+// 	LoginEndpoint       = "http://localhost:8001/apis/v1/login"
+// 	ServerPubSubEnpoint = "ws://localhost:8002/server/pubsub"
+// 	PubSubEnpoint       = "ws://localhost:8003/pubsub"
+// 	LogLevel            = "debug"
+// 	NodeName            = "kairosdeamon"
+// 	AgentHTTPAddrPort   = 8080
+// 	AgentDefaultPort    = 6868
+// 	AgentDataDir        = "kairos.boltdb"
+// )
 
-	ClientName = ""
-	KairosName = ""
-)
+type Configs struct {
+	ServerPort          int    `yaml:"serverPort"`
+	LoginEndpoint       string `yaml:"loginEndpoint"`
+	ServerPubSubEnpoint string `yaml:"serverPubSubEnpoint"`
+	PubSubEnpoint       string `yaml:"pubSubEnpoint"`
+	LogLevel            string `yaml:"logLevel"`
+	NodeName            string `yaml:"nodeName"`
+	AgentHTTPAddrPort   int    `yaml:"agentHTTPAddrPort"`
+	AgentDefaultPort    int    `yaml:"agentDefaultPort"`
+	AgentDataDir        string `yaml:"agentDataDir"`
+}
+
+type Auth struct {
+	Token      string `json:"token"`
+	ClientName string `json:"client_name"`
+	ClientID   string `json:"client_id"`
+	UserID     string `json:"user_id"`
+}

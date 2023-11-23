@@ -11,29 +11,32 @@ vars:
       "body": "",
       "timeout": "30",
       "expectCode": "200",
-      "expectBody": "",
+      "expectBody": ""
     }
   
 tasks:
   crawl_data:
-    schedule: "@every 2s"
-    timezone: "Indochina Time"
+    schedule: "@every 5s"
+    timezone: "Asia/Ho_Chi_Minh"
     executor: http
     clients: [abc]
+    replicas: 2
     success: none
     payload: |
       {{.CRAWL_DATA_PAYLOAD}} 
+
   summary_data:
     executor: script
     clients: [abc]
     payload: |
       {
-        content: {{.INPUT_CLIENT}} + {{.INPUT_CONTENT}} 
+        content: {{.INPUT_FROM}} {{.INPUT_CONTENT}} 
       } 
+
   prepare_post:
     deps: [summary_data]
     schedule: "0 20 * * *"
-    timezone: "Indochina Time"
+    timezone: "Asia/Ho_Chi_Minh"
     executor: script
     clients: [abc]
     success: all
@@ -53,6 +56,7 @@ tasks:
         "channel":"post_channel",
         "content": "{{.INPUT}}"
       }
+
   response_post_message:
     executor: pubsub
     payload: |
@@ -66,8 +70,14 @@ brokers:
   request_post_channel:
     listens: [request_post_channel]
     flows: |
-      {{if eq .MESSAGE_CMD .REQUEST_POST_CMD}}
-        [request_post_message_task]
+      {{if eq .REQUEST_POST_CHANNEL_MSG .REQUEST_POST_CHANNEL_CMD}}
+        {{send .REQUEST_POST_CHANNEL .CRAWL_DATA_TASK}}
+      {{else if}}
+        {{if eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS}}
+            {{range .REQUEST_POST_CHANNEL_MSG}}
+
+            {{end}}
+        {{end}}
       {{end}}
   
   get_post:

@@ -16,23 +16,23 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/routes"
 	"github.com/THPTUHA/kairos/server/httpserver/runner"
 	"github.com/THPTUHA/kairos/server/storage"
-	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 )
 
 type HttpServer struct {
-	Router     *gin.Engine
+	Router     *routes.Route
 	Token      auth.TokenInterface
 	Config     *config.Configs
 	PubsubChan chan *pubsub.PubSubPayload
+	NatConn    *nats.Conn
 
 	Logger *logrus.Entry
 }
 
 func (server *HttpServer) initialize(config *config.Configs) {
 	server.Config = config
-	server.Router = routes.Build(server.PubsubChan)
 	server.Logger = logger.InitLogger("debug", "httpserver")
 }
 
@@ -41,12 +41,22 @@ func (server *HttpServer) start() {
 	signal.Notify(signals,
 		os.Interrupt,
 	)
+	worklowRunner := runner.NewRunner(runner.Configs{
+		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
+		Logger:                server.Logger,
+	})
+
+	server.Router = routes.New(&routes.RouteConfig{
+		Pubsub:   server.PubsubChan,
+		WfRunner: worklowRunner,
+	})
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", server.Config.HTTPServer.Port),
-		Handler: server.Router,
+		Handler: server.Router.Build(),
 	}
 
+	go server.serviceNats()
 	go func() {
 		<-signals
 		log.Warn().Msg("Shutting down...")
@@ -58,11 +68,6 @@ func (server *HttpServer) start() {
 		}
 		os.Exit(0)
 	}()
-
-	worklowRunner := runner.NewRunner(runner.Configs{
-		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
-		Logger:                server.Logger,
-	})
 
 	go func() {
 		worklowRunner.Start(signals)
@@ -98,6 +103,11 @@ func main() {
 	pubsubChan := make(chan *pubsub.PubSubPayload)
 	httpserver.PubsubChan = pubsubChan
 
+	httpserver.NatConn, err = nats.Connect(config.Nats.URL, nats.Name(config.Nats.Name))
+	if err != nil {
+		log.Err(err)
+		return
+	}
 	go pubsub.Start(config, pubsubChan)
 	httpserver.initialize(config)
 	httpserver.start()

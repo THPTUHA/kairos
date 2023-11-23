@@ -1,8 +1,14 @@
 DROP TABLE IF EXISTS clients;
-DROP TABLE IF EXISTS graph_tasks;
+DROP TABLE IF EXISTS message_flows;
 DROP TABLE IF EXISTS message_flow;
 DROP TABLE IF EXISTS task_records;
-DROP TABLE IF EXISTS brockers;
+DROP TABLE IF EXISTS task_summary;
+DROP TABLE IF EXISTS task_summaries;
+DROP TABLE IF EXISTS broker_queues;
+DROP TABLE IF EXISTS brokers;
+DROP TABLE IF EXISTS channel_permissions;
+DROP TABLE IF EXISTS certificates;
+DROP TABLE IF EXISTS channels;
 DROP TABLE IF EXISTS vars;
 DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS workflows;
