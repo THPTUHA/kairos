@@ -67,6 +67,6 @@ start_nats:
 	fi
 
 deploy:start_nats
-	docker compose up -f server/storage/docker-compose.yaml -d
-	docker compose up -f server/httpserver/docker-compose.yaml -d
-	docker compose up -f server/deliverer/server/docker-compose.yaml -d
+	docker compose -f server/storage/docker-compose.yaml up -d
+	docker compose -f server/httpserver/docker-compose.yml up -d
+	docker compose -f server/deliverer/server/docker-compose.yml up -d
