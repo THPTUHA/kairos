@@ -1,6 +1,7 @@
 
 GOPATH=$(shell go env GOPATH)
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+.PHONY: start_nats
 
 compile-proto:
 	@echo
@@ -39,3 +40,32 @@ migrate-down:
 
 migrate-force:
 	migrate -path server/storage/migration -database postgresql://kairos:kairos@localhost:5432/kairos?sslmode=disable force ${v}
+
+install_postgres:
+	sudo yum install -y postgresql-server postgresql-contrib
+	sudo postgresql-setup initdb
+	sudo systemctl start postgresql
+	sudo systemctl enable postgresql
+
+create_database:
+	sudo -u postgres psql -c "CREATE DATABASE kairos;"
+	sudo -u postgres psql -c "CREATE USER kairos WITH PASSWORD 'kairos';"
+	sudo -u postgres psql -c "ALTER ROLE kairos SET client_encoding TO 'utf8';"
+	sudo -u postgres psql -c "ALTER ROLE kairos SET default_transaction_isolation TO 'read committed';"
+	sudo -u postgres psql -c "ALTER ROLE kairos SET timezone TO 'UTC';"
+	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE kairos TO kairos;"
+
+setupdb: install_postgres create_database
+	psql -h localhost -U kairos -d kairos -f server/storage/migration/000001_kairos.up.sql
+
+start_nats:
+	@if [ $$(docker ps -q -f name=nats) ]; then \
+		echo "Container 'nats-container' is already running."; \
+	else \
+		echo "Starting NATS container..."; \
+		docker run -p 4222:4222 -d --name nats nats:latest; \
+	fi
+
+deploy:start_nats
+	docker compose up -f server/httpserver -d
+	docker compose up -f server/deliverer/server -d

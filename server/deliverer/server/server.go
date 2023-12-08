@@ -37,9 +37,9 @@ type Message struct {
 	Payload string
 }
 type DelivererServer struct {
-	node   *deliverer.Node
-	sub    *natsSub
-	redis  *redis.Client
+	node *deliverer.Node
+	sub  *natsSub
+	// redis  *redis.Client
 	logger *logrus.Entry
 }
 
@@ -92,7 +92,7 @@ func createServer() (*DelivererServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.redis = NewRedisDB(RedisHost, RedisPort, "")
+	// d.redis = NewRedisDB(RedisHost, RedisPort, "")
 	d.createSub(log)
 	d.logger = log
 	return &d, nil
@@ -118,7 +118,7 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 			s.logger.WithField("deliver", "receiver data").Error(err)
 			return
 		}
-		s.redis.Set(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID), string(msg.Data), 10*time.Minute)
+		// s.redis.Set(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID), string(msg.Data), 10*time.Minute)
 		s.node.Publish(cmd.Channel, msg.Data)
 		s.logger.WithField("deliver", "receiver deliver cmd").Debug(fmt.Sprintf("id=%d channel=%s", cmd.DeliverID, cmd.Channel))
 	}
@@ -232,12 +232,12 @@ func (d *DelivererServer) createNode() error {
 
 	node.OnConnect(func(client *deliverer.Client) {
 		log.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
-		msgs := d.GetCacheKey(client.UserID())
-		go func() {
-			for _, ms := range msgs {
-				client.Send([]byte(ms))
-			}
-		}()
+		// msgs := d.GetCacheKey(client.UserID())
+		// go func() {
+		// 	for _, ms := range msgs {
+		// 		client.Send([]byte(ms))
+		// 	}
+		// }()
 
 		client.OnSubscribe(func(e deliverer.SubscribeEvent, cb deliverer.SubscribeCallback) {
 			log.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
@@ -254,7 +254,7 @@ func (d *DelivererServer) createNode() error {
 			log.Printf("client %s publishes into channel %s: %s", client.UserID(), e.Channel, string(e.Data))
 			var cmd workflow.CmdReplyTask
 			err := json.Unmarshal(e.Data, &cmd)
-			d.redis.Del(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID))
+			// d.redis.Del(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID))
 			if err != nil {
 				d.logger.WithField("onpublish", "receiver data").Error(err)
 				return
@@ -310,15 +310,15 @@ func NewRedisDB(host, port, password string) *redis.Client {
 	return redisClient
 }
 
-func (d *DelivererServer) GetCacheKey(pattern string) []string {
-	var matchingKeys []string
-	iter := d.redis.Scan(0, pattern, 0).Iterator()
-	for iter.Next() {
-		key := iter.Val()
-		matchingKeys = append(matchingKeys, key)
-	}
-	if err := iter.Err(); err != nil {
-		d.logger.Error(err)
-	}
-	return matchingKeys
-}
+// func (d *DelivererServer) GetCacheKey(pattern string) []string {
+// 	var matchingKeys []string
+// 	iter := d.redis.Scan(0, pattern, 0).Iterator()
+// 	for iter.Next() {
+// 		key := iter.Val()
+// 		matchingKeys = append(matchingKeys, key)
+// 	}
+// 	if err := iter.Err(); err != nil {
+// 		d.logger.Error(err)
+// 	}
+// 	return matchingKeys
+// }
