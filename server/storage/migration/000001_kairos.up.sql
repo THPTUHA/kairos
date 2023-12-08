@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     status INT NOT NULL,
     payload TEXT,
     expires_at VARCHAR(255) NOT NULL,
+    wait VARCHAR(255),
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -61,7 +62,6 @@ CREATE TABLE IF NOT EXISTS brokers (
     flows  TEXT,
     workflow_id bigserial NOT NULL,
     status INT NOT NULL,
-    queue BOOLEAN DEFAULT FALSE,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -78,17 +78,27 @@ CREATE TABLE IF NOT EXISTS task_summaries (
     CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
-
 CREATE TABLE IF NOT EXISTS task_records (
+    id bigserial PRIMARY KEY,
+    status INT NOT NULL,
+    output TEXT,
+    task_id   INT NOT NULL,
+	started_at  INT NOT NULL,
+	finished_at  INT NOT NULL,
+    client_id BIGINT NOT NUll,
+    created_at BIGINT NOT NUll,
+    CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_client FOREIGN KEY(client_id) REFERENCES clients(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS broker_records (
     id bigserial PRIMARY KEY,
     status INT NOT NULL,
     input TEXT,
     output TEXT,
-    task_id     INT NOT NULL,
-	started_at    INT NOT NULL,
-	finished_at   INT NOT NULL,
+    broker_id BIGINT NOT NUll,
     created_at BIGINT NOT NUll,
-    CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    CONSTRAINT fk_broker FOREIGN KEY(broker_id) REFERENCES brokers(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS message_flows (
@@ -96,8 +106,10 @@ CREATE TABLE IF NOT EXISTS message_flows (
     status INT NOT NULL,
     sender_id INT NOT NULL,
     sender_type INT NOT NULL,
+    sender_name VARCHAR(255) DEFAULT '',
     receiver_id INT NOT NULL,
     receiver_type INT NOT NULL,
+    receiver_name VARCHAR(255) DEFAULT '',
     workflow_id bigserial NOT NULL,
     message TEXT,
     attemp INT DEFAULT 0,
@@ -107,6 +119,7 @@ CREATE TABLE IF NOT EXISTS message_flows (
     elapsed_time BIGINT NOT NULL,
     request_size INT NOT NULL,
     response_size INT NOT NULL,
+    cmd INT NOT NULL,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -119,15 +132,6 @@ CREATE TABLE IF NOT EXISTS clients (
     CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS broker_queues (
-    id bigserial PRIMARY KEY,
-    key VARCHAR(255) NOT NULL,
-    value TEXT NOT NULL,
-    workflow_id BIGINT NOT NULL,
-    used BOOLEAN NOT NULL,
-    created_at BIGINT NOT NULL,
-    CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
-);
 
 CREATE TABLE IF NOT EXISTS certificates (
     id bigserial PRIMARY KEY,
@@ -146,5 +150,14 @@ CREATE TABLE IF NOT EXISTS channel_permissions (
     role INT NOT NULL,
     channel_id BIGINT NOT NULL,
     CONSTRAINT fk_cert FOREIGN KEY(cert_id) REFERENCES certificates(id) ON DELETE CASCADE,
-    CONSTRAINT fk_channel FOREIGN KEY(channel_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_channel FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS functions (
+    id bigserial PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    content TEXT,
+    created_at BIGINT NOT NULL,
+    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+)

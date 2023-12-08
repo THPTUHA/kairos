@@ -9,7 +9,6 @@ import (
 
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/config"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/events"
-	"github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog/log"
 )
 
@@ -55,7 +54,7 @@ func handleSignals() int {
 	signalCh := make(chan os.Signal, 4)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	var sig os.Signal
-WAIT:
+WAIT_EXP:
 	select {
 	case s := <-signalCh:
 		sig = s
@@ -65,7 +64,7 @@ WAIT:
 
 	if sig == syscall.SIGHUP {
 		handleReload()
-		goto WAIT
+		goto WAIT_EXP
 	}
 
 	if sig != syscall.SIGTERM && sig != os.Interrupt {
@@ -90,7 +89,6 @@ WAIT:
 		time.Sleep(1 * time.Second)
 	}
 
-	plugin.CleanupClients()
 	close(gracefulCh)
 
 	select {

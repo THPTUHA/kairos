@@ -1,6 +1,9 @@
 import { CertService } from "./certificateService";
 import { ChannelService } from "./channelService";
 import { ClientService } from "./clientService";
+import { FunctionSerive } from "./functionService";
+import { GraphService } from "./graphService";
+import { RecordService } from "./recordService";
 import { UserService } from "./userService";
 import { WorkflowsService } from "./workflowService";
 
@@ -10,6 +13,9 @@ interface Services {
     users: typeof UserService;
     channels: typeof ChannelService;
     certs: typeof CertService;
+    functions: typeof FunctionSerive;
+    graphs: typeof GraphService;
+    records: typeof RecordService;
 }
 
 export const services: Services = {
@@ -18,4 +24,7 @@ export const services: Services = {
     users: UserService,
     channels: ChannelService,
     certs: CertService,
+    functions: FunctionSerive,
+    graphs: GraphService,
+    records: RecordService,
 };

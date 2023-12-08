@@ -15,15 +15,8 @@ import (
 )
 
 type AgentConfig struct {
-	// NodeName is the name we register as. Defaults to hostname.
 	NodeName string `mapstructure:"node-name"`
-
-	// BindAddr is the address on which all of kairos's services will
-	// be bound. If not specified, this defaults to the first private ip address.
 	BindAddr string `mapstructure:"bind-addr"`
-
-	// HTTPAddr is the address on the UI web server will
-	// be bound. If not specified, this defaults to all interfaces.
 	HTTPAddr string `mapstructure:"http-addr"`
 	DevMode  bool
 	LogLevel string            `mapstructure:"log-level"`

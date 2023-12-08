@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dop251/goja"
 	"gopkg.in/yaml.v3"
 )
 
@@ -65,37 +66,45 @@ func validateDynamicParam(str string) (bool, error) {
 	return true, nil
 }
 
-func (w *WorkflowFile) Compile() error {
-	err := w.Vars.Range(func(_ string, value *Var) error {
-		return value.Compile()
+func (w *WorkflowFile) Compile(funcs *goja.Runtime) error {
+	if w.Vars != nil {
+		err := w.Vars.Range(func(_ string, value *Var) error {
+			return value.Compile()
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	err := w.Brokers.Range(func(_ string, b *Broker) error {
+		return b.Compile(w.Vars, w.Clients, w.Channels, &w.Tasks, funcs)
 	})
 	if err != nil {
 		return err
 	}
-	err = w.Brokers.Range(func(_ string, b *Broker) error {
-		return b.Compile(w.Vars)
-	})
-	if err != nil {
-		return err
-	}
+
 	vars := GetKeyValueVars(w.Vars)
-	err = w.Tasks.Range(func(_ string, t *Task) error {
+	err = w.Tasks.Range(func(k string, t *Task) error {
+		t.Name = k
 		err := t.Compile(vars)
 		return err
 	})
 	return err
 }
 
-func (w *Workflow) Compile() error {
-	err := w.Vars.Range(func(_ string, value *Var) error {
-		err := value.Compile()
-		return err
-	})
-	if err != nil {
-		return err
+func (w *Workflow) Compile(funcs *goja.Runtime) error {
+	if w.Vars != nil {
+		err := w.Vars.Range(func(_ string, value *Var) error {
+			err := value.Compile()
+			return err
+		})
+		if err != nil {
+			return err
+		}
 	}
-	err = w.Brokers.Range(func(_ string, b *Broker) error {
-		return b.Compile(w.Vars)
+
+	err := w.Brokers.Range(func(_ string, b *Broker) error {
+		return b.Compile(w.Vars, w.Clients, w.Channels, &w.Tasks, funcs)
 	})
 	if err != nil {
 		return err

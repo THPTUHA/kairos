@@ -1,5 +1,5 @@
 import { useRecoilState } from "recoil";
-import { Entry } from "../../models/entry";
+import { Entry, Point } from "../../models/entry";
 import focusedItemAtom from "../../recoil/focusedItem/atom";
 import StatusCode, { StatusCodeClassification, getClassification } from "../StatusCode";
 import ingoingIconSuccess from "../../assets/ingoing-traffic-success.svg"
@@ -8,7 +8,7 @@ import ingoingIconFailure from "../../assets/ingoing-traffic-failure.svg"
 import outgoingIconFailure from "../../assets/outgoing-traffic-failure.svg"
 import ingoingIconNeutral from "../../assets/ingoing-traffic-neutral.svg"
 import outgoingIconNeutral from "../../assets/outgoing-traffic-neutral.svg"
-import { ColorGreen, ColorRed, ColorWhite, InputTaskCmd, ReplyInputTaskCmd, ReplyOutputTaskCmd, ReplySetTaskCmd, ReplyStartTaskCmd, SetTaskCmd, TriggerStartTaskCmd } from "../../conts";
+import { BrokerPoint, BrokerPointColor, ChannelPoint, ChannelPointColor, ClientPoint, ClientPointColor, ColorGreen, ColorRed, ColorWhite, InputTaskCmd, KairosPoint, KairosPointColor, ReplyInputTaskCmd, ReplyMessageCmd, ReplyOutputTaskCmd, ReplySetTaskCmd, ReplyStartTaskCmd, SetTaskCmd, TaskPoint, TaskPointColor, TriggerStartTaskCmd } from "../../conts";
 import React from "react";
 import styles from '../../styles/EntriesList.module.sass';
 import Queryable from "../Queryable";
@@ -21,6 +21,20 @@ interface EntryProps {
   namespace?: string;
 }
 
+export function getColorPoint(point: Point){
+  switch(point.type){
+    case KairosPoint:
+      return KairosPointColor
+    case ClientPoint:
+      return ClientPointColor
+    case BrokerPoint:
+      return BrokerPointColor
+    case ChannelPoint:
+      return ChannelPointColor
+    case TaskPoint:
+      return TaskPointColor
+  }
+}
 export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, namespace }) => {
   const [focusedItem, setFocusedItem] = useRecoilState(focusedItemAtom);
   const isSelected = focusedItem === entry.id;
@@ -64,6 +78,8 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
           return "reply output task"
         case ReplyInputTaskCmd:
           return "reply input task"
+        case ReplyMessageCmd:
+          return "reply message channel"
       }
     } else {
       switch (entry.cmd) {
@@ -129,7 +145,7 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
           iconStyle={{ marginRight: "16px" }}
         >
           <span
-            className={`${styles.tcpInfo} ${styles.ip}`}
+            className={`${styles.tcpInfo} ${styles.ip} ${getColorPoint(entry.src)}`}
             title="Source name"
           >
             {entry.src.name}
@@ -151,13 +167,13 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
           }
         </div>
         <Queryable
-          query={`dst.ip == "${entry.dst.name}"`}
+          query={`dst.name == "${entry.dst.name}"`}
           displayIconOnMouseOver={true}
           flipped={false}
           iconStyle={{ marginTop: "30px", right: "35px", position: "relative" }}
         >
           <span
-            className={`${styles.tcpInfo} ${styles.ip}`}
+            className={`${styles.tcpInfo} ${styles.ip} ${getColorPoint(entry.dst)}`}
             title="Destination Name"
           >
             {entry.dst.name}

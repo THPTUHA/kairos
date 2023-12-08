@@ -3,10 +3,10 @@ package models
 type TaskRecord struct {
 	ID         int    `json:"id"`
 	Status     int    `json:"status"`
-	Input      string `json:"input"`
 	Output     string `json:"output"`
-	TaskID     int    `json:"task_id"`
-	StartedAt  int    `json:"started_at"`
-	FinishedAt int    `json:"finished_at"`
+	TaskID     int64  `json:"task_id"`
+	StartedAt  int64  `json:"started_at"`
+	FinishedAt int64  `json:"finished_at"`
+	ClientID   int64  `json:"client_id"`
 	CreatedAt  int64  `json:"created_at"`
 }

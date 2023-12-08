@@ -10,23 +10,21 @@ message Error {
 
 message Command {
   uint32 id = 1;
-  reserved 2, 3;
-  ConnectRequest connect = 4;
-  SubscribeRequest subscribe = 5;
-  UnsubscribeRequest unsubscribe = 6;
-  PublishRequest publish = 7;
-  PresenceRequest presence = 8;
-  PresenceStatsRequest presence_stats = 9;
-  PingRequest ping = 10;
-  SendRequest send = 11;
-  RefreshRequest refresh = 12;
-  SubRefreshRequest sub_refresh = 13;
+  ConnectRequest connect = 2;
+  SubscribeRequest subscribe = 3;
+  UnsubscribeRequest unsubscribe = 4;
+  PublishRequest publish = 5;
+  PresenceRequest presence = 6;
+  PresenceStatsRequest presence_stats = 7;
+  PingRequest ping = 8;
+  SendRequest send = 9;
+  RefreshRequest refresh = 10;
+  SubRefreshRequest sub_refresh = 11;
 }
 
 message Reply {
   uint32 id = 1;
   Error error = 2;
-  reserved 3;
   Push push = 4;
   ConnectResult connect = 5;
   SubscribeResult subscribe = 6;
@@ -39,21 +37,17 @@ message Reply {
   SubRefreshResult sub_refresh = 15;
 }
 
-// Push can be sent to a client as part of Reply in case of bidirectional transport or
-// without additional wrapping in case of unidirectional transports.
-// ProtocolVersion2 uses channel and one of the possible concrete push messages.
 message Push {
-  reserved 1, 3;
-  string channel = 2;
-  Publication pub = 4;
-  Join join = 5;
-  Leave leave = 6;
-  Unsubscribe unsubscribe = 7;
-  Message message = 8;
-  Subscribe subscribe = 9;
-  Connect connect = 10;
-  Disconnect disconnect = 11;
-  Refresh refresh = 12;
+  string channel = 1;
+  Publication pub = 2;
+  Join join = 3;
+  Leave leave = 4;
+  Unsubscribe unsubscribe = 5;
+  Message message = 6;
+  Subscribe subscribe = 7;
+  Connect connect = 8;
+  Disconnect disconnect = 9;
+  Refresh refresh = 10;
 }
 
 message ClientInfo {
@@ -64,11 +58,9 @@ message ClientInfo {
 }
 
 message Publication {
-  reserved 1, 2, 3;
-  bytes data = 4;
-  ClientInfo info = 5;
-  uint64 offset = 6;
-  map<string, string> tags = 7;
+  bytes data = 1;
+  ClientInfo info = 2;
+  map<string, string> tags = 3;
 }
 
 message Join {
@@ -80,18 +72,12 @@ message Leave {
 }
 
 message Unsubscribe {
-  reserved 1;
-  uint32 code = 2;
-  string reason = 3;
+  uint32 code = 1;
+  string reason = 2;
 }
 
 message Subscribe {
-  bool recoverable = 1;
-  reserved 2, 3;
-  string epoch = 4;
-  uint64 offset = 5;
-  bool positioned = 6;
-  bytes data = 7;
+  bytes data = 1;
 }
 
 message Message {
@@ -105,9 +91,8 @@ message Connect {
   bool expires = 4;
   uint32 ttl = 5;
   uint32 ping = 6;
-  bool pong = 7;
-  string session = 8;
-  string node = 9;
+  string session = 7;
+  string node = 8;
 }
 
 message Disconnect {
@@ -135,9 +120,8 @@ message ConnectResult {
   bytes data = 4;
   map<string, SubscribeResult> subs = 5;
   uint32 ping = 6;
-  bool pong = 7;
-  string session = 8;
-  string node = 9;
+  string session = 7;
+  string node = 8;
 }
 
 message RefreshRequest {
@@ -154,28 +138,15 @@ message RefreshResult {
 message SubscribeRequest {
   string channel = 1;
   string token = 2;
-  bool recover = 3;
-  reserved 4, 5;
-  string epoch = 6;
-  uint64 offset = 7;
-  bytes data = 8;
-  bool positioned = 9;
-  bool recoverable = 10;
-  bool join_leave = 11;
+  bytes data = 3;
+  bool join_leave = 4;
 }
 
 message SubscribeResult {
   bool expires = 1;
   uint32 ttl = 2;
-  bool recoverable = 3;
-  reserved 4, 5;
-  string epoch = 6;
-  repeated Publication publications = 7;
-  bool recovered = 8;
-  uint64 offset = 9;
-  bool positioned = 10;
-  bytes data = 11;
-  bool was_recovering = 12;
+  repeated Publication publications = 3;
+  bytes data = 4;
 }
 
 message SubRefreshRequest {
@@ -216,11 +187,6 @@ message PresenceStatsRequest {
 message PresenceStatsResult {
   uint32 num_clients = 1;
   uint32 num_users = 2;
-}
-
-message StreamPosition {
-  uint64 offset = 1;
-  string epoch = 2;
 }
 
 message PingRequest {}

@@ -9,12 +9,14 @@ import (
 	v1 "github.com/THPTUHA/kairos/server/httpserver/routes/v1"
 	"github.com/THPTUHA/kairos/server/httpserver/runner"
 	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 )
 
 type Route struct {
 	ginApp   *gin.Engine
 	pubsub   chan *pubsub.PubSubPayload
 	wfRunner *runner.Runner
+	nats     *nats.Conn
 }
 
 func (r *Route) initialize() {
@@ -29,6 +31,7 @@ func (r *Route) initialize() {
 		PubSubCh:     r.pubsub,
 		WfRunner:     r.wfRunner,
 		TokenService: tokenService,
+		Nats:         r.nats,
 	})
 
 	v1.Auth(routeGroup, ctr)
@@ -43,6 +46,9 @@ func (r *Route) initialize() {
 	v1.Channel(privateGroup, ctr)
 	v1.User(privateGroup, ctr)
 	v1.Certificate(privateGroup, ctr)
+	v1.Functions(privateGroup, ctr)
+	v1.Graph(privateGroup, ctr)
+	v1.Record(privateGroup, ctr)
 }
 
 func (r *Route) Build() *gin.Engine {
@@ -57,6 +63,7 @@ func (r *Route) Run(path string) error {
 type RouteConfig struct {
 	Pubsub   chan *pubsub.PubSubPayload
 	WfRunner *runner.Runner
+	Nats     *nats.Conn
 }
 
 func New(conf *RouteConfig) *Route {
@@ -68,5 +75,6 @@ func New(conf *RouteConfig) *Route {
 		ginApp:   ginApp,
 		pubsub:   conf.Pubsub,
 		wfRunner: conf.WfRunner,
+		nats:     conf.Nats,
 	}
 }

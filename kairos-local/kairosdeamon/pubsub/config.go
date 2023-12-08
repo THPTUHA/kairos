@@ -29,12 +29,8 @@ type Config struct {
 	ReadTimeout time.Duration
 	// WriteTimeout is Websocket write timeout.
 	// Zero value means 1 * time.Second.
-	WriteTimeout time.Duration
-	// HandshakeTimeout specifies the duration for the handshake to complete.
-	// Zero value means 1 * time.Second.
-	HandshakeTimeout time.Duration
-	// MaxServerPingDelay used to set maximum delay of ping from server.
-	// Zero value means 10 * time.Second.
+	WriteTimeout       time.Duration
+	HandshakeTimeout   time.Duration
 	MaxServerPingDelay time.Duration
 
 	// EnableCompression specifies if the client should attempt to negotiate

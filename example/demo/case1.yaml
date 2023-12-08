@@ -1,0 +1,14 @@
+version: '1'
+name: schedule_noti_expired
+namespace: demo
+tasks:
+  pubsub_noti:
+    timezone: Asia/Ho_Chi_Minh
+    executor: pubsub 
+    wait: true
+brokers:
+  pub_collect:
+    listens: [request_pub_channel]
+    flows: |
+      {{get .request_pub_channel ("content") | .content}}
+      {{send .content .pubsub_noti_task}}

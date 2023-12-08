@@ -1,9 +1,7 @@
 package deliverer
 
-// PublishOption is a type to represent various Publish options.
 type PublishOption func(*PublishOptions)
 
-// SubscribeOption is a type to represent various Subscribe options.
 type SubscribeOption func(*SubscribeOptions)
 
 type RefreshOptions struct {
@@ -25,63 +23,36 @@ type RefreshOption func(options *RefreshOptions)
 
 // SubscribeOptions define per-subscription options.
 type SubscribeOptions struct {
-	// ExpireAt defines time in future when subscription should expire,
-	// zero value means no expiration.
-	ExpireAt    int64
-	ChannelInfo []byte
-	// EmitPresence turns on participating in channel presence - i.e. client
-	// subscription will emit presence updates to PresenceManager and will be visible
-	// in a channel presence result.
-	EmitPresence bool
-	// EmitJoinLeave turns on emitting Join and Leave events from the subscribing client.
-	// See also PushJoinLeave if you want current client to receive join/leave messages.
+	ExpireAt      int64
+	ChannelInfo   []byte
+	EmitPresence  bool
 	EmitJoinLeave bool
-	// PushJoinLeave turns on receiving channel Join and Leave events by the client.
-	// Subscriptions which emit join/leave events should have EmitJoinLeave on.
 	PushJoinLeave bool
-	// Data to send to a client with Subscribe Push.
-	Data []byte
-	// RecoverSince will try to subscribe a client and recover from a certain StreamPosition.
-	RecoverSince *StreamPosition
-	// clientID to subscribe.
-	clientID string
-	// Source is a way to mark the source of Subscription - i.e. where it comes from. May be useful
-	// for inspection of a connection during its lifetime.
-	Source uint8
-	Role   int32
+	Data          []byte
+	clientID      string
+	Source        uint8
+	Role          int32
 }
 
 type UnsubscribeOptions struct {
-	// clientID to unsubscribe.
-	clientID string
-	// sessionID to unsubscribe.
-	sessionID string
-	// custom unsubscribe object.
+	clientID    string
+	sessionID   string
 	unsubscribe *Unsubscribe
 }
 
-// UnsubscribeOption is a type to represent various Unsubscribe options.
 type UnsubscribeOption func(options *UnsubscribeOptions)
 
 type DisconnectOptions struct {
-	// Disconnect represents custom disconnect to use.
-	// By default, DisconnectForceNoReconnect will be used.
-	Disconnect *Disconnect
-	// ClientWhitelist contains client IDs to keep.
+	Disconnect      *Disconnect
 	ClientWhitelist []string
-	// clientID to disconnect.
-	clientID string
-	// sessionID to disconnect.
-	sessionID string
+	clientID        string
+	sessionID       string
 }
 
-// DisconnectOption is a type to represent various Disconnect options.
 type DisconnectOption func(options *DisconnectOptions)
 
-// NoLimit defines that limit should not be applied.
 const NoLimit = -1
 
-// WithExpireAt allows setting ExpireAt field.
 func WithExpireAt(expireAt int64) SubscribeOption {
 	return func(opts *SubscribeOptions) {
 		opts.ExpireAt = expireAt
@@ -128,13 +99,6 @@ func WithSubscribeClient(clientID string) SubscribeOption {
 func WithSubscribeData(data []byte) SubscribeOption {
 	return func(opts *SubscribeOptions) {
 		opts.Data = data
-	}
-}
-
-// WithRecoverSince allows setting SubscribeOptions.RecoverFrom.
-func WithRecoverSince(since *StreamPosition) SubscribeOption {
-	return func(opts *SubscribeOptions) {
-		opts.RecoverSince = since
 	}
 }
 

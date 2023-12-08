@@ -40,9 +40,8 @@ tasks:
         "expectBody": ""
       }
 brokers:
-  brok:
-    listens:
-      - a_task
+  filter:
+    listens: [a_task]
     flows: |
       {{if .A_TASK_SUCCESS }}
         {{set .A_TASK_OUTPUT .MY_URL}}

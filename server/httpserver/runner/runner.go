@@ -6,10 +6,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/THPTUHA/kairos/pkg/logger"
 	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/THPTUHA/kairos/server/storage/models"
+	"github.com/dop251/goja"
 	"github.com/go-redis/redis"
 	"github.com/panjf2000/ants"
 	"github.com/rs/zerolog/log"
@@ -53,7 +55,7 @@ func (r *Runner) Start(signals chan os.Signal) {
 				MaxAttempDeliverTask: 10,
 				TimeoutRetryDeliver:  2 * time.Second,
 				DeliverTimeout:       5 * time.Second,
-				Logger:               r.config.Logger,
+				Logger:               logger.InitLogger("debug", "worker"),
 			}, r.sched)
 			worker.status = workflow.Pending
 			worker.workflow.Status = workflow.Pending
@@ -121,15 +123,32 @@ func (r *Runner) startInitWorkflow(isFirst bool) error {
 			return err
 		}
 
-		fmt.Printf("[INIT WORKFLOW IDS] %+v \n", ids)
+		r.config.Logger.Info("")
 
 		for _, id := range ids {
 			fmt.Printf("[INIT WORKFLOW ] %d \n", id)
-			wf, err := storage.DetailWorkflow(id)
+			wf, err := storage.DetailWorkflow(id, "")
 			if err != nil {
 				return err
 			}
-			if err = wf.Compile(); err != nil {
+
+			fs, err := storage.FindFunctionsByUserID(wf.UserID)
+			if err != nil {
+				return err
+			}
+			scriptCode := ""
+			for _, f := range fs {
+				scriptCode += f.Content + "\n"
+			}
+			fmt.Printf("scriptCode --- %s\n", scriptCode)
+			vm := goja.New()
+			prog, err := goja.Compile("", scriptCode, true)
+			_, err = vm.RunProgram(prog)
+			if err != nil {
+				return err
+			}
+
+			if err = wf.Compile(vm); err != nil {
 				return err
 			}
 

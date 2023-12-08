@@ -17,10 +17,6 @@ type ClientInfo struct {
 
 // Publication is a data sent to channel.
 type Publication struct {
-	// Offset is an incremental position number inside history stream.
-	// Zero value means that channel does not maintain Publication stream.
-	Offset uint64
-	// Data published to channel.
 	Data []byte
 	// Info is optional information about client connection published
 	// this data to channel.
@@ -59,9 +55,8 @@ func infoFromProto(v *deliverprotocol.ClientInfo) ClientInfo {
 
 func pubFromProto(pub *deliverprotocol.Publication) Publication {
 	p := Publication{
-		Offset: pub.GetOffset(),
-		Data:   pub.Data,
-		Tags:   pub.GetTags(),
+		Data: pub.Data,
+		Tags: pub.GetTags(),
 	}
 	if pub.GetInfo() != nil {
 		info := infoFromProto(pub.GetInfo())
@@ -71,5 +66,5 @@ func pubFromProto(pub *deliverprotocol.Publication) Publication {
 }
 
 func errorFromProto(err *deliverprotocol.Error) *Error {
-	return &Error{Code: err.Code, Message: err.Message, Temporary: err.Temporary}
+	return &Error{Code: err.Code, Message: err.Message}
 }

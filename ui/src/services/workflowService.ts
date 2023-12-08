@@ -19,4 +19,10 @@ export const WorkflowsService = {
                 return item
             }));
     },
+    detail(id:number){
+        return requests
+        .get(`apis/v1/service/workflow/${id}/detail`)
+        .send()
+        .then(res => (res.body.workflow as Workflow));
+    }
 }

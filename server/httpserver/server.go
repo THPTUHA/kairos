@@ -43,12 +43,13 @@ func (server *HttpServer) start() {
 	)
 	worklowRunner := runner.NewRunner(runner.Configs{
 		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
-		Logger:                server.Logger,
+		Logger:                logger.InitLogger("debug", "runner"),
 	})
 
 	server.Router = routes.New(&routes.RouteConfig{
 		Pubsub:   server.PubsubChan,
 		WfRunner: worklowRunner,
+		Nats:     server.NatConn,
 	})
 
 	srv := &http.Server{
@@ -85,7 +86,9 @@ func main() {
 		log.Error().Msg(err.Error())
 		return
 	}
+
 	events.Init()
+
 	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.DB.Postgres.URI,
 		config.DB.Postgres.Port,
@@ -96,6 +99,7 @@ func main() {
 
 	auth.Init(config.Auth.HmacSecret, config.Auth.HmrfSecret)
 	if err != nil {
+		log.Error().Msg(err.Error())
 		return
 	}
 	httpserver := HttpServer{}
@@ -105,7 +109,7 @@ func main() {
 
 	httpserver.NatConn, err = nats.Connect(config.Nats.URL, nats.Name(config.Nats.Name))
 	if err != nil {
-		log.Err(err)
+		log.Error().Msg(err.Error())
 		return
 	}
 	go pubsub.Start(config, pubsubChan)

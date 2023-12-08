@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
@@ -24,6 +25,7 @@ const (
 	workflowsPrefix  = "workflows"
 	tasksPrefix      = "tasks"
 	executionsPrefix = "executions"
+	brokerPrefix     = "brokers"
 )
 
 var (
@@ -31,6 +33,7 @@ var (
 	tasksBucket      = []byte("tasks")
 	executionsBucket = []byte("executions")
 	metaBucket       = []byte("meta")
+	brokersBucket    = []byte("brokers")
 	queueBucket      = []byte("queue")
 )
 
@@ -73,7 +76,6 @@ func NewStore(database string, logger *logrus.Entry, local bool) (*Store, error)
 	return store, nil
 }
 
-// TaskOptions additional options to apply when loading a Task.
 type TaskOptions struct {
 	Metadata    map[string]string `json:"tags"`
 	Sort        string
@@ -227,6 +229,7 @@ func (s *Store) GetTask(id string, options *TaskOptions) (*Task, error) {
 		err := s.getTaskTxFunc(id, &task)(tx)
 		return err
 	})
+
 	return &task, nil
 }
 
@@ -238,6 +241,80 @@ func (s *Store) SetTask(task *Task) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return s.setTaskTxFunc(task)(tx)
 	})
+}
+
+func (s *Store) setBrokerTxFunc(broker *workflow.Broker) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		brokerBkt, err := tx.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+		bt, err := json.Marshal(brokerBkt)
+		if err != nil {
+			return err
+		}
+		brokerBkt.Put([]byte(fmt.Sprint(broker.ID)), bt)
+		return nil
+	}
+}
+
+func (s *Store) SetBroker(broker *workflow.Broker) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setBrokerTxFunc(broker)(tx)
+	})
+}
+
+func (s *Store) getBrokerTxFunc(brokerID string, broker *workflow.Broker) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+
+		brokerBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+		if err != nil {
+			return err
+		}
+		v := brokerBkt.Get([]byte(brokerID))
+		if v == nil {
+			return ErrNotFound
+		}
+		err = json.Unmarshal(v, broker)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (s *Store) GetBroker(id string) (*workflow.Broker, error) {
+	var broker workflow.Broker
+	s.db.Update(func(tx *bolt.Tx) error {
+		err := s.getBrokerTxFunc(id, &broker)(tx)
+		return err
+	})
+	return &broker, nil
+}
+
+func (s *Store) GetBrokers() ([]*workflow.Broker, error) {
+	brokers := make([]*workflow.Broker, 0)
+	bx, err := s.db.Begin(true)
+	if err != nil {
+		return brokers, err
+	}
+	defer bx.Rollback()
+
+	brokerBkt, err := bx.CreateBucketIfNotExists(tasksBucket)
+	if err != nil {
+		return brokers, err
+	}
+
+	c := brokerBkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var broker workflow.Broker
+		err := json.Unmarshal(v, &broker)
+		if err != nil {
+			return brokers, err
+		}
+	}
+
+	return brokers, bx.Commit()
 }
 
 func (*Store) setQueueTxFunc(workflowID, k, v string) func(tx *bolt.Tx) error {
@@ -321,6 +398,7 @@ func (s *Store) GetQueue(workflowID string, value *map[string]string) error {
 
 func (s *Store) getTaskTxFunc(taskID string, task *Task) func(tx *bolt.Tx) error {
 	return func(tx *bolt.Tx) error {
+
 		taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
 		if err != nil {
 			return err
@@ -512,7 +590,6 @@ func (s *Store) computeStatus(taskID string, exGroup int64, tx *buntdb.Tx) (stri
 }
 
 func (s *Store) SetExecutionDone(taskID string, execution *Execution) (bool, error) {
-	s.logger.Debug("Set execution done", execution)
 	err := s.db.Update(func(tx *bolt.Tx) error {
 		err := s.setExecutionTxFunc(taskID, execution)(tx)
 		if err != nil {

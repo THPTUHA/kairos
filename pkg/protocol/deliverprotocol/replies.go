@@ -86,23 +86,6 @@ func (p *ReplyPoolCollection) ReleasePublishReply(r *Reply) {
 	p.publishReplyPool.Put(r)
 }
 
-func (p *ReplyPoolCollection) AcquireRPCReply(result *RPCResult) *Reply {
-	r := p.rpcReplyPool.Get()
-	if r == nil {
-		return &Reply{
-			Rpc: result,
-		}
-	}
-	reply := r.(*Reply)
-	reply.Rpc = result
-	return reply
-}
-
-func (p *ReplyPoolCollection) ReleaseRPCReply(r *Reply) {
-	r.Rpc = nil
-	p.rpcReplyPool.Put(r)
-}
-
 func (p *ReplyPoolCollection) AcquirePresenceReply(result *PresenceResult) *Reply {
 	r := p.presenceReplyPool.Get()
 	if r == nil {
@@ -135,23 +118,6 @@ func (p *ReplyPoolCollection) AcquirePresenceStatsReply(result *PresenceStatsRes
 func (p *ReplyPoolCollection) ReleasePresenceStatsReply(r *Reply) {
 	r.PresenceStats = nil
 	p.presenceStatsReplyPool.Put(r)
-}
-
-func (p *ReplyPoolCollection) AcquireHistoryReply(result *HistoryResult) *Reply {
-	r := p.historyReplyPool.Get()
-	if r == nil {
-		return &Reply{
-			History: result,
-		}
-	}
-	reply := r.(*Reply)
-	reply.History = result
-	return reply
-}
-
-func (p *ReplyPoolCollection) ReleaseHistoryReply(r *Reply) {
-	r.History = nil
-	p.historyReplyPool.Put(r)
 }
 
 func (p *ReplyPoolCollection) AcquireRefreshReply(result *RefreshResult) *Reply {

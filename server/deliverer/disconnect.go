@@ -3,13 +3,10 @@ package deliverer
 import "fmt"
 
 type Disconnect struct {
-	// Code is a disconnect code.
-	Code uint32 `json:"code,omitempty"`
-	// Reason is a short description of disconnect code for humans.
+	Code   uint32 `json:"code,omitempty"`
 	Reason string `json:"reason"`
 }
 
-// String representation.
 func (d Disconnect) String() string {
 	return fmt.Sprintf("code: %d, reason: %s", d.Code, d.Reason)
 }
@@ -20,18 +17,11 @@ func (d Disconnect) Error() string {
 	return d.String()
 }
 
-// DisconnectConnectionClosed is a special Disconnect object used when
-// client connection was closed without any advice from a server side.
-// This can be a clean disconnect, or temporary disconnect of the client
-// due to internet connection loss. Server can not distinguish the actual
-// reason of disconnect.
 var DisconnectConnectionClosed = Disconnect{
 	Code:   3000,
 	Reason: "connection closed",
 }
 
-// Some predefined non-terminal disconnect structures used by
-// the library internally.
 var (
 	// DisconnectShutdown issued when node is going to shut down.
 	DisconnectShutdown = Disconnect{

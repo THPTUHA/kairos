@@ -20,7 +20,6 @@ type Hub struct {
 	sessions   map[string]*Client
 }
 
-// newHub initializes Hub.
 func newHub(logger *logger) *Hub {
 	h := &Hub{
 		sessions: map[string]*Client{},
@@ -39,9 +38,7 @@ func (h *Hub) clientBySession(session string) (*Client, bool) {
 	return c, ok
 }
 
-// shutdown unsubscribes users from all channels and disconnects them.
 func (h *Hub) shutdown(ctx context.Context) error {
-	// Limit concurrency here to prevent resource usage burst on shutdown.
 	sem := make(chan struct{}, hubShutdownSemaphoreSize)
 
 	var errMu sync.Mutex
@@ -118,21 +115,14 @@ func (h *Hub) addSub(ch string, c *Client) (bool, error) {
 	return h.subShards[index(ch, numHubShards)].addSub(ch, c)
 }
 
-// removeSub removes connection from clientHub subscriptions registry.
 func (h *Hub) removeSub(ch string, c *Client) (bool, error) {
 	return h.subShards[index(ch, numHubShards)].removeSub(ch, c)
 }
 
-// BroadcastPublication sends message to all clients subscribed on a channel on the current Node.
-// Usually this is NOT what you need since in most cases you should use Node.Publish method which
-// uses a Broker to deliver publications to all Nodes in a cluster and maintains publication history
-// in a channel with incremental offset. By calling BroadcastPublication messages will only be sent
-// to the current node subscribers without any defined offset semantics.
-func (h *Hub) BroadcastPublication(ch string, pub *Publication, sp StreamPosition) error {
-	return h.subShards[index(ch, numHubShards)].broadcastPublication(ch, pubToProto(pub), sp)
+func (h *Hub) BroadcastPublication(ch string, pub *Publication) error {
+	return h.subShards[index(ch, numHubShards)].broadcastPublication(ch, pubToProto(pub))
 }
 
-// broadcastJoin sends message to all clients subscribed on channel.
 func (h *Hub) broadcastJoin(ch string, info *ClientInfo) error {
 	return h.subShards[index(ch, numHubShards)].broadcastJoin(ch, &deliverprotocol.Join{Info: infoToProto(info)})
 }
@@ -141,12 +131,10 @@ func (h *Hub) broadcastLeave(ch string, info *ClientInfo) error {
 	return h.subShards[index(ch, numHubShards)].broadcastLeave(ch, &deliverprotocol.Leave{Info: infoToProto(info)})
 }
 
-// NumSubscribers returns number of current subscribers for a given channel.
 func (h *Hub) NumSubscribers(ch string) int {
 	return h.subShards[index(ch, numHubShards)].NumSubscribers(ch)
 }
 
-// Channels returns a slice of all active channels.
 func (h *Hub) Channels() []string {
 	channels := make([]string, 0, h.NumChannels())
 	for i := 0; i < numHubShards; i++ {
@@ -155,7 +143,6 @@ func (h *Hub) Channels() []string {
 	return channels
 }
 
-// NumClients returns total number of client connections.
 func (h *Hub) NumClients() int {
 	var total int
 	for i := 0; i < numHubShards; i++ {
@@ -164,7 +151,6 @@ func (h *Hub) NumClients() int {
 	return total
 }
 
-// NumUsers returns a number of unique users connected.
 func (h *Hub) NumUsers() int {
 	var total int
 	for i := 0; i < numHubShards; i++ {
@@ -174,7 +160,6 @@ func (h *Hub) NumUsers() int {
 	return total
 }
 
-// NumSubscriptions returns a total number of subscriptions.
 func (h *Hub) NumSubscriptions() int {
 	var total int
 	for i := 0; i < numHubShards; i++ {
@@ -184,21 +169,17 @@ func (h *Hub) NumSubscriptions() int {
 	return total
 }
 
-// NumChannels returns a total number of different channels.
 func (h *Hub) NumChannels() int {
 	var total int
 	for i := 0; i < numHubShards; i++ {
-		// channels do not overlap among shards.
 		total += h.subShards[i].NumChannels()
 	}
 	return total
 }
 
 type connShard struct {
-	mu sync.RWMutex
-	// match client ID with actual client connection.
+	mu    sync.RWMutex
 	conns map[string]*Client
-	// registry to hold active client connections grouped by user.
 	users map[string]map[string]struct{}
 }
 
@@ -213,7 +194,6 @@ const (
 	hubShutdownSemaphoreSize = 128
 )
 
-// shutdown unsubscribes users from all channels and disconnects them.
 func (h *connShard) shutdown(ctx context.Context, sem chan struct{}) error {
 	advice := DisconnectShutdown
 	h.mu.RLock()
@@ -366,7 +346,6 @@ func (h *connShard) disconnect(user string, disconnect Disconnect, clientID stri
 	return firstErr
 }
 
-// userConnections returns all connections of user with specified User.
 func (h *connShard) userConnections(userID string) map[string]*Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -405,7 +384,6 @@ func (h *connShard) add(c *Client) error {
 	return nil
 }
 
-// Remove connection from clientHub connections registry.
 func (h *connShard) remove(c *Client) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -415,7 +393,6 @@ func (h *connShard) remove(c *Client) error {
 
 	delete(h.conns, uid)
 
-	// try to find connection to delete, return early if not found.
 	if _, ok := h.users[user]; !ok {
 		return nil
 	}
@@ -423,10 +400,8 @@ func (h *connShard) remove(c *Client) error {
 		return nil
 	}
 
-	// actually remove connection from hub.
 	delete(h.users[user], uid)
 
-	// clean up users map if it's needed.
 	if len(h.users[user]) == 0 {
 		delete(h.users, user)
 	}
@@ -434,7 +409,6 @@ func (h *connShard) remove(c *Client) error {
 	return nil
 }
 
-// NumClients returns total number of client connections.
 func (h *connShard) NumClients() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -445,7 +419,6 @@ func (h *connShard) NumClients() int {
 	return total
 }
 
-// NumUsers returns a number of unique users connected.
 func (h *connShard) NumUsers() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -453,8 +426,7 @@ func (h *connShard) NumUsers() int {
 }
 
 type subShard struct {
-	mu sync.RWMutex
-	// registry to hold active subscriptions of clients to channels.
+	mu     sync.RWMutex
 	subs   map[string]map[string]*Client
 	logger *logger
 }
@@ -466,7 +438,6 @@ func newSubShard(logger *logger) *subShard {
 	}
 }
 
-// addSub adds connection into clientHub subscriptions registry.
 func (h *subShard) addSub(ch string, c *Client) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -484,14 +455,12 @@ func (h *subShard) addSub(ch string, c *Client) (bool, error) {
 	return false, nil
 }
 
-// removeSub removes connection from clientHub subscriptions registry.
 func (h *subShard) removeSub(ch string, c *Client) (bool, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	uid := c.ID()
 
-	// try to find subscription to delete, return early if not found.
 	if _, ok := h.subs[ch]; !ok {
 		return true, nil
 	}
@@ -499,10 +468,8 @@ func (h *subShard) removeSub(ch string, c *Client) (bool, error) {
 		return true, nil
 	}
 
-	// actually remove subscription from hub.
 	delete(h.subs[ch], uid)
 
-	// clean up subs map if it's needed.
 	if len(h.subs[ch]) == 0 {
 		delete(h.subs, ch)
 		return true, nil
@@ -517,8 +484,7 @@ type encodeError struct {
 	error  error
 }
 
-// broadcastPublication sends message to all clients subscribed on channel.
-func (h *subShard) broadcastPublication(channel string, pub *deliverprotocol.Publication, sp StreamPosition) error {
+func (h *subShard) broadcastPublication(channel string, pub *deliverprotocol.Publication) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -553,11 +519,10 @@ func (h *subShard) broadcastPublication(channel string, pub *deliverprotocol.Pub
 			}
 		}
 		fmt.Println("...........Pulish to client......", pub)
-		_ = c.writePublication(channel, pub, jsonReply, sp)
+		_ = c.writePublication(channel, pub, jsonReply)
 	}
 
 	if jsonEncodeErr != nil && h.logger.enabled(LogLevelWarn) {
-		// Log that we had clients with inappropriate deliverprotocol, and point to the first such client.
 		h.logger.log(NewLogEntry(LogLevelWarn, "inappropriate deliverprotocol publication", map[string]any{
 			"channel": channel,
 			"user":    jsonEncodeErr.user,
@@ -616,7 +581,6 @@ func (h *subShard) broadcastJoin(channel string, join *deliverprotocol.Join) err
 	return nil
 }
 
-// broadcastLeave sends message to all clients subscribed on channel.
 func (h *subShard) broadcastLeave(channel string, leave *deliverprotocol.Leave) error {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -645,7 +609,6 @@ func (h *subShard) broadcastLeave(channel string, leave *deliverprotocol.Leave) 
 		_ = c.writeLeave(channel, leave, jsonReply)
 	}
 	if jsonEncodeErr != nil && h.logger.enabled(LogLevelWarn) {
-		// Log that we had clients with inappropriate deliverprotocol, and point to the first such client.
 		h.logger.log(NewLogEntry(LogLevelWarn, "inappropriate deliverprotocol leave", map[string]any{
 			"channel": channel,
 			"user":    jsonEncodeErr.user,
@@ -656,7 +619,6 @@ func (h *subShard) broadcastLeave(channel string, leave *deliverprotocol.Leave) 
 	return nil
 }
 
-// NumChannels returns a total number of different channels.
 func (h *subShard) NumChannels() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

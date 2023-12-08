@@ -1,0 +1,14 @@
+version: '1'
+name: simple
+namespace: demo
+tasks:
+  temp: 
+    schedule: '@every 5s'
+    timezone: Asia/Ho_Chi_Minh
+    executor: script 
+    clients: [client1]
+    payload: |
+      {
+        "command": "ls",
+        "commandArgs": "[\"-l\",\".\"]"
+      }

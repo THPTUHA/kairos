@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,9 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Empty Replies/Pushes for pings.
 var jsonPingReply = []byte(`{}`)
-var jsonPingPush = []byte(`{}`)
 
 var randSource *saferand.Rand
 
@@ -54,42 +53,27 @@ func (c *Client) OnMessage(h MessageHandler) {
 	c.eventHub.messageHandler = h
 }
 
-// OnSubscribe allows setting SubscribeHandler.
-// SubscribeHandler called when client subscribes on a channel.
 func (c *Client) OnSubscribe(h SubscribeHandler) {
 	c.eventHub.subscribeHandler = h
 }
 
-// OnUnsubscribe allows setting UnsubscribeHandler.
-// UnsubscribeHandler called when client unsubscribes from channel.
 func (c *Client) OnUnsubscribe(h UnsubscribeHandler) {
 	c.eventHub.unsubscribeHandler = h
 }
 
-// OnPublish allows setting PublishHandler.
-// PublishHandler called when client publishes message into channel.
 func (c *Client) OnPublish(h PublishHandler) {
 	c.eventHub.publishHandler = h
 }
 
-// OnPresence allows setting PresenceHandler.
-// PresenceHandler called when Presence request from client received.
-// At this moment you can only return a custom error or disconnect client.
 func (c *Client) OnPresence(h PresenceHandler) {
 	c.eventHub.presenceHandler = h
 }
 
-// OnPresenceStats allows settings PresenceStatsHandler.
-// PresenceStatsHandler called when Presence Stats request from client received.
-// At this moment you can only return a custom error or disconnect client.
 func (c *Client) OnPresenceStats(h PresenceStatsHandler) {
 	c.eventHub.presenceStatsHandler = h
 }
 
 const (
-	// flagSubscribed will be set upon successful Subscription to a channel.
-	// Until that moment channel exists in client Channels map only to track
-	// duplicate subscription requests.
 	flagSubscribed uint8 = 1 << iota
 	flagEmitPresence
 	flagEmitJoinLeave
@@ -104,7 +88,6 @@ type ChannelContext struct {
 	info              []byte
 	expireAt          int64
 	positionCheckTime int64
-	streamPosition    StreamPosition
 	flags             uint8
 	role              int32
 	Source            uint8
@@ -161,19 +144,14 @@ func (r *ConnectRequest) toProto() *deliverprotocol.ConnectRequest {
 		return nil
 	}
 	req := &deliverprotocol.ConnectRequest{
-		Token:   r.Token,
-		Data:    r.Data,
-		Name:    r.Name,
-		Version: r.Version,
+		Token: r.Token,
+		Data:  r.Data,
+		Name:  r.Name,
 	}
 	if len(r.Subs) > 0 {
 		subs := make(map[string]*deliverprotocol.SubscribeRequest, len(r.Subs))
-		for k, v := range r.Subs {
-			subs[k] = &deliverprotocol.SubscribeRequest{
-				Recover: v.Recover,
-				Epoch:   v.Epoch,
-				Offset:  v.Offset,
-			}
+		for k, _ := range r.Subs {
+			subs[k] = &deliverprotocol.SubscribeRequest{}
 		}
 		req.Subs = subs
 	}
@@ -312,7 +290,6 @@ func (c *Client) onTimerOp() {
 	}
 }
 
-// Lock must be held outside.
 func (c *Client) scheduleNextTimer() {
 	if c.status == statusClosed {
 		return
@@ -370,22 +347,16 @@ func (c *Client) addPingUpdate(isFirst bool) {
 	c.scheduleNextTimer()
 }
 
-// Lock must be held outside.
 func (c *Client) addPresenceUpdate() {
 	c.nextPresence = time.Now().Add(c.node.config.ClientPresenceUpdateInterval).UnixNano()
 	c.scheduleNextTimer()
 }
 
-// Lock must be held outside.
 func (c *Client) addExpireUpdate(after time.Duration) {
 	c.nextExpire = time.Now().Add(after).UnixNano()
 	c.scheduleNextTimer()
 }
 
-// closeStale closes connection if it's not authenticated yet, or it's
-// unusable but still not closed. At moment used to close client connections
-// which have not sent valid connect command in a reasonable time interval after
-// establishing connection with a server.
 func (c *Client) closeStale() {
 	c.mu.RLock()
 	authenticated := c.authenticated
@@ -407,7 +378,6 @@ func (c *Client) transportEnqueue(data []byte, ch string, frameType deliverproto
 	}
 	disconnect := c.messageWriter.enqueue(item)
 	if disconnect != nil {
-		// close in goroutine to not block message broadcast.
 		go func() { _ = c.close(*disconnect) }()
 		return io.EOF
 	}
@@ -434,8 +404,6 @@ func (c *Client) updateChannelPresence(ch string, chCtx ChannelContext) error {
 	})
 }
 
-// Context returns client Context. This context will be canceled
-// as soon as client connection closes.
 func (c *Client) Context() context.Context {
 	return c.ctx
 }
@@ -506,45 +474,14 @@ func (c *Client) updatePresence() {
 	c.mu.Unlock()
 }
 
-func (c *Client) isValidPosition(streamTop StreamPosition, nowUnix int64, ch string) bool {
-	c.mu.Lock()
-	if c.status == statusClosed {
-		c.mu.Unlock()
-		return true
-	}
-	chCtx, ok := c.channels[ch]
-	if !ok || !channelHasFlag(chCtx.flags, flagSubscribed) {
-		c.mu.Unlock()
-		return true
-	}
-	position := chCtx.streamPosition
-	c.mu.Unlock()
-
-	isValidPosition := streamTop.Epoch == position.Epoch && position.Offset >= streamTop.Offset
-	if isValidPosition {
-		c.mu.Lock()
-		if chContext, ok := c.channels[ch]; ok {
-			chContext.positionCheckTime = nowUnix
-			c.channels[ch] = chContext
-		}
-		c.mu.Unlock()
-		return true
-	}
-
-	return false
-}
-
-// ID returns unique client connection id.
 func (c *Client) ID() string {
 	return c.uid
 }
 
-// UserID returns user id associated with client connection.
 func (c *Client) UserID() string {
 	return c.user
 }
 
-// Info returns connection info.
 func (c *Client) Info() []byte {
 	c.mu.Lock()
 	info := make([]byte, len(c.info))
@@ -553,12 +490,10 @@ func (c *Client) Info() []byte {
 	return info
 }
 
-// Transport returns client connection transport information.
 func (c *Client) Transport() TransportInfo {
 	return c.transport
 }
 
-// Channels returns a slice of channels client connection currently subscribed to.
 func (c *Client) Channels() []string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -670,13 +605,6 @@ func (c *Client) getUnsubscribePushReply(ch string, unsub Unsubscribe) ([]byte, 
 	})
 }
 
-// If zero args or nil passed then DisconnectForceNoReconnect is used.
-//
-// This method internally creates a new goroutine at the moment to do
-// closing stuff. An extra goroutine is required to solve disconnect
-// and alive callback ordering/sync problems. Will be a noop if client
-// already closed. As this method runs a separate goroutine client
-// connection will be closed eventually (i.e. not immediately).
 func (c *Client) Disconnect(disconnect ...Disconnect) {
 	if len(disconnect) > 1 {
 		panic("Client.Disconnect called with more than 1 argument")
@@ -812,12 +740,6 @@ func (c *Client) HandleCommand(cmd *deliverprotocol.Command, cmdProtocolSize int
 	return proceed
 }
 
-// isPong is a helper method to check whether the command from the client
-// is a pong to server ping. It's actually an empty command.
-func isPong(cmd *deliverprotocol.Command) bool {
-	return cmd.Id == 0 && cmd.Send == nil
-}
-
 func (c *Client) handleCommandDispatchError(ch string, cmd *deliverprotocol.Command, frameType deliverprotocol.FrameType, err error, started time.Time) (*Disconnect, bool) {
 	switch t := err.(type) {
 	case *Disconnect:
@@ -851,26 +773,6 @@ func (c *Client) dispatchCommand(cmd *deliverprotocol.Command, cmdSize int) (*Di
 	var metricChannel string
 	var frameType deliverprotocol.FrameType
 
-	if isPong(cmd) {
-		frameType = deliverprotocol.FrameTypeClientPong
-		c.mu.Lock()
-		if c.status == statusClosed {
-			c.mu.Unlock()
-			return nil, false
-		}
-		if c.lastPing <= 0 {
-			// No ping was issued, unnecessary pong.
-			c.mu.Unlock()
-			return &DisconnectBadRequest, false
-		}
-		// upon receiving pong we change a sign of lastPing value. This way we can handle
-		// unnecessary pongs sent by the client and still use lastPing value in Client.checkPong.
-		c.lastPing = -c.lastPing
-		c.lastSeen = time.Now().Unix()
-		c.mu.Unlock()
-		return nil, true
-	}
-
 	if cmd.Id == 0 && cmd.Send == nil {
 		// Now as pong processed make sure that command has id > 0 (except Send).
 		return &DisconnectBadRequest, false
@@ -895,9 +797,6 @@ func (c *Client) dispatchCommand(cmd *deliverprotocol.Command, cmdSize int) (*Di
 	} else if cmd.PresenceStats != nil {
 		metricChannel = cmd.PresenceStats.Channel
 		frameType = deliverprotocol.FrameTypePresenceStats
-	} else if cmd.History != nil {
-		metricChannel = cmd.History.Channel
-		frameType = deliverprotocol.FrameTypeHistory
 	} else if cmd.Send != nil {
 		frameType = deliverprotocol.FrameTypeSend
 	} else if cmd.Refresh != nil {
@@ -1281,12 +1180,10 @@ func (c *Client) handleSubscribe(req *deliverprotocol.SubscribeRequest, cmd *del
 	}
 
 	event := SubscribeEvent{
-		Channel:     req.Channel,
-		Token:       req.Token,
-		Data:        req.Data,
-		Positioned:  req.Positioned,
-		Recoverable: req.Recoverable,
-		JoinLeave:   req.JoinLeave,
+		Channel:   req.Channel,
+		Token:     req.Token,
+		Data:      req.Data,
+		JoinLeave: req.JoinLeave,
 	}
 
 	cb := func(reply SubscribeReply, err error) {
@@ -1537,14 +1434,6 @@ func (c *Client) getPresenceStatsCommandReply(res *deliverprotocol.PresenceStats
 	return deliverprotocol.ReplyPool.AcquirePresenceStatsReply(res), nil
 }
 
-func (c *Client) releaseHistoryCommandReply(reply *deliverprotocol.Reply) {
-	deliverprotocol.ReplyPool.ReleaseHistoryReply(reply)
-}
-
-func (c *Client) getHistoryCommandReply(res *deliverprotocol.HistoryResult) (*deliverprotocol.Reply, error) {
-	return deliverprotocol.ReplyPool.AcquireHistoryReply(res), nil
-}
-
 var emptyReply = &deliverprotocol.Reply{}
 
 func (c *Client) writeError(ch string, frameType deliverprotocol.FrameType, cmd *deliverprotocol.Command, errorReply *deliverprotocol.Reply, rw *replyWriter) {
@@ -1588,8 +1477,6 @@ func (c *Client) unlockServerSideSubscriptions(subCtxMap map[string]subscribeCon
 	}
 }
 
-// connectCmd handles connect command from client - client must send connect
-// command immediately after establishing connection with server.
 func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverprotocol.Command, started time.Time, rw *replyWriter) (*deliverprotocol.ConnectResult, error) {
 	c.mu.RLock()
 	authenticated := c.authenticated
@@ -1605,7 +1492,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 	}
 
 	config := c.node.config
-	version := config.Version
 	userConnectionLimit := config.UserConnectionLimit
 	channelLimit := config.ClientChannelLimit
 
@@ -1622,7 +1508,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 			Data:      req.Data,
 			Token:     req.Token,
 			Name:      req.Name,
-			Version:   req.Version,
 			Transport: c.transport,
 		}
 		if len(req.Subs) > 0 {
@@ -1733,7 +1618,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 	c.mu.RUnlock()
 
 	res := &deliverprotocol.ConnectResult{
-		Version: version,
 		Expires: expires,
 		Ttl:     ttl,
 	}
@@ -1741,10 +1625,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 	if c.pingInterval > 0 {
 		res.Ping = uint32(c.pingInterval.Seconds())
 	}
-	if c.pongTimeout > 0 {
-		res.Pong = true
-	}
-
 	// Client successfully connected.
 	c.mu.Lock()
 	c.authenticated = true
@@ -1782,11 +1662,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 				defer wg.Done()
 				subCmd := &deliverprotocol.SubscribeRequest{
 					Channel: ch,
-				}
-				if subReq, ok := req.Subs[ch]; ok {
-					subCmd.Recover = subReq.Recover
-					subCmd.Offset = subReq.Offset
-					subCmd.Epoch = subReq.Epoch
 				}
 				subCtx := c.subscribeCmd(subCmd, SubscribeReply{Options: opts}, nil, true, started, nil)
 				subMu.Lock()
@@ -1844,23 +1719,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 	}
 
 	return res, nil
-}
-
-func (c *Client) getConnectPushReply(res *deliverprotocol.ConnectResult) (*deliverprotocol.Reply, error) {
-	p := &deliverprotocol.Connect{
-		Client:  res.GetClient(),
-		Data:    res.Data,
-		Subs:    res.Subs,
-		Expires: res.Expires,
-		Ttl:     res.Ttl,
-		Ping:    res.Ping,
-		Node:    res.Node,
-	}
-	return &deliverprotocol.Reply{
-		Push: &deliverprotocol.Push{
-			Connect: p,
-		},
-	}, nil
 }
 
 func (c *Client) startWriter(batchDelay time.Duration, maxMessagesInFrame int, queueInitialCap int) {
@@ -1951,11 +1809,6 @@ func (c *Client) Subscribe(channel string, opts ...SubscribeOption) error {
 	for _, opt := range opts {
 		opt(subscribeOpts)
 	}
-	if subscribeOpts.RecoverSince != nil {
-		subCmd.Recover = true
-		subCmd.Offset = subscribeOpts.RecoverSince.Offset
-		subCmd.Epoch = subscribeOpts.RecoverSince.Epoch
-	}
 	subCtx := c.subscribeCmd(subCmd, SubscribeReply{
 		Options: *subscribeOpts,
 	}, nil, true, time.Time{}, nil)
@@ -1984,11 +1837,7 @@ func (c *Client) Subscribe(channel string, opts ...SubscribeOption) error {
 
 func (c *Client) getSubscribePushReply(channel string, res *deliverprotocol.SubscribeResult) ([]byte, error) {
 	sub := &deliverprotocol.Subscribe{
-		Offset:      res.GetOffset(),
-		Epoch:       res.GetEpoch(),
-		Recoverable: res.GetRecoverable(),
-		Positioned:  res.GetPositioned(),
-		Data:        res.Data,
+		Data: res.Data,
 	}
 	return c.encodeReply(&deliverprotocol.Reply{
 		Push: &deliverprotocol.Push{
@@ -2053,29 +1902,6 @@ type subscribeContext struct {
 	channelContext ChannelContext
 }
 
-func isRecovered(historyResult HistoryResult, cmdOffset uint64, cmdEpoch string) ([]*deliverprotocol.Publication, bool) {
-	latestOffset := historyResult.Offset
-	latestEpoch := historyResult.Epoch
-
-	recoveredPubs := make([]*deliverprotocol.Publication, 0, len(historyResult.Publications))
-	for _, pub := range historyResult.Publications {
-		protoPub := pubToProto(pub)
-		recoveredPubs = append(recoveredPubs, protoPub)
-	}
-
-	nextOffset := cmdOffset + 1
-	var recovered bool
-	if len(recoveredPubs) == 0 {
-		recovered = latestOffset == cmdOffset && (cmdEpoch == "" || latestEpoch == cmdEpoch)
-	} else {
-		recovered = recoveredPubs[0].Offset == nextOffset &&
-			recoveredPubs[len(recoveredPubs)-1].Offset == latestOffset &&
-			(cmdEpoch == "" || latestEpoch == cmdEpoch)
-	}
-
-	return recoveredPubs, recovered
-}
-
 func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply SubscribeReply, cmd *deliverprotocol.Command, serverSide bool, started time.Time, rw *replyWriter) subscribeContext {
 	ctx := subscribeContext{}
 	res := &deliverprotocol.SubscribeResult{}
@@ -2095,15 +1921,37 @@ func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply Subsc
 		res.Data = reply.Options.Data
 	}
 
-	channel := req.Channel
-
 	info := &ClientInfo{
 		ClientID: c.uid,
 		UserID:   c.user,
 		ConnInfo: c.info,
 		ChanInfo: reply.Options.ChannelInfo,
+		ChanRole: reply.Options.Role,
 	}
 
+	channel := req.Channel
+
+	fmt.Printf(" MY CHANNEL------ %s  %+v\n", channel, c.channels)
+	if strings.Contains(channel, ":") {
+		valid := false
+		item := strings.Split(channel, ":")
+		for k := range c.channels {
+			pre := strings.Split(k, "-")
+			if pre[0] == item[0] {
+				valid = true
+				channel = fmt.Sprintf("%s-%s:%s", item[0], pre[1], item[1])
+				info.ChanRole = c.channels[k].role
+				break
+			}
+		}
+		if !valid {
+			return subscribeContext{
+				err:        ErrorPermissionDenied,
+				disconnect: &DisconnectBadRequest,
+			}
+		}
+	}
+	fmt.Println("CCCC----", channel)
 	err := c.node.addSubscription(channel, c)
 	if err != nil {
 		c.node.logger.log(newLogEntry(LogLevelError, "error adding subscription", map[string]any{"channel": channel, "user": c.user, "client": c.uid, "error": err.Error()}))
@@ -2122,23 +1970,6 @@ func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply Subsc
 			c.pubSubSync.StopBuffering(channel)
 			ctx.disconnect = &DisconnectServerError
 			return ctx
-		}
-	}
-
-	var (
-		latestOffset  uint64
-		latestEpoch   string
-		recoveredPubs []*deliverprotocol.Publication
-	)
-
-	if len(recoveredPubs) > 0 {
-		lastPubOffset := recoveredPubs[len(recoveredPubs)-1].Offset
-		if lastPubOffset > res.Offset {
-			// There can be a case when recovery returned a limited set of publications
-			// thus last publication offset will be smaller than history current offset.
-			// In this case res.Recovered will be false. So we take a maximum here.
-			latestOffset = lastPubOffset
-			res.Offset = latestOffset
 		}
 	}
 
@@ -2183,12 +2014,8 @@ func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply Subsc
 		info:     reply.Options.ChannelInfo,
 		flags:    channelFlags,
 		expireAt: reply.Options.ExpireAt,
-		streamPosition: StreamPosition{
-			Offset: latestOffset,
-			Epoch:  latestEpoch,
-		},
-		Source: reply.Options.Source,
-		role:   reply.Options.Role,
+		Source:   reply.Options.Source,
+		role:     info.ChanRole,
 	}
 
 	if !serverSide {
@@ -2248,7 +2075,7 @@ func (c *Client) handleAsyncUnsubscribe(ch string, unsub Unsubscribe) {
 	}
 }
 
-func (c *Client) writePublicationUpdatePosition(ch string, pub *deliverprotocol.Publication, data []byte, sp StreamPosition) error {
+func (c *Client) writePublicationUpdatePosition(ch string, pub *deliverprotocol.Publication, data []byte) error {
 	c.mu.Lock()
 	channelContext, ok := c.channels[ch]
 	if !ok || !channelHasFlag(channelContext.flags, flagSubscribed) {
@@ -2257,18 +2084,14 @@ func (c *Client) writePublicationUpdatePosition(ch string, pub *deliverprotocol.
 	}
 
 	channelContext.positionCheckTime = time.Now().Unix()
-	channelContext.streamPosition.Offset = pub.Offset
 	c.channels[ch] = channelContext
 	c.mu.Unlock()
 	return c.transportEnqueue(data, ch, deliverprotocol.FrameTypePushPublication)
 }
 
-func (c *Client) writePublication(ch string, pub *deliverprotocol.Publication, data []byte, sp StreamPosition) error {
-	if pub.Offset == 0 {
-		return c.transportEnqueue(data, ch, deliverprotocol.FrameTypePushPublication)
-	}
+func (c *Client) writePublication(ch string, pub *deliverprotocol.Publication, data []byte) error {
 	c.pubSubSync.SyncPublication(ch, pub, func() {
-		_ = c.writePublicationUpdatePosition(ch, pub, data, sp)
+		_ = c.writePublicationUpdatePosition(ch, pub, data)
 	})
 	return nil
 }

@@ -1,4 +1,5 @@
 DROP TABLE IF EXISTS clients;
+DROP TABLE IF EXISTS functions;
 DROP TABLE IF EXISTS message_flows;
 DROP TABLE IF EXISTS message_flow;
 DROP TABLE IF EXISTS task_records;
@@ -14,3 +15,4 @@ DROP TABLE IF EXISTS tasks;
 DROP TABLE IF EXISTS workflows;
 DROP TABLE IF EXISTS collections;
 DROP TABLE IF EXISTS users;
+

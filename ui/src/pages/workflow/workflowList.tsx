@@ -120,6 +120,10 @@ const WorkflowListPage = () => {
     }, [error])
 
     function onCreateWorkflow(e: any) {
+        if(e && e.err){
+            setError(new Error(e.err))
+            return
+        }
         onWfYamlClose()
         setReload(e => e + 1)
     }
@@ -192,7 +196,11 @@ const WorkflowListPage = () => {
                         }}
                             className="bg-green-500"
                         > Apply</button>
-                        <UploadButton onUpload={setWorkflowFile} onError={setError} />
+                        <UploadButton onUpload={(e:Workflow)=>{
+                            if(e){
+                                setWorkflowFile(e)
+                            }
+                        }} onError={setError} />
                     </div>
                 }
                </div>

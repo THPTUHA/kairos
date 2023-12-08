@@ -131,7 +131,6 @@ func (w *writer) waitSendMessage(maxMessagesInFrame int, writeDelay time.Duratio
 			writeErr = w.config.WriteManyFn(messages...)
 		}
 	} else {
-		// WriteMany single message without allocating new slice.
 		writeErr = w.config.WriteFn(msg)
 	}
 	if writeErr != nil {

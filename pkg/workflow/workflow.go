@@ -1,15 +1,14 @@
 package workflow
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
-	"text/template"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/THPTUHA/kairos/pkg/orderedmap"
+	"github.com/dop251/goja"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,16 +20,20 @@ const (
 )
 
 const (
-	PubSubTask  = "pub"
-	WebHookTask = "webhook"
-	HttpTask    = "http"
+	PubSubTask   = "pubsub"
+	HttpHookTask = "httphook"
+	HttpTask     = "http"
+	FileTask     = "file"
+	SqlTask      = "sql"
+	ScriptTask   = "script"
 )
+
+// wait = input or wait = 3s, 3h..
+const TaskWaitInput = "input"
 
 type Task struct {
 	ID   int64  `json:"id,omitempty"`
 	Name string `yaml:"name" json:"name,omitempty"`
-	// Để chạy đưọc task này thì cần phải đợi kết quả từ các deps
-	Deps []string `yaml:"deps" json:"deps,omitempty"`
 	// Thời điểm task thực thi, nếu đến thời điểm thực thi mà các deps chưa hoàn thành,
 	// sẽ dựa vào ontime để có chiến lược thực thi
 	// Nếu để trống thì mặc định sẽ là thực hiện sau deps
@@ -55,8 +58,8 @@ type Task struct {
 	WorkflowID int64             `json:"workflow_id"`
 
 	UserDefineVars map[string]string `json:"user_define_vars,omitempty"`
-	DynamicVars    map[string]bool   `json:"dynamic_vars,omitempty"`
 	Execute        func()            `json:"-"`
+	Wait           string            `json:"wait"`
 }
 
 type Tasks struct {
@@ -78,9 +81,10 @@ type Broker struct {
 	// Nơi mà Broker sẽ lắng nghe nhận dữ liệu đầu vào
 	Listens []string `yaml:"listens" json:"listens"`
 	// Các điều kiện điều hướng task
-	Flows       BrokerFlows              `yaml:"flows" json:"flows,omitempty"`
+	Clients     []string                 `yaml:"clients" json:"clients"`
 	Queue       bool                     `yaml:"queue" json:"queue"`
-	Exps        *Template                `json:"template,omitempty"`
+	Flows       BrokerFlows              `yaml:"flows" json:"flows,omitempty"`
+	Template    *Template                `json:"template,omitempty"`
 	DynamicVars map[string]*CmdReplyTask `json:"dynamic_vars,omitempty"`
 }
 
@@ -93,17 +97,58 @@ func (b *Broker) IsListen(name string) bool {
 	return false
 }
 
-func (b *Broker) Compile(userVars *Vars) error {
+func validateVarListen(dv string, clients []*Client, channels []*Channel, tasks *Tasks) bool {
+	satisfied := false
+	d := strings.TrimPrefix(GetRootDefaultVar(dv), ".")
+
+	for _, cl := range clients {
+		if GetClientName(cl.Name) == d {
+			satisfied = true
+		}
+	}
+	for _, ch := range channels {
+		if GetChannelName(ch.Name) == d {
+			satisfied = true
+		}
+	}
+	tasks.Range(func(key string, value *Task) error {
+		if GetTaskName(key) == d {
+			satisfied = true
+		}
+		return nil
+	})
+	if !satisfied {
+		return false
+	}
+	return true
+}
+
+func (b *Broker) Compile(userVars *Vars, clients []*Client, channels []*Channel, tasks *Tasks, funcs *goja.Runtime) error {
 	b.DynamicVars = make(map[string]*CmdReplyTask)
 	if b.Flows.Condition != "" {
-		t := NewTemplate()
-		if err := t.Build(b.Listens, b.Flows.Condition, userVars); err != nil {
+		restrict := true
+		if len(b.Clients) > 0 {
+			restrict = false
+		}
+
+		t := NewTemplate(funcs)
+		if err := t.Build(b.Listens, b.Flows.Condition, userVars, restrict); err != nil {
 			return err
 		}
-		b.Exps = t
+		b.Template = t
+		for k := range t.ListenVars {
+			if !validateVarListen(k, clients, channels, tasks) {
+				return errors.New(fmt.Sprintf("broker %s: var %s not exist!", b.Name, k))
+			}
+		}
 	} else {
 		if len(b.Flows.Endpoints) == 0 {
 			return errors.New(fmt.Sprintf("broker %s: empty flows", b.Name))
+		}
+		for _, e := range b.Flows.Endpoints {
+			if !validateVarListen(e, clients, channels, tasks) {
+				return errors.New(fmt.Sprintf("broker %s: var %s not exist!", b.Name, e))
+			}
 		}
 		// TODO check validate condition
 	}
@@ -115,47 +160,49 @@ type Brokers struct {
 }
 
 type Channel struct {
-	ID   int64
-	Name string
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type Client struct {
-	ID   int64
-	Name string
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type Workflow struct {
-	Version   *semver.Version `yaml:"version"`
-	ID        int64           `json:"id"`
-	Name      string          `yaml:"name"`
-	Vars      *Vars           `yaml:"vars"`
-	Namespace string          `yaml:"namespace"`
+	Version   *semver.Version `yaml:"version" json:"version"`
+	ID        int64           `json:"id" json:"id"`
+	Name      string          `yaml:"name" json:"name"`
+	Vars      *Vars           `yaml:"vars" json:"vars"`
+	Namespace string          `yaml:"namespace" json:"namespace"`
 	Tasks     Tasks           `yaml:"tasks" json:"tasks"`
-	Brokers   Brokers         `yaml:"brokers"`
-	Channels  []*Channel      `json:"channels"`
-	Clients   []*Client       `json:"clients"`
+	Brokers   Brokers         `yaml:"brokers" json:"brokers"`
+	Channels  []*Channel      `json:"channels" json:"channels"`
+	Clients   []*Client       `json:"clients" json:"clients"`
 	Status    int             `json:"status" json:"status"`
 	CreatedAt int             `json:"created_at" json:"created_at"`
 	UpdatedAt int             `json:"updated_at" json:"updated_at"`
-	UserID    int64
+	UserID    int64           `json:"user_id"`
 }
 
 type Var struct {
-	ID    int64
-	Name  string
-	Value string
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 type Vars struct {
 	orderedmap.OrderedMap[string, *Var]
 }
 
 type WorkflowFile struct {
-	Version   *semver.Version `yaml:"version"`
-	Name      string          `yaml:"name"`
-	Vars      *Vars           `yaml:"vars"`
-	Namespace string          `yaml:"namespace"`
-	Tasks     Tasks           `yaml:"tasks"`
-	Brokers   Brokers         `yaml:"brokers"`
+	Version   *semver.Version `yaml:"version" json:"version"`
+	Name      string          `yaml:"name" json:"name"`
+	Vars      *Vars           `yaml:"vars"  json:"vars"`
+	Namespace string          `yaml:"namespace"  json:"namespace"`
+	Tasks     Tasks           `yaml:"tasks" json:"tasks"`
+	Brokers   Brokers         `yaml:"brokers" json:"brokers"`
+	Channels  []*Channel      `json:"channels"`
+	Clients   []*Client       `json:"clients"`
 }
 
 func (wf *WorkflowFile) UnmarshalYAML(node *yaml.Node) error {
@@ -262,61 +309,31 @@ func (v *Var) Compile() error {
 }
 
 func (t *Task) Compile(userVars map[string]string) error {
-	for _, e := range t.Deps {
-		if !isPoint(e) {
-			return errors.New(fmt.Sprintf("dep %s must be _task, _channel or _client", e))
-		}
-	}
 	if t.Payload != "" {
 		localVar, err := extractVariableNames(t.Payload)
 		if err != nil {
 			return err
 		}
-		dynamicVars := make(map[string]bool)
-		// for l, v := range userVars {
-		// 	fmt.Printf("Key value ---", l, v)
-		// }
 		for _, v := range localVar {
 			if !strings.HasPrefix(v, ".") {
 				return errors.New(fmt.Sprintf("task %s: %s not is variable", t.Name, v))
 			}
 			if _, ok := userVars[strings.TrimPrefix(v, ".")]; !ok {
-				// check default var
 				if !isDefaultVar(v) {
 					return errors.New(fmt.Sprintf("task %s: %s is not define", t.Name, v))
 				} else {
-					// check deps
 					s := GetRootDefaultVar(v)
 					if s == "" {
 						return errors.New(fmt.Sprintf("task %s: %s is not define", t.Name, v))
 					}
-					if !includes(t.Deps, strings.ToLower(strings.TrimPrefix(s, "."))) {
-						return errors.New(fmt.Sprintf("%s is not dependence in %+v", v, t.Deps))
-					}
-					dynamicVars[strings.TrimPrefix(v, ".")] = true
 				}
 			}
 		}
-		t.DynamicVars = dynamicVars
-		if len(dynamicVars) == 0 {
-			// no value
-			tmpl, err := template.New("extract").Parse(t.Payload)
-			if err != nil {
-				return err
-			}
-			var buf bytes.Buffer
-			// to upper
-			parse := make(map[string]string)
-			for k, v := range userVars {
-				parse[strings.ToUpper(k)] = v
-			}
-			err = tmpl.Execute(&buf, &parse)
-			if err != nil {
-				return err
-			}
-			t.Payload = buf.String()
+		var payload interface{}
+		err = json.Unmarshal([]byte(t.Payload), &payload)
+		if err != nil {
+			return fmt.Errorf("task %s complie payload err: %s", t.Name, err)
 		}
-
 		if t.Executor == PubSubTask {
 			arrs := make([]map[string]interface{}, 0)
 			maps := make(map[string]interface{})
@@ -364,10 +381,6 @@ func (t *Tasks) UnmarshalYAML(node *yaml.Node) error {
 				}
 			}
 			task.Name = name
-			// stand
-			for idx, d := range task.Deps {
-				task.Deps[idx] = strings.ToLower(d)
-			}
 			tasks.Set(name, task)
 			return nil
 		})
@@ -512,7 +525,6 @@ func (w *WorkflowFile) String() string {
 	w.Tasks.Range(func(name string, task *Task) error {
 		taskStr += fmt.Sprintf("\t%s:\n", name)
 		taskStr += fmt.Sprintf("\t\t Name: %s\n", task.Name)
-		taskStr += fmt.Sprintf("\t\t Deps: %s\n", task.Deps)
 		taskStr += fmt.Sprintf("\t\t Schedule: %s\n", task.Schedule)
 		taskStr += fmt.Sprintf("\t\t Timezone: %s\n", task.Timezone)
 		taskStr += fmt.Sprintf("\t\t Clients: %s\n", task.Clients)
@@ -538,10 +550,12 @@ func (w *WorkflowFile) String() string {
 
 func GetKeyValueVars(wv *Vars) map[string]string {
 	vars := make(map[string]string)
-	wv.Range(func(key string, value *Var) error {
-		vars[key] = value.Value
-		return nil
-	})
+	if wv != nil {
+		wv.Range(func(key string, value *Var) error {
+			vars[key] = value.Value
+			return nil
+		})
+	}
 	return vars
 }
 
@@ -602,6 +616,9 @@ const (
 	SetTaskCmd RequestActionTask = iota
 	TriggerStartTaskCmd
 	InputTaskCmd
+
+	RequestTaskRunSyncCmd
+	SetBrokerCmd
 )
 
 type ResponseActionTask int
@@ -612,6 +629,10 @@ const (
 	ReplyStartTaskCmd
 	ReplyOutputTaskCmd
 	ReplyInputTaskCmd
+
+	ReplyMessageCmd
+	ReplyRequestTaskSyncCmd
+	ReplySetBrokerCmd
 )
 
 const (
@@ -623,6 +644,9 @@ const (
 	SuccessReceiveInputTaskCmd
 	SuccessReceiveOutputTaskCmd
 	FaultInputTask
+	SuccessReceiveRequestRunSyncTaskCmd
+	SuccessSetBroker
+	FaultSetBroker
 )
 
 type Result struct {
@@ -631,21 +655,20 @@ type Result struct {
 	Attempt    uint   `json:"attempt"`
 	StartedAt  int64  `json:"startd_at"`
 	FinishedAt int64  `json:"finished_at"`
+	Offset     int    `json:"offset"`
+	RunCount   int64  `json:"run_coun,omitemptyt"`
 }
 
-type Content struct {
-	Cmd     string `json:"cmd"`
-	Message string `json:"message"`
-}
+type Content interface{}
 type CmdReplyTask struct {
 	Cmd        ResponseActionTask `json:"cmd"`
-	UserID     int64              `json:"user_id,omitempty"`
 	TaskID     int64              `json:"task_id,omitempty"`
 	TaskName   string             `json:"task_name,omitempty"`
 	DeliverID  int64              `json:"deliver_id,omitempty"`
-	RunIn      string             `json:"run_in,omitempty"`
+	RunOn      string             `json:"run_on,omitempty"`
 	Status     int                `json:"status"`
 	WorkflowID int64              `json:"workflow_id,omitempty"`
+	Channel    string             `json:"channel,omitempty"`
 	Message    string             `json:"message,omitempty"`
 	Content    *Content           `json:"content,omitempty"`
 	Result     *Result            `json:"result,omitempty"`
@@ -653,18 +676,28 @@ type CmdReplyTask struct {
 }
 
 type CmdTask struct {
-	Cmd       RequestActionTask `json:"cmd"`
-	Task      *Task             `json:"task,omitempty"`
-	DeliverID int64             `json:"deliver_id"`
-	Channel   string            `json:"channel"`
-	Status    int               `json:"status"`
-	From      string            `json:"from,omitempty"`
-	SendAt    int64             `json:"send_at"`
+	Cmd        RequestActionTask `json:"cmd"`
+	Task       *Task             `json:"task,omitempty"`
+	Message    interface{}       `json:"message,omitempty"`
+	DeliverID  int64             `json:"deliver_id"`
+	WorkflowID int64             `json:"workflow_id,omitempty"`
+	Channel    string            `json:"channel"`
+	Status     int               `json:"status"`
+	From       string            `json:"from,omitempty"`
+	SendAt     int64             `json:"send_at"`
+	Offset     int               `json:"offset,omitempty"`
+	RunCount   int64             `json:"run_coun,omitemptyt"`
+	Broker     *Broker           `json:"broker,omitempty"`
 }
 
 const (
 	SetStatusWorkflow = iota
 	LogMessageFlow
+)
+
+const (
+	BrokerExecuteFault = iota
+	BrokerExecuteSuccess
 )
 
 type MonitorWorkflow struct {

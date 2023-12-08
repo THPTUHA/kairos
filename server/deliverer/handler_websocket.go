@@ -59,9 +59,6 @@ type WebsocketConfig struct {
 	PingPongConfig
 }
 
-// WebsocketHandler handles WebSocket client connections. WebSocket deliverprotocol
-// is a bidirectional connection between a client and a server for low-latency
-// communication.
 type WebsocketHandler struct {
 	node    *Node
 	upgrade *websocket.Upgrader
@@ -134,7 +131,6 @@ func (s *WebsocketHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Separate goroutine for better GC of caller's data.
 	go func() {
 		opts := websocketTransportOptions{
 			pingPong:           s.config.PingPongConfig,

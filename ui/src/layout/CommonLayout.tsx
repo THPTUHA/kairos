@@ -14,14 +14,17 @@ import userInfoAtom from "../recoil/userInfo/atom";
 import { Header } from "antd/es/layout/layout";
 import { Kairos, SubscriptionState } from "kairos";
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
-import { SetStatusWorkflow } from "../conts";
+import { PiFunctionBold } from "react-icons/pi";
+import { FcWorkflow } from "react-icons/fc";
 
 const MenuItems = [
     { path: "/workflows", title: "workflows", icon: <GoWorkflow /> },
     { path: "/clients", title: "clients", icon: <GrVirtualMachine /> },
     { path: "/channels", title: "channels", icon: <RiWechatChannelsLine /> },
+    { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
     { path: "/certificates", title: "certificates", icon: <GrCertificate /> },
     { path: "/dashboard", title: "dashboard", icon: <TbLayoutDashboard /> },
+    { path: "/graphs", title: "graph", icon: <FcWorkflow /> },
 ]
 function CommonLayout({ children }: { children: React.ReactElement }) {
     const location = useLocation()
@@ -38,10 +41,8 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
             console.log(u)
             try {
                 const channel = `kairosuser-${u.id}`
-
-                const kairos = new Kairos('ws://localhost:8003/pubsub', {
-                    token: localStorage.getItem('accessToken') || "",
-                    fetch
+                const kairos = new Kairos('ws://localhost:8003/pubsub', "",{
+                    secret_key: localStorage.getItem('accessToken') || "",
                 });
 
                 kairos.on('message', function(ctx){
@@ -50,7 +51,6 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                 
                 kairos.on('connected', function (ctx) {
                     console.log("connected")
-                    // kairos.publish(channel, {"ok":"baby"})
                 });
 
                 kairos.on('connecting', function (ctx) {
@@ -64,8 +64,9 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                 kairos.on('publication', function(ctx){
                     // console.log("Reciver message",ctx.data)
                     const msg = ctx.data
-                    ctx.data.data = JSON.parse(msg.data)
-                    setWfCmd(ctx.data)
+                    console.log(ctx)
+                    ctx.data = JSON.parse(msg)
+                    setWfCmd(ctx)
                 })
                 
                 kairos.connect();

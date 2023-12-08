@@ -50,7 +50,6 @@ func (w *writer) BuildBytes(reuse ...[]byte) ([]byte, error) {
 	return ret, nil
 }
 
-// RawByte appends raw binary data to the buffer.
 func (w *writer) RawByte(c byte) {
 	_ = w.Buffer.WriteByte(c)
 }

@@ -1,92 +1,28 @@
 version: '1'
-name: simple_flow_post
+name: debug
 vars:
-  REQUEST_POST_CMD: 'request_post'
-  RESPONSE_POST_CMD: 'response_post'
-  CRAWL_DATA_PAYLOAD: |
-    {
-      "method": "GET",
-      "url": "http://example.com",
-      "headers": "[]",
-      "body": "",
-      "timeout": "30",
-      "expectCode": "200",
-      "expectBody": ""
-    }
-  
 tasks:
-  crawl_data:
-    schedule: "@every 5s"
-    timezone: "Asia/Ho_Chi_Minh"
-    executor: http
-    clients: [abc]
-    replicas: 2
-    success: none
-    payload: |
-      {{.CRAWL_DATA_PAYLOAD}} 
-
-  summary_data:
-    executor: script
-    clients: [abc]
+  user_sql:
+    executor: sql
+    clients: [client1]
     payload: |
       {
-        content: {{.INPUT_FROM}} {{.INPUT_CONTENT}} 
-      } 
-
-  prepare_post:
-    deps: [summary_data]
-    schedule: "0 20 * * *"
-    timezone: "Asia/Ho_Chi_Minh"
-    executor: script
-    clients: [abc]
-    success: all
-    retries: 1
-    expires_at: 3h
-
-  request_post_message:
-    deps: [prepare_post]
-    schedule: "0 0 * * *"
-    duration: 2h
-    executor: pubsub
-    message_schedule: "outside post"
-    message_error: "request error"
-    payload: |
-      {
-        "cmd":"request_post",
-        "channel":"post_channel",
-        "content": "{{.INPUT}}"
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": "workflow"
       }
 
-  response_post_message:
-    executor: pubsub
-    payload: |
-      {
-        cmd: response_post
-        channel: response_channel
-        content: {{.INPUT}}
-      }
-  
 brokers:
-  request_post_channel:
-    listens: [request_post_channel]
+  brok:
+    listens: [a_channel]
     flows: |
-      {{if eq .REQUEST_POST_CHANNEL_MSG .REQUEST_POST_CHANNEL_CMD}}
-        {{send .REQUEST_POST_CHANNEL .CRAWL_DATA_TASK}}
-      {{else if}}
-        {{if eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS}}
-            {{range .REQUEST_POST_CHANNEL_MSG}}
-
-            {{end}}
-        {{end}}
-      {{end}}
-  
-  get_post:
-    listens: [response_post_channel]
-    flows: |
-      {{if eq .MESSAGE_CMD .RESPONSE_POST_CMD}}
-        [response_post_message_task]
-      {{end}}
-
-  view_crawl:
-    listens: [crawl_data_task]
-    flows: [crawl_watcher_channel, summary_data_task]
+      {{get .a_channel ("content") | get ("msg")  
+          | .data | parse | get ("user_id") | .user_id }}{{end}}
+      {{printf ("select *  from users where id = %v") .user_id 
+          | .sql_user }}
+      {{define .req map | put ("sql") .sql_user | .req }}{{end}}
+      {{sendsync .req  .user_sql_task | .result }}
+      {{get .result ("result") |  get ("output") | getp (0) | return }}{{end}}

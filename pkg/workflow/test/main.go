@@ -4,53 +4,111 @@ import (
 	"fmt"
 
 	"github.com/THPTUHA/kairos/pkg/workflow"
+	"github.com/dop251/goja"
 )
 
 func main() {
 	s := `
-	{{set .ABCD .REQUEST_POST_CHANNEL_MSG}}
-	{{if eq .REQUEST_POST_CHANNEL_MSG .REQUEST_POST_CHANNEL_CMD}}
-		{{set .ABC .REQUEST_POST_CHANNEL_MSG}}
-		{{sum .ABCD | sub .REQUEST_POST_CHANNEL | .RESULT }}
-	    {{send .REQUEST_POST_CHANNEL .CRAWL_DATA_TASK}}
-	{{elseif eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS }}
-		{{range .REQUEST_POST_CHANNEL_MSG}}
-			{{if eq .REQUEST_POST_CHANNEL_MSG .REQUEST_POST_CHANNEL_CMD}}
-				{{set .ABC .REQUEST_POST_CHANNEL_MSG}}
-				{{sum .ABCD | sub .REQUEST_POST_CHANNEL | .RESULT }}
-				{{send .REQUEST_POST_CHANNEL .CRAWL_DATA_TASK}}
-			{{elseif eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS }}
-				{{range .REQUEST_POST_CHANNEL_MSG}}
-				
-				{{endrange}}
-			{{elseif eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS}}
-			{{endif}}
-		{{endrange}}
-	{{elseif eq .CRAWL_DATA_TASK_STATUS .TASK_STATUS_SUCCESS }}
-	{{endif}}
+	{{define .fuck map | put ("hello") (1) | put ("hello2") (2) | .fuck}}
+		{{define .arrs array | push (5) | push (3) | push (4) | .arrs }}
+			{{define .result number}}
+			{{range .fuck .f_key .f_value}}
+				{{range .arrs .a_key .a_value}}
+					{{merge .result .f_value | merge .a_value | .result}}{{end}}
+				{{end}}
+			{{end}}
+		{{printf ("result  %v") .result}}
+
+		{{end}}
+	{{end}}
 	`
+
+	// s := `
+	// {{define .fuck map | put ("hello") (1) | put ("hello2") (2) | .fuck}}
+	// 	{{define .arrs array | push (5) | push (3) | push (4) | .arrs }}
+	// 		{{define .result number}}
+	// 		{{range .fuck .f_key .f_value}}
+	// 			{{range .arrs .a_key .a_value}}
+	// 				{{printf ("fuck key %v number \narrs key %v") .f_key .a_key}}
+	// 			{{end}}
+	// 		{{end}}
+	// 	{{end}}
+	// {{end}}
+	// `
+
+	// s := `
+	// {{define .mp array | push ("abc") (10)}}
+	// {{end}}
+	// {{define .a string | set .a ("OK")}}
+
+	// {{put .mp (12) }}
+	// 	{{merge .a (100)}}{{end}}
+	// 	{{printf ("run here")}}
+	// {{else}}
+	// 	{{define .a number | set .a (10)}}
+	// 	{{merge .a (11) | .a}}{{end}}
+	// 	{{printf ("no")}}
+	// {{end}}
+	// {{printf ("a=%v") .a}}
+	// `
+
 	input := []string{
-		"request_post_channel", "crawl_data_task",
+		"a_channel", "b_channel",
 	}
-	t := workflow.NewTemplate()
+
+	vm := goja.New()
+
+	script := `
+		function parseJSONString() {
+
+			return arguments[0].split(" ");
+		}
+	`
+
+	prog, err := goja.Compile("", script, true)
+	if err != nil {
+		fmt.Printf("Error compiling the script %v ", err)
+		return
+	}
+	_, err = vm.RunProgram(prog)
+
+	t := workflow.NewTemplate(vm)
 	var vars workflow.Vars
-	err := t.Build(input, s, &vars)
+	vars.Set("c", &workflow.Var{Value: "1"})
+	vars.Set("zero", &workflow.Var{Value: "0"})
+	vars.Set("item_value", &workflow.Var{Value: "0"})
+	vars.Set("item_index", &workflow.Var{Value: "0"})
+
+	err = t.Build(input, s, &vars, true)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	// run
-	var output workflow.Vars
-	output.Set(".REQUEST_POST_CHANNEL_MSG", &workflow.Var{
-		Value: "hello",
-	})
-	output.Set(".REQUEST_POST_CHANNEL_CMD", &workflow.Var{
-		Value: "hello 2",
-	})
-	output.Set(".CRAWL_DATA_TASK_STATUS", &workflow.Var{
-		Value: "2",
-	})
-	// d, e := t.Execute(&output)
+	// var output workflow.Vars
+	// output.Set(".REQUEST_POST_CHANNEL_MSG", &workflow.Var{
+	// 	Value: "hello",
+	// })
+	// output.Set(".REQUEST_POST_CHANNEL_CMD", &workflow.Var{
+	// 	Value: "hello 2",
+	// })
+	// output.Set(".CRAWL_DATA_TASK_STATUS", &workflow.Var{
+	// 	Value: "2",
+	// })
+	options := make(map[string]workflow.ReplyData)
+	at := workflow.ReplyData{
+		"content": map[string]interface{}{
+			"msg": map[string]interface{}{
+				"user_id": 1,
+			},
+		},
+	}
+
+	options["a_channel"] = at
+
+	r := t.NewRutime(options)
+
+	r.Execute()
 	// fmt.Println("deliver", d)
 	// fmt.Println("err", e)
 

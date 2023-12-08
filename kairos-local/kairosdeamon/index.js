@@ -1,0 +1,5 @@
+function throwError() {
+    undefinedVariable;
+  }
+  
+  throwError();

@@ -112,6 +112,7 @@ var Executor_ServiceDesc = grpc.ServiceDesc{
 
 const (
 	StatusHelper_Update_FullMethodName = "/proto.StatusHelper/Update"
+	StatusHelper_Input_FullMethodName  = "/proto.StatusHelper/Input"
 )
 
 // StatusHelperClient is the client API for StatusHelper service.
@@ -119,6 +120,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type StatusHelperClient interface {
 	Update(ctx context.Context, in *StatusUpdateRequest, opts ...grpc.CallOption) (*StatusUpdateResponse, error)
+	Input(ctx context.Context, in *StatusInputRequest, opts ...grpc.CallOption) (*StatusInputResponse, error)
 }
 
 type statusHelperClient struct {
@@ -138,11 +140,21 @@ func (c *statusHelperClient) Update(ctx context.Context, in *StatusUpdateRequest
 	return out, nil
 }
 
+func (c *statusHelperClient) Input(ctx context.Context, in *StatusInputRequest, opts ...grpc.CallOption) (*StatusInputResponse, error) {
+	out := new(StatusInputResponse)
+	err := c.cc.Invoke(ctx, StatusHelper_Input_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // StatusHelperServer is the server API for StatusHelper service.
 // All implementations must embed UnimplementedStatusHelperServer
 // for forward compatibility
 type StatusHelperServer interface {
 	Update(context.Context, *StatusUpdateRequest) (*StatusUpdateResponse, error)
+	Input(context.Context, *StatusInputRequest) (*StatusInputResponse, error)
 	mustEmbedUnimplementedStatusHelperServer()
 }
 
@@ -152,6 +164,9 @@ type UnimplementedStatusHelperServer struct {
 
 func (UnimplementedStatusHelperServer) Update(context.Context, *StatusUpdateRequest) (*StatusUpdateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Update not implemented")
+}
+func (UnimplementedStatusHelperServer) Input(context.Context, *StatusInputRequest) (*StatusInputResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Input not implemented")
 }
 func (UnimplementedStatusHelperServer) mustEmbedUnimplementedStatusHelperServer() {}
 
@@ -184,6 +199,24 @@ func _StatusHelper_Update_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _StatusHelper_Input_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StatusInputRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(StatusHelperServer).Input(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: StatusHelper_Input_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(StatusHelperServer).Input(ctx, req.(*StatusInputRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // StatusHelper_ServiceDesc is the grpc.ServiceDesc for StatusHelper service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -194,6 +227,10 @@ var StatusHelper_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Update",
 			Handler:    _StatusHelper_Update_Handler,
+		},
+		{
+			MethodName: "Input",
+			Handler:    _StatusHelper_Input_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

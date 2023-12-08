@@ -1,0 +1,27 @@
+version: '1'
+name: debug
+vars:
+  PAYLOADA: |
+    {
+      "path": "./main.go",
+      "timeout": "30",
+      "method": "read"
+    }
+tasks:
+  a:
+    schedule: '0 0 30 11 *'
+    timezone: Asia/Ho_Chi_Minh
+    executor: file
+    clients: [client1, client2]
+    payload: |
+      {{.PAYLOADA}} 
+brokers:
+  brok:
+    listens:
+      - a_task
+    flows: |
+      {{send .A_TASK .ABC_CHANNEL}}
+  brok2:
+    listens:
+      - b_task
+    flows: [a_task]

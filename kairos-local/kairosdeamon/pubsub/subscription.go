@@ -19,11 +19,8 @@ const (
 )
 
 type SubscriptionConfig struct {
-	// Data is an arbitrary data to pass to a server in each subscribe request.
-	Data []byte
-	// Token for Subscription.
-	Token string
-	// GetToken called to get or refresh private channel subscription token.
+	Data     []byte
+	Token    string
 	GetToken func(SubscriptionTokenEvent) (string, error)
 }
 
@@ -56,15 +53,10 @@ type Subscription struct {
 	state SubState
 
 	events     *subscriptionEventHub
-	offset     uint64
-	epoch      string
-	recover    bool
 	subFutures map[uint64]subFuture
 	data       []byte
 
-	positioned  bool
-	recoverable bool
-	joinLeave   bool
+	joinLeave bool
 
 	token    string
 	getToken func(SubscriptionTokenEvent) (string, error)
@@ -95,7 +87,6 @@ func (s *Subscription) nextFutureID() uint64 {
 	return atomic.AddUint64(&s.futureID, 1)
 }
 
-// Lock must be held outside.
 func (s *Subscription) resolveSubFutures(err error) {
 	for _, fut := range s.subFutures {
 		fut.fn(err)
@@ -126,7 +117,6 @@ func (s *Subscription) Publish(ctx context.Context, data []byte) (PublishResult,
 	}
 }
 
-// Presence allows extracting channel presence.
 func (s *Subscription) Presence(ctx context.Context) (PresenceResult, error) {
 	s.mu.Lock()
 	if s.state == SubStateUnsubscribed {
@@ -149,7 +139,6 @@ func (s *Subscription) Presence(ctx context.Context) (PresenceResult, error) {
 	}
 }
 
-// PresenceStats allows extracting channel presence stats.
 func (s *Subscription) PresenceStats(ctx context.Context) (PresenceStatsResult, error) {
 	s.mu.Lock()
 	if s.state == SubStateUnsubscribed {
@@ -352,32 +341,17 @@ func (s *Subscription) moveToSubscribed(res *deliverprotocol.SubscribeResult) {
 	if res.Expires {
 		s.scheduleSubRefresh(res.Ttl)
 	}
-	if res.Recoverable {
-		s.recover = true
-	}
 	s.resubscribeAttempts = 0
 	if s.resubscribeTimer != nil {
 		s.resubscribeTimer.Stop()
 	}
 	s.resolveSubFutures(nil)
-	s.offset = res.Offset
-	s.epoch = res.Epoch
 	s.mu.Unlock()
 
 	if s.events != nil && s.events.onSubscribed != nil {
 		handler := s.events.onSubscribed
 		ev := SubscribedEvent{
-			Data:          res.GetData(),
-			Recovered:     res.GetRecovered(),
-			WasRecovering: res.GetWasRecovering(),
-			Recoverable:   res.GetRecoverable(),
-			Positioned:    res.GetPositioned(),
-		}
-		if ev.Positioned || ev.Recoverable {
-			ev.StreamPosition = &StreamPosition{
-				Epoch:  res.GetEpoch(),
-				Offset: res.GetOffset(),
-			}
+			Data: res.GetData(),
 		}
 		s.client.runHandlerSync(func() {
 			handler(ev)
@@ -394,9 +368,6 @@ func (s *Subscription) moveToSubscribed(res *deliverprotocol.SubscribeResult) {
 					s.mu.Unlock()
 					return
 				}
-				if pub.Offset > 0 {
-					s.offset = pub.Offset
-				}
 				s.mu.Unlock()
 				var handler PublicationHandler
 				if s.events != nil && s.events.onPublication != nil {
@@ -410,7 +381,6 @@ func (s *Subscription) moveToSubscribed(res *deliverprotocol.SubscribeResult) {
 	}
 }
 
-// Lock must be held outside.
 func (s *Subscription) scheduleResubscribe() {
 	delay := s.resubscribeStrategy.timeBeforeNextAttempt(s.resubscribeAttempts)
 	s.resubscribeAttempts++
@@ -447,10 +417,6 @@ func (s *Subscription) subscribeError(err error) {
 			s.token = ""
 			s.scheduleResubscribe()
 			s.mu.Unlock()
-		} else if serverError.Temporary {
-			s.mu.Lock()
-			s.scheduleResubscribe()
-			s.mu.Unlock()
 		} else {
 			s.mu.Lock()
 			s.resolveSubFutures(err)
@@ -479,9 +445,6 @@ func (s *Subscription) handlePublication(pub *deliverprotocol.Publication) {
 	if s.state != SubStateSubscribed {
 		s.mu.Unlock()
 		return
-	}
-	if pub.Offset > 0 {
-		s.offset = pub.Offset
 	}
 	s.mu.Unlock()
 
@@ -566,15 +529,7 @@ func (s *Subscription) resubscribe() {
 		return
 	}
 
-	var isRecover bool
-	var sp StreamPosition
-	if s.recover {
-		isRecover = true
-		sp.Offset = s.offset
-		sp.Epoch = s.epoch
-	}
-
-	err := s.client.sendSubscribe(s.Channel, s.data, isRecover, sp, token, s.positioned, s.recoverable, s.joinLeave, func(res *deliverprotocol.SubscribeResult, err error) {
+	err := s.client.sendSubscribe(s.Channel, s.data, token, s.joinLeave, func(res *deliverprotocol.SubscribeResult, err error) {
 		if err != nil {
 			s.subscribeError(err)
 			return
@@ -632,15 +587,8 @@ func (s *Subscription) scheduleSubRefresh(ttl uint32) {
 				s.emitError(SubscriptionSubscribeError{Err: err})
 				var serverError *Error
 				if errors.As(err, &serverError) {
-					if serverError.Temporary {
-						s.mu.Lock()
-						defer s.mu.Unlock()
-						s.scheduleSubRefresh(10)
-						return
-					} else {
-						s.unsubscribe(serverError.Code, serverError.Message, true)
-						return
-					}
+					s.unsubscribe(serverError.Code, serverError.Message, true)
+					return
 				} else {
 					s.mu.Lock()
 					defer s.mu.Unlock()

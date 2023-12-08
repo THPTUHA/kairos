@@ -7,7 +7,6 @@ import (
 	"github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 )
 
-// PubSubSync wraps logic to synchronize recovery with PUB/SUB.
 type PubSubSync struct {
 	subSyncMu sync.RWMutex
 	subSync   map[string]*subscribeState

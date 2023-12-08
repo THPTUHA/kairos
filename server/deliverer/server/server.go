@@ -21,6 +21,7 @@ import (
 	"github.com/THPTUHA/kairos/server/messaging"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/THPTUHA/kairos/server/storage/models"
+	"github.com/go-redis/redis"
 	"github.com/gorilla/mux"
 	"github.com/nats-io/nats.go"
 	"github.com/sirupsen/logrus"
@@ -36,22 +37,11 @@ type Message struct {
 	Payload string
 }
 type DelivererServer struct {
-	node *deliverer.Node
-	sub  *natsSub
-
+	node   *deliverer.Node
+	sub    *natsSub
+	redis  *redis.Client
 	logger *logrus.Entry
 }
-
-const (
-	DeliverBorkerCmd = iota
-	DeleteWorkerCmd
-	ReceiveDeliverTaskCmd
-)
-
-const (
-	ConnectServerCmd = iota
-	SubscribeServerCmd
-)
 
 func main() {
 	signals := make(chan os.Signal, 1)
@@ -102,7 +92,7 @@ func createServer() (*DelivererServer, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	d.redis = NewRedisDB(RedisHost, RedisPort, "")
 	d.createSub(log)
 	d.logger = log
 	return &d, nil
@@ -128,6 +118,7 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 			s.logger.WithField("deliver", "receiver data").Error(err)
 			return
 		}
+		s.redis.Set(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID), string(msg.Data), 10*time.Minute)
 		s.node.Publish(cmd.Channel, msg.Data)
 		s.logger.WithField("deliver", "receiver deliver cmd").Debug(fmt.Sprintf("id=%d channel=%s", cmd.DeliverID, cmd.Channel))
 	}
@@ -163,7 +154,6 @@ func (d *DelivererServer) createNode() error {
 	node.OnConnecting(func(ctx context.Context, e deliverer.ConnectEvent) (deliverer.ConnectReply, error) {
 		user, err := auth.ExtractAccessStr(e.Token)
 		if err != nil {
-			fmt.Println("ERRR 0", err)
 			return deliverer.ConnectReply{}, err
 		}
 
@@ -222,7 +212,7 @@ func (d *DelivererServer) createNode() error {
 		}
 
 		credentials := &deliverer.Credentials{
-			UserID:   id,
+			UserID:   fmt.Sprintf("%s@%s", id, user.UserID),
 			ExpireAt: time.Now().Unix() + 300000,
 		}
 
@@ -242,6 +232,12 @@ func (d *DelivererServer) createNode() error {
 
 	node.OnConnect(func(client *deliverer.Client) {
 		log.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
+		msgs := d.GetCacheKey(client.UserID())
+		go func() {
+			for _, ms := range msgs {
+				client.Send([]byte(ms))
+			}
+		}()
 
 		client.OnSubscribe(func(e deliverer.SubscribeEvent, cb deliverer.SubscribeCallback) {
 			log.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
@@ -253,18 +249,19 @@ func (d *DelivererServer) createNode() error {
 		})
 
 		client.OnPublish(func(e deliverer.PublishEvent, cb deliverer.PublishCallback) {
+			cid := client.UserID()
+			uid := strings.Split(cid, "@")[1]
 			log.Printf("client %s publishes into channel %s: %s", client.UserID(), e.Channel, string(e.Data))
 			var cmd workflow.CmdReplyTask
 			err := json.Unmarshal(e.Data, &cmd)
+			d.redis.Del(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID))
 			if err != nil {
 				d.logger.WithField("onpublish", "receiver data").Error(err)
 				return
 			}
 			go func() {
-				d.reply(fmt.Sprint(cmd.UserID), string(e.Data))
+				d.reply(uid, string(e.Data))
 			}()
-			node.Publish("abc-1", []byte(`{"a": "abc"}`))
-
 			// workflowID, cmd, payload, cb
 			cb(deliverer.PublishReply{}, nil)
 		})
@@ -302,4 +299,26 @@ func (s *DelivererServer) checkSameHost(r *http.Request) bool {
 	}
 	s.logger.Error(fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host))
 	return false
+}
+
+func NewRedisDB(host, port, password string) *redis.Client {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", host, port),
+		Password: password,
+		DB:       0,
+	})
+	return redisClient
+}
+
+func (d *DelivererServer) GetCacheKey(pattern string) []string {
+	var matchingKeys []string
+	iter := d.redis.Scan(0, pattern, 0).Iterator()
+	for iter.Next() {
+		key := iter.Val()
+		matchingKeys = append(matchingKeys, key)
+	}
+	if err := iter.Err(); err != nil {
+		d.logger.Error(err)
+	}
+	return matchingKeys
 }

@@ -16,7 +16,7 @@ tasks:
   a:
     schedule: "@every 2s"
     timezone: "Asia/Ho_Chi_Minh"
-    executor: pub
+    executor: pubsub
     payload: |
       [
         {

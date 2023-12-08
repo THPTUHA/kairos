@@ -55,7 +55,7 @@ func main() {
 	})
 
 	client.OnSubscribed(func(e pubsub.ServerSubscribedEvent) {
-		log.Printf("Subscribed to server-side channel %s: (was recovering: %v, recovered: %v)", e.Channel, e.WasRecovering, e.Recovered)
+		log.Printf("Subscribed to server-side channel %s", e.Channel)
 	})
 	client.OnSubscribing(func(e pubsub.ServerSubscribingEvent) {
 		log.Printf("Subscribing to server-side channel %s", e.Channel)
@@ -65,7 +65,7 @@ func main() {
 	})
 
 	client.OnPublication(func(e pubsub.ServerPublicationEvent) {
-		log.Printf("Publication from server-side channel %s: %s (offset %d)", e.Channel, e.Data, e.Offset)
+		log.Printf("Publication from server-side channel %s: %s", e.Channel, e.Data)
 	})
 	client.OnJoin(func(e pubsub.ServerJoinEvent) {
 		log.Printf("Join to server-side channel %s: %s (%s)", e.Channel, e.User, e.Client)
@@ -88,7 +88,7 @@ func main() {
 		log.Printf("Subscribing on channel %s - %d (%s)", sub.Channel, e.Code, e.Reason)
 	})
 	sub.OnSubscribed(func(e pubsub.SubscribedEvent) {
-		log.Printf("Subscribed on channel %s, (was recovering: %v, recovered: %v)", sub.Channel, e.WasRecovering, e.Recovered)
+		log.Printf("Subscribed on channel %s", sub.Channel)
 	})
 	sub.OnUnsubscribed(func(e pubsub.UnsubscribedEvent) {
 		log.Printf("Unsubscribed from channel %s - %d (%s)", sub.Channel, e.Code, e.Reason)
@@ -104,7 +104,7 @@ func main() {
 		if err != nil {
 			return
 		}
-		log.Printf("Someone says via channel %s: %s (offset %d)", sub.Channel, chatMessage.Input, e.Offset)
+		log.Printf("Someone says via channel %s: %s", sub.Channel, chatMessage.Input)
 	})
 	sub.OnJoin(func(e pubsub.JoinEvent) {
 		log.Printf("Someone joined %s: user id %s, client id %s", sub.Channel, e.User, e.Client)

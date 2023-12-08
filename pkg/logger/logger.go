@@ -1,7 +1,11 @@
 package logger
 
 import (
+	"fmt"
 	"io/ioutil"
+	"os"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/gin-gonic/gin"
@@ -21,10 +25,18 @@ func InitLogger(logLevel string, node string) *logrus.Entry {
 	}
 
 	formattedLogger.Level = level
+	formattedLogger.SetReportCaller(true)
+	formattedLogger.Formatter = &logrus.TextFormatter{
+		CallerPrettyfier: func(f *runtime.Frame) (string, string) {
+			repopath := fmt.Sprintf("%s/src/github.com/bob", os.Getenv("GOPATH"))
+			filename := strings.Replace(f.File, repopath, "", -1)
+			return fmt.Sprintf("%s()", f.Function), fmt.Sprintf("%s:%d", filename, f.Line)
+		},
+	}
 	log := logrus.NewEntry(formattedLogger).WithField("node", node)
-
 	ginOnce.Do(func() {
 		if level == logrus.DebugLevel {
+
 			gin.DefaultWriter = log.Writer()
 			gin.SetMode(gin.DebugMode)
 		} else {

@@ -1,0 +1,27 @@
+version: '1'
+name: debug
+vars:
+tasks:
+  user_sql:
+    executor: sql
+    clients: [client1]
+    wait: input
+    payload: |
+      {
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": "workflow",
+        "instance": "multi"
+      }
+
+brokers:
+  wait:
+    listens: [user_sql_task, a_channel]
+    flows: |
+      {{wait .user_sql_task .a_channel}}
+      {{get .user_sql_task ("result") | .result}}
+        {{send .result .a_channel}}
+      {{end}}

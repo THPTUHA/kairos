@@ -14,6 +14,7 @@ import (
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/routers"
 	"github.com/THPTUHA/kairos/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 )
@@ -46,6 +47,8 @@ func (server *DeamonServer) start() {
 	go func() {
 		<-signals
 		log.Warn().Msg("Shutting down...")
+		plugin.CleanupClients()
+		log.Info().Msg("Plugin clean finish...")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := srv.Shutdown(ctx)

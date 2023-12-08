@@ -23,8 +23,6 @@ type ServerParts struct {
 	Status       serf.MemberStatus
 }
 
-// IsServer Returns if a member is a Dkron server. Returns a boolean,
-// and a struct with the various important components
 func isServer(m serf.Member) (bool, *ServerParts) {
 	if m.Tags["role"] != "agent" {
 		return false, nil

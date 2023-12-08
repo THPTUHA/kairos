@@ -2,14 +2,9 @@ package deliverer
 
 import "time"
 
-// Config contains Node configuration options.
 type Config struct {
-	// Version of server – if set will be sent to a client on connection
-	// establishment phase in reply to connect command from a client.
 	Version string
-	// Name is a unique name of the current server Node. Name used as human-readable
-	// and meaningful node identifier. If not set then os.Hostname will be used.
-	Name string
+	Name    string
 	// LogLevel is a log level. By default, nothing will be logged by Centrifuge.
 	LogLevel LogLevel
 	// LogHandler is a handler function Node will send logs to.

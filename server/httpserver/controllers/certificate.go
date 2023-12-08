@@ -78,3 +78,44 @@ func (ctr *Controller) ListCertificate(c *gin.Context) {
 		"certificates": certs,
 	})
 }
+
+func (ctr *Controller) PermisCert(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	clientID, exist := c.Get("clientID")
+	apiKey := c.GetHeader("api-key")
+
+	if !exist || userID == "" || apiKey == "" {
+		c.JSON(http.StatusUnauthorized, nil)
+		return
+	}
+	cid, err := strconv.ParseInt(clientID.(string), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	cert, err := storage.GetCertificatesID(cid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	if cert.APIKey != apiKey {
+		c.JSON(http.StatusUnauthorized, nil)
+		return
+	}
+
+	cp, err := storage.GetChannelInfoByCertID(cid)
+	if err != nil {
+		fmt.Println("err", err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":     "permission",
+		"permissions": cp,
+	})
+}

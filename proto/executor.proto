@@ -20,15 +20,24 @@ service Executor {
 }
 
 message StatusUpdateRequest {
-    bytes output = 2;
-    bool error = 3;
+    bytes output = 1;
+    bool error = 2;
 }
 
 message StatusUpdateResponse {
     int64 r = 1;
 }
 
+message StatusInputRequest {
+}
+
+message StatusInputResponse {
+    bytes input = 1;
+}
+
+
 service StatusHelper {
     rpc Update(StatusUpdateRequest) returns (StatusUpdateResponse);
+    rpc Input(StatusInputRequest) returns (StatusInputResponse);
 }
   

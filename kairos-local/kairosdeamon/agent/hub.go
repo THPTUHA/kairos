@@ -45,9 +45,8 @@ func (hub *Hub) AddEventTask(ch chan *workflow.CmdTask) {
 }
 
 func (hub *Hub) Publish(cmd *workflow.CmdReplyTask) {
-	cmd.RunIn = fmt.Sprintf("%s%s", hub.clientName, workflow.SubClient)
+	cmd.RunOn = fmt.Sprintf("%s%s", hub.clientName, workflow.SubClient)
 	cmd.SendAt = helper.GetTimeNow()
-	cmd.UserID = hub.userID
 	data, err := json.Marshal(cmd)
 	fmt.Printf("[HUB PUBLISH REPLY] %+v\n", cmd)
 	if err != nil {
@@ -57,7 +56,6 @@ func (hub *Hub) Publish(cmd *workflow.CmdReplyTask) {
 }
 
 func (hub *Hub) HandleConnectServer(auth *config.Auth) error {
-	// TODO check token ,nếu ko có thì đăng xuát và yêu cầu kết nối
 	hub.logger.Debug("start connect server", auth.UserID)
 	hub.clientName = auth.ClientName
 	hub.userID, _ = strconv.ParseInt(auth.UserID, 10, 64)
@@ -85,7 +83,7 @@ func (hub *Hub) HandleConnectServer(auth *config.Auth) error {
 				hub.logger.WithField("task", "publication receiver task").Error(err)
 				return
 			}
-			func() {
+			go func() {
 				hub.taskCh <- &cmd
 			}()
 		}

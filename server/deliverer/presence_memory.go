@@ -5,17 +5,6 @@ import (
 	"sync"
 )
 
-// MemoryPresenceManager is builtin default PresenceManager which allows running
-// Centrifuge-based server without any external storage. All data managed inside process
-// memory.
-//
-// With this PresenceManager you can only run single Centrifuge node. If you need to scale
-// you should consider using another PresenceManager implementation instead – for example
-// RedisPresenceManager.
-//
-// Running single node can be sufficient for many use cases especially when you
-// need maximum performance and not too many online clients. Consider configuring
-// your load balancer to have one backup Centrifuge node for HA in this case.
 type MemoryPresenceManager struct {
 	node        *Node
 	config      MemoryPresenceManagerConfig
@@ -24,10 +13,8 @@ type MemoryPresenceManager struct {
 
 var _ PresenceManager = (*MemoryPresenceManager)(nil)
 
-// MemoryPresenceManagerConfig is a MemoryPresenceManager config.
 type MemoryPresenceManagerConfig struct{}
 
-// NewMemoryPresenceManager initializes MemoryPresenceManager.
 func NewMemoryPresenceManager(n *Node, c MemoryPresenceManagerConfig) (*MemoryPresenceManager, error) {
 	return &MemoryPresenceManager{
 		node:        n,

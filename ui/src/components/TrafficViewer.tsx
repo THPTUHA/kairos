@@ -10,7 +10,7 @@ import focusedContextAtom from "../recoil/focusedContext/atom";
 import queryAtom from "../recoil/query/atom";
 import queryBuildAtom from "../recoil/queryBuild/atom";
 import queryBackgroundColorAtom from "../recoil/queryBackgroundColor/atom";
-import { ColorYellow } from "../conts";
+import { BrokerPointColor, ChannelPointColor, ClientPointColor, ColorYellow, KairosPointColor, TaskPointColor } from "../conts";
 import { toast } from "react-toastify";
 import TrafficViewerStyles from "../styles/TrafficViewer.module.sass";
 import pauseIcon from "../assets/pause.svg";
@@ -19,6 +19,8 @@ import { EntriesList } from "./entry/EntriesList";
 import styles from '../styles/EntriesList.module.sass';
 import { EntryDetailed } from "./entry/EntryDetail";
 import { Filters } from "./Filters";
+import Queryable from "./Queryable";
+import { Switch } from "antd";
 
 const useLayoutStyles = makeStyles(() => ({
   details: {
@@ -42,14 +44,13 @@ const useLayoutStyles = makeStyles(() => ({
 
 interface TrafficViewerProps {
   entries: Entry[];
-  setEntries: React.Dispatch<React.SetStateAction<Entry[]>>;
-  setLastUpdated: React.Dispatch<React.SetStateAction<number>>;
+  setView: any;
   actionButtons?: JSX.Element,
 }
 
-const DEFAULT_QUERY =  "" ;
+const DEFAULT_QUERY = "";
 
-export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntries, setLastUpdated, actionButtons }) => {
+export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setView, actionButtons }) => {
 
   const classes = useLayoutStyles();
   const setFocusedItem = useSetRecoilState(focusedItemAtom);
@@ -61,7 +62,6 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntrie
   const [isSnappedToBottom, setIsSnappedToBottom] = useState(true);
   const [wsReadyState, setWsReadyState] = useState(0);
   const [searchParams] = useSearchParams();
-
   const entriesBuffer = useRef([] as Entry[]);
 
   const scrollableRef = useRef<any>(null);
@@ -79,7 +79,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntrie
     } else {
       setQueryBuild(DEFAULT_QUERY);
       setQuery(DEFAULT_QUERY);
-    //   navigate({ pathname: location.pathname, search: `q=${encodeURIComponent(DEFAULT_QUERY)}` });
+      //   navigate({ pathname: location.pathname, search: `q=${encodeURIComponent(DEFAULT_QUERY)}` });
       setQueryBackgroundColor(ColorYellow);
     }
 
@@ -131,25 +131,25 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntrie
   }, []);
   const getConnectionIndicator = () => {
     switch (wsReadyState) {
-    case WebSocket.OPEN:
-      return <div
-        className={`${TrafficViewerStyles.indicatorContainer} ${TrafficViewerStyles.greenIndicatorContainer}`}>
-        <div className={`${TrafficViewerStyles.indicator} ${TrafficViewerStyles.greenIndicator}`} />
-      </div>
-    default:
-      return <div
-        className={`${TrafficViewerStyles.indicatorContainer} ${TrafficViewerStyles.redIndicatorContainer}`}>
-        <div className={`${TrafficViewerStyles.indicator} ${TrafficViewerStyles.redIndicator}`} />
-      </div>
+      case WebSocket.OPEN:
+        return <div
+          className={`${TrafficViewerStyles.indicatorContainer} ${TrafficViewerStyles.greenIndicatorContainer}`}>
+          <div className={`${TrafficViewerStyles.indicator} ${TrafficViewerStyles.greenIndicator}`} />
+        </div>
+      default:
+        return <div
+          className={`${TrafficViewerStyles.indicatorContainer} ${TrafficViewerStyles.redIndicatorContainer}`}>
+          <div className={`${TrafficViewerStyles.indicator} ${TrafficViewerStyles.redIndicator}`} />
+        </div>
     }
   }
 
   const getConnectionTitle = () => {
     switch (wsReadyState) {
-    case WebSocket.OPEN:
-      return "streaming live traffic"
-    default:
-      return "streaming paused";
+      case WebSocket.OPEN:
+        return "streaming live traffic"
+      default:
+        return "streaming paused";
     }
   }
 
@@ -178,11 +178,19 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntrie
   //   setLastUpdated(Date.now());
   // }, 500, true);
 
+  function changeSwitchView(checked: boolean){
+     if(checked){
+      setView(0)
+     }else{
+      setView(1)
+     }
+  } 
+
   return (
-    <div className={TrafficViewerStyles.TrafficPage}>
-      <div className={TrafficViewerStyles.TrafficPageHeader}>
+    <div className={`${TrafficViewerStyles.TrafficPage}`}>
+      <div className={`${TrafficViewerStyles.TrafficPageHeader} bg-red-500`}>
         <div className={TrafficViewerStyles.TrafficPageStreamStatus}>
-          <img id="pause-icon"
+          {/* <img id="pause-icon"
             className={TrafficViewerStyles.playPauseIcon}
             style={{ visibility: wsReadyState === WebSocket.OPEN ? "visible" : "hidden" }}
             alt="pause"
@@ -193,14 +201,54 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({ entries, setEntrie
             style={{ position: "absolute", visibility: wsReadyState === WebSocket.OPEN ? "hidden" : "visible" }}
             alt="play"
             src={playIcon}
-            onClick={toggleConnection} />
-          <div className={TrafficViewerStyles.connectionText}>
-            {getConnectionTitle()}
-            {getConnectionIndicator()}
+            onClick={toggleConnection} /> */}
+         <Switch defaultChecked onChange={changeSwitchView} />
+          <div className="flex">
+            <Queryable
+              query={`src.name == "kairos"`}
+              displayIconOnMouseOver={true}
+              flipped={true}
+              iconStyle={{ marginRight: "10px" }}
+            >
+              <div className={`${KairosPointColor} mx-3`}>Kairos</div>
+            </Queryable>
+            <Queryable
+              query={`src.name == "broker"`}
+              displayIconOnMouseOver={true}
+              flipped={true}
+              iconStyle={{ marginRight: "10px" }}
+            >
+              <div className={`${BrokerPointColor}  mx-3`}>Broker</div>
+            </Queryable>
+            <Queryable
+              query={`src.name == "client"`}
+              displayIconOnMouseOver={true}
+              flipped={true}
+              iconStyle={{ marginRight: "10px" }}
+            >
+              <div className={`${ClientPointColor}  mx-3`}>Client</div>
+            </Queryable>
+            <Queryable
+              query={`src.name == "channel"`}
+              displayIconOnMouseOver={true}
+              flipped={true}
+              iconStyle={{ marginRight: "10px" }}
+            >
+               <div className={`${ChannelPointColor} mx-3`}>Channel</div>
+            </Queryable>
+            <Queryable
+              query={`src.name == "task"`}
+              displayIconOnMouseOver={true}
+              flipped={true}
+              iconStyle={{ marginRight: "10px" }}
+            >
+                <div className={`${TaskPointColor} mx-3`}>Task</div>
+            </Queryable>
           </div>
         </div>
         {actionButtons}
       </div>
+
       {<div className={TrafficViewerStyles.TrafficPageContainer}>
         <div className={TrafficViewerStyles.TrafficPageListContainer}>
           <Filters

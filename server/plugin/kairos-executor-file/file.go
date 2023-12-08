@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,7 +19,7 @@ type File struct {
 }
 
 func (s *File) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*proto.ExecuteResponse, error) {
-	out, err := s.ExecuteImpl(args)
+	out, err := s.ExecuteImpl(args, cb)
 	resp := &proto.ExecuteResponse{Output: out}
 	if err != nil {
 		resp.Error = err.Error()
@@ -26,31 +27,33 @@ func (s *File) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*pr
 	return resp, nil
 }
 
-func (s *File) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
-	output, _ := circbuf.NewBuffer(maxBufSize)
-	output.Write([]byte("OK: ABABY"))
+func (s *File) ExecuteImpl(args *proto.ExecuteRequest, cb kplugin.StatusHelper) ([]byte, error) {
+	output := circbuf.NewBuffer(maxBufSize)
 	path := args.Config["path"]
-	if path != "" {
-		file, err := os.Open(path)
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-		bufferSize := 20
-		buffer := make([]byte, bufferSize)
-
-		for {
-			_, err := file.Read(buffer)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				fmt.Println(err)
-				break
-			}
-		}
-		output.Write(buffer)
+	if path == "" {
+		return nil, errors.New("Path file empty")
 	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	bufferSize := 1000
+	buffer := make([]byte, bufferSize)
+
+	for {
+		_, err := file.Read(buffer)
+		if err == io.EOF {
+			break
+		}
+		_, err = cb.Update(buffer, true)
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+	}
+	output.Write(buffer)
 
 	return output.Bytes(), nil
 

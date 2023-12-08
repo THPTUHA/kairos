@@ -11,7 +11,7 @@ brokers:
     queue: true
     flows: |
       {{wait .WAIT_CHANNEL .A_TASK}}
-        {{range .WAIT_CHANNEL_QUEUE}}
+        {{range .A_TASK_QUEUE}}
           {{set .NOTI_CHANNEL_SUB .ITEM_CONTENT_CMD}}
           {{send .ITEM .NOTI_CHANNEL }}
         {{end}}

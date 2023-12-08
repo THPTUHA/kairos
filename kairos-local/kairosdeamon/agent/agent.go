@@ -7,10 +7,13 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/agent/broker"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/config"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/events"
+	"github.com/THPTUHA/kairos/pkg/bufcb"
 	"github.com/THPTUHA/kairos/pkg/circbuf"
 	"github.com/THPTUHA/kairos/pkg/logger"
 	"github.com/THPTUHA/kairos/pkg/workflow"
@@ -21,7 +24,7 @@ import (
 )
 
 const (
-	maxBufSize = 256000
+	maxBufSize = 1000
 )
 
 var (
@@ -29,31 +32,24 @@ var (
 )
 
 type Agent struct {
-	ProcessorPlugins map[string]Processor
-
-	ExecutorPlugins map[string]plugin.Executor
-
-	HTTPTransport Transport
-
-	Store Storage
-	hub   *Hub
-
-	config     *AgentConfig
-	sched      *Scheduler
-	ready      bool
-	shutdownCh chan struct{}
-
+	ExecutorPlugins  map[string]plugin.Executor
+	HTTPTransport    Transport
+	Store            Storage
+	hub              *Hub
+	config           *AgentConfig
+	sched            *Scheduler
+	ready            bool
+	shutdownCh       chan struct{}
 	activeExecutions sync.Map
-
-	listener net.Listener
-	taskCh   chan *workflow.CmdTask
-	EventCh  chan *events.Event
+	listener         net.Listener
+	taskCh           chan *workflow.CmdTask
+	EventCh          chan *events.Event
+	RunCount         int64
+	Broker           *broker.Broker
 
 	logger *logrus.Entry
 }
 
-// ProcessorFactory is a function type that creates a new instance
-// of a processor.
 type ProcessorFactory func() (Processor, error)
 
 type AgentOption func(agent *Agent)
@@ -62,6 +58,7 @@ func NewAgent(config *AgentConfig, options ...AgentOption) *Agent {
 	agent := &Agent{
 		config: config,
 		taskCh: make(chan *workflow.CmdTask),
+		Broker: broker.NewBroker(),
 	}
 
 	for _, option := range options {
@@ -124,10 +121,17 @@ func (a *Agent) Stop() error {
 func (a *Agent) handleTaskEvent() {
 	for te := range a.taskCh {
 		re := workflow.CmdReplyTask{
-			TaskID:     te.Task.ID,
-			WorkflowID: te.Task.WorkflowID,
-			DeliverID:  te.DeliverID,
+			TaskID:    te.Task.ID,
+			DeliverID: te.DeliverID,
+			Channel:   te.Channel,
 		}
+		if te.Task != nil {
+			re.WorkflowID = te.Task.WorkflowID
+			re.TaskID = te.Task.ID
+		} else {
+			re.WorkflowID = te.WorkflowID
+		}
+
 		switch te.Cmd {
 		case workflow.SetTaskCmd:
 			fmt.Printf("[AGENT HANLE SetTaskCmd ] %+v\n", te)
@@ -158,7 +162,7 @@ func (a *Agent) handleTaskEvent() {
 				re.Status = workflow.FaultTriggerTask
 			} else {
 				err = a.ScheduleTask(task)
-				fmt.Printf("[AGENT Schedule task] %+v\n", task)
+				a.logger.Debug(fmt.Sprintf("Scheduler task %+v", task))
 				if err != nil {
 					re.Message = err.Error()
 					re.Status = workflow.FaultTriggerTask
@@ -170,27 +174,73 @@ func (a *Agent) handleTaskEvent() {
 			fmt.Printf("[AGENT HANLE Input TaskCmd ] %+v\n", te)
 			re.Cmd = workflow.ReplyInputTaskCmd
 			re.Status = workflow.SuccessReceiveInputTaskCmd
-			// a.Store.SetExecution()
 			go a.hub.Publish(&re)
-			m, _ := json.Marshal(te.Task)
-			a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, string(m))
-			a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), workflow.GetTaskName(te.Task.Name), string(m))
 
-			tasks, err := a.Store.GetTasks(&TaskOptions{NoScheduler: true})
+			// a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, te.Task.Input)
+			// a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), workflow.GetTaskName(te.Task.Name), te.Task.Input)
+
+			// tasks, err := a.Store.GetTasks(&TaskOptions{NoScheduler: true})
+			// if err != nil {
+			// 	fmt.Println("[AGENT GET TASK ERROR]", err)
+			// }
+
+			// for _, task := range tasks {
+			// 	fmt.Printf("AGENT RUN TASK NO SCHEDULE %+v\n", task)
+			// 	task.Agent = a
+			// 	go task.Run()
+			// }
+			task, err := a.Store.GetTask(fmt.Sprint(te.Task.ID), nil)
 			if err != nil {
 				fmt.Println("[AGENT GET TASK ERROR]", err)
 			}
-
-			for _, task := range tasks {
-				fmt.Printf("AGENT RUN TASK NO SCHEDULE %+v\n", task)
-				if len(task.Deps) > 0 {
-					task.Agent = a
-					go task.Run()
+			if task.ID == "" {
+				a.logger.Errorf("Task id = %d not found \n", te.Task.ID)
+				continue
+			}
+			task.Agent = a
+			task.logger = a.logger
+			go task.RunTrigger(te)
+			fmt.Printf("[AGENT SET QUEUE] taskname = %s, input=%s, from=%s\n", te.Task.Name, te.Task.Input, te.From)
+			// TODO check
+		case workflow.RequestTaskRunSyncCmd:
+			re.Cmd = workflow.ReplyRequestTaskSyncCmd
+			fmt.Printf("[AGENT Request Task run sync ] %+v\n", te)
+			a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, te.Task.Input)
+			task, err := a.GetTask(fmt.Sprint(te.Task.ID))
+			if err != nil {
+				re.Result = &workflow.Result{
+					Success: false,
+					Output:  err.Error(),
 				}
 			}
 
-			fmt.Printf("[AGENT SET QUEUE] taskname = %s, input=%s, from=%s\n", te.Task.Name, te.Task.Input, te.From)
-			// TODO check
+			task.Agent = a
+			result, err := task.RunSync(te)
+			fmt.Printf("TASK RESULT-- %+v ERR = %+v\n", result, err)
+			if err != nil {
+				re.Result = &workflow.Result{
+					Success: false,
+					Output:  err.Error(),
+				}
+			} else {
+				re.Result = result
+			}
+
+			a.hub.Publish(&re)
+		case workflow.SetBrokerCmd:
+			re.Cmd = workflow.ReplySetBrokerCmd
+			if te.Broker == nil {
+				re.Status = workflow.FaultSetBroker
+				re.Message = fmt.Sprintf("Empty broker")
+			} else {
+				// te.Broker.Template.FuncNotFound
+				err := a.Store.SetBroker(te.Broker)
+				if err != nil {
+					re.Status = workflow.FaultSetBroker
+					re.Message = err.Error()
+				}
+			}
+			a.hub.Publish(&re)
 		}
 	}
 }
@@ -201,7 +251,6 @@ func (a *Agent) initConnectServer() {
 		a.logger.WithField("agent", "init connect server").Error(err)
 		return
 	}
-	fmt.Println("Token-----", token)
 	clientName, err := a.Store.GetMeta("clientname")
 	clientID, err := a.Store.GetMeta("client_id")
 	userID, err := a.Store.GetMeta("user_id")
@@ -293,12 +342,18 @@ func (a *Agent) GetRunningTasks() int {
 }
 
 func (agent *Agent) ScheduleTask(task *Task) error {
-	if task.Schedule == "" {
-		return nil
-	}
 	task.Agent = agent
-	if err := agent.sched.AddTask(task); err != nil {
-		return err
+	if task.Schedule == "" {
+		if task.Wait == workflow.TaskWaitInput {
+			return nil
+		}
+		go func() {
+			task.Run()
+		}()
+	} else {
+		if err := agent.sched.AddTask(task); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -307,6 +362,18 @@ func (agent *Agent) SetTask(task *Task) error {
 	if err := agent.Store.SetTask(task); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (agent *Agent) SetTaskAndRun(task *Task) error {
+
+	if err := agent.Store.SetTask(task); err != nil {
+		return err
+	}
+	task.Agent = agent
+	task.logger = agent.logger
+	go task.Run()
+
 	return nil
 }
 
@@ -328,7 +395,8 @@ func (agent *Agent) SetExecution(execution *Execution) error {
 }
 
 func (agent *Agent) GetTask(taskID string) (*Task, error) {
-	return agent.Store.GetTask(taskID, nil)
+	t, err := agent.Store.GetTask(taskID, nil)
+	return t, err
 }
 
 func (agent *Agent) DeleteTask(taskID string) error {
@@ -338,12 +406,33 @@ func (agent *Agent) DeleteTask(taskID string) error {
 }
 
 type statusAgentHelper struct {
+	agent     *Agent
 	execution *Execution
+	task      *Task
+	input     chan []byte
+	buffer    *bufcb.Buffer
+	circbuf   *circbuf.Buffer
 }
 
 func (s *statusAgentHelper) Update(b []byte, c bool) (int64, error) {
-	s.execution.Output = string(b)
-	return 0, nil
+	var err error
+	if s.buffer != nil {
+		_, err = s.buffer.Write(b)
+
+	} else if s.circbuf != nil {
+		_, err = s.circbuf.Write(b)
+	}
+	s.execution.Success = c
+	// time.Sleep(3 * time.Second)
+	return 0, err
+}
+
+func (s *statusAgentHelper) Input() []byte {
+	return <-s.input
+}
+
+func (s *statusAgentHelper) Send(data []byte) {
+	s.input <- data
 }
 
 func (a *Agent) AddHub(h *Hub) {
@@ -351,69 +440,178 @@ func (a *Agent) AddHub(h *Hub) {
 	a.hub = h
 }
 
-func (agent *Agent) Run(task *Task, execution *Execution) error {
+func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) error {
 	agent.logger.WithFields(logrus.Fields{
 		"task": task.Name,
 	}).Info("agent: Starting task")
 
-	output, _ := circbuf.NewBuffer(maxBufSize)
-
-	var success bool
+	execution.RunCount = atomic.AddInt64(&agent.RunCount, 1)
 
 	jex := task.Executor
 	exc := task.ExecutorConfig
+
+	if re != nil && exc != nil {
+		exc["input"] = re.Task.Input
+		exc["deliver_id"] = fmt.Sprint(re.DeliverID)
+		exc["worklow_id"] = fmt.Sprint(re.WorkflowID)
+	}
 
 	execution.StartedAt = time.Now()
 	execution.NodeName = agent.config.NodeName
 	execution.Id = execution.Key()
 	agent.SetExecution(execution)
+
 	exc["debug"] = ""
+
 	if jex == "" {
 		return errors.New("agent: No executor defined, nothing to do")
 	}
-	fmt.Printf("excutor %+v", agent.ExecutorPlugins)
 
 	if executor, ok := agent.ExecutorPlugins[jex]; ok {
 		agent.logger.WithField("plugin", jex).Debug("agent: calling executor plugin")
 		id, _ := strconv.ParseInt(task.ID, 10, 64)
+		helper := &statusAgentHelper{
+			agent:     agent,
+			execution: execution,
+			task:      task,
+			input:     make(chan []byte),
+			buffer: bufcb.NewBuffer(maxBufSize, func(b []byte) error {
+				execution.FinishedAt = time.Now()
+				execution.Output = string(b)
+				execution.Offset++
+				fmt.Println(" BUFFER OUT---", string(b))
+				err := agent.SaveExecutorResult(execution)
+				if err != nil {
+					agent.logger.WithField("executor", "set").Error(err)
+					return err
+				}
+
+				t := task.ToCmdReplyTask()
+				t.Cmd = workflow.ReplyOutputTaskCmd
+				t.Result = execution.GetResult()
+				go agent.hub.Publish(t)
+
+				fmt.Printf("[ OUTPUT TASK ] %+v  RESULT = %+v\n", t, t.Result)
+				return nil
+			}),
+		}
+
+		// // test
+		// time.AfterFunc(2*time.Second, func() {
+		// 	fmt.Println(" RUN HERE BABY")
+		// 	helper.Send([]byte("SELECT * FROM users\n"))
+		// })
+
 		out, err := executor.Execute(&proto.ExecuteRequest{
 			TaskId: id,
 			Config: exc,
-		}, &statusAgentHelper{
-			execution: execution,
-		})
+		}, helper)
 
 		if err == nil && out.Error != "" {
 			err = errors.New(out.Error)
 		}
 		if err != nil {
 			agent.logger.WithError(err).WithField("task", task.Name).WithField("plugin", executor).Error("agent: command error output")
-			success = false
-			_, _ = output.Write([]byte(err.Error() + "\n"))
+			execution.Success = false
+			_, _ = helper.buffer.Write([]byte(err.Error() + "\n"))
 		} else {
-			success = true
+			execution.Success = true
 		}
 
 		if out != nil {
-			_, _ = output.Write(out.Output)
+			_, _ = helper.buffer.Write(out.Output)
+			helper.buffer.Flush()
 		}
+
 	} else {
 		agent.logger.WithField("executor", jex).Error("agent: Specified executor is not present")
-		_, _ = output.Write([]byte("agent: Specified executor is not present"))
 	}
 
-	execution.FinishedAt = time.Now()
-	execution.Success = success
-	execution.Output = output.String()
-	_, err := agent.Store.SetExecutionDone(task.ID, execution)
-	if err != nil {
-		agent.logger.WithField("executor", "set").Error(err)
-	}
-
-	t := task.ToCmdReplyTask()
-	t.Cmd = workflow.ReplyOutputTaskCmd
-	t.Result = execution.GetResult()
-	go agent.hub.Publish(t)
-	fmt.Printf("[ OUTPUT TASK ] %+v  RESULT = %+v\n", t, t.Result)
 	return nil
+}
+
+func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTask) (*workflow.Result, error) {
+	agent.logger.WithFields(logrus.Fields{
+		"task": task.Name,
+	}).Info("agent: Starting task")
+
+	execution.RunCount = atomic.AddInt64(&agent.RunCount, 1)
+	jex := task.Executor
+	exc := task.ExecutorConfig
+
+	if re != nil {
+		exc["input"] = re.Task.Input
+		exc["deliver_id"] = fmt.Sprint(re.DeliverID)
+		exc["worklow_id"] = fmt.Sprint(re.WorkflowID)
+	}
+
+	execution.StartedAt = time.Now()
+	execution.NodeName = agent.config.NodeName
+	execution.Id = execution.Key()
+	agent.SetExecution(execution)
+
+	exc["debug"] = ""
+
+	if jex == "" {
+		return nil, errors.New("agent: No executor defined, nothing to do")
+	}
+	fmt.Printf("excutor %+v", agent.ExecutorPlugins)
+
+	if executor, ok := agent.ExecutorPlugins[jex]; ok {
+		agent.logger.WithField("plugin", jex).Debug("agent: calling executor plugin")
+		id, _ := strconv.ParseInt(task.ID, 10, 64)
+		helper := &statusAgentHelper{
+			agent:     agent,
+			execution: execution,
+			task:      task,
+			input:     make(chan []byte),
+			circbuf:   circbuf.NewBuffer(maxBufSize),
+		}
+
+		out, err := executor.Execute(&proto.ExecuteRequest{
+			TaskId: id,
+			Config: exc,
+		}, helper)
+
+		if err == nil && out.Error != "" {
+			err = errors.New(out.Error)
+		}
+		if err != nil {
+			agent.logger.WithError(err).WithField("task", task.Name).WithField("plugin", executor).Error("agent: command error output")
+			execution.Success = false
+			helper.circbuf.Write([]byte(err.Error()))
+			return execution.GetResult(), err
+		} else {
+			execution.Success = true
+		}
+
+		if out != nil {
+			_, err = helper.circbuf.Write(out.Output)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		execution.FinishedAt = time.Now()
+		execution.Output = helper.circbuf.String()
+		execution.Offset++
+		fmt.Println(" BUFFER OUT SYNC---", execution.Output)
+		err = agent.SaveExecutorResult(execution)
+		if err != nil {
+			agent.logger.WithField("executor", "set").Error(err)
+			return nil, err
+		}
+
+		return execution.GetResult(), nil
+	} else {
+		agent.logger.WithField("executor", jex).Error("agent: Specified executor is not present")
+	}
+
+	fmt.Println("FINSH EXECUTOR SYNC")
+	return nil, fmt.Errorf("agent: Specified executor is not present")
+}
+
+func (a *Agent) SaveExecutorResult(e *Execution) error {
+	_, err := a.Store.SetExecutionDone(e.TaskID, e)
+	return err
 }

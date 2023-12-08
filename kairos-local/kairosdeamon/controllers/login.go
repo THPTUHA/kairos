@@ -57,7 +57,7 @@ func Login(eventCh chan *events.Event) func(c *gin.Context) {
 			}
 
 			sub.OnSubscribed(func(e pubsub.SubscribedEvent) {
-				log.Printf("Subscribed on channel %s, (was recovering: %v, recovered: %v)", sub.Channel, e.WasRecovering, e.Recovered)
+				log.Printf("Subscribed on channel %s: ", sub.Channel)
 				utils.OpenBrowser(fmt.Sprintf("%s?user_count_id=%s", cf.LoginEndpoint, mr.UserCountID))
 			})
 

@@ -11,13 +11,9 @@ import (
 )
 
 const (
-	// maxBufSize limits how much data we collect from a handler.
-	// This is to prevent Serf's memory from growing to an enormous
-	// amount due to a faulty handler.
 	maxBufSize = 500000
 )
 
-// Nats process http request
 type Nats struct {
 }
 
@@ -43,7 +39,7 @@ func (s *Nats) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*pr
 
 func (s *Nats) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 
-	output, _ := circbuf.NewBuffer(maxBufSize)
+	output := circbuf.NewBuffer(maxBufSize)
 
 	var debug bool
 	if args.Config["debug"] != "" {

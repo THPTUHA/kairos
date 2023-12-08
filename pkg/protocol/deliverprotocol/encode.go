@@ -397,9 +397,7 @@ type ResultEncoder interface {
 	EncodePublishResult(*PublishResult) ([]byte, error)
 	EncodePresenceResult(*PresenceResult) ([]byte, error)
 	EncodePresenceStatsResult(*PresenceStatsResult) ([]byte, error)
-	EncodeHistoryResult(*HistoryResult) ([]byte, error)
 	EncodePingResult(*PingResult) ([]byte, error)
-	EncodeRPCResult(*RPCResult) ([]byte, error)
 }
 
 // JSONResultEncoder ...
@@ -466,22 +464,8 @@ func (e *JSONResultEncoder) EncodePresenceStatsResult(res *PresenceStatsResult) 
 	return jw.BuildBytes()
 }
 
-// EncodeHistoryResult ...
-func (e *JSONResultEncoder) EncodeHistoryResult(res *HistoryResult) ([]byte, error) {
-	jw := newWriter()
-	res.MarshalEasyJSON(jw)
-	return jw.BuildBytes()
-}
-
 // EncodePingResult ...
 func (e *JSONResultEncoder) EncodePingResult(res *PingResult) ([]byte, error) {
-	jw := newWriter()
-	res.MarshalEasyJSON(jw)
-	return jw.BuildBytes()
-}
-
-// EncodeRPCResult ...
-func (e *JSONResultEncoder) EncodeRPCResult(res *RPCResult) ([]byte, error) {
 	jw := newWriter()
 	res.MarshalEasyJSON(jw)
 	return jw.BuildBytes()
@@ -535,18 +519,8 @@ func (e *ProtobufResultEncoder) EncodePresenceStatsResult(res *PresenceStatsResu
 	return res.MarshalVT()
 }
 
-// EncodeHistoryResult ...
-func (e *ProtobufResultEncoder) EncodeHistoryResult(res *HistoryResult) ([]byte, error) {
-	return res.MarshalVT()
-}
-
 // EncodePingResult ...
 func (e *ProtobufResultEncoder) EncodePingResult(res *PingResult) ([]byte, error) {
-	return res.MarshalVT()
-}
-
-// EncodeRPCResult ...
-func (e *ProtobufResultEncoder) EncodeRPCResult(res *RPCResult) ([]byte, error) {
 	return res.MarshalVT()
 }
 

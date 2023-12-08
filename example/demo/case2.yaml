@@ -1,0 +1,30 @@
+version: '1'
+name: read_one
+namespace: demo
+tasks:
+  request_data: 
+    executor: http
+    clients:
+      - client1
+      - client2
+    wait: true
+    payload: |
+      {
+        "method": "GET",
+        "url": "http://locallhost:3000/data",
+        "headers": "[]",
+        "body": "",
+        "timeout": "30",
+        "expectCode": "200",
+        "expectBody": ""
+      }
+
+brokers:
+  send:
+    listens: [request_channel]
+    flows: | 
+      {{sendu .request_channel .request_data_task}}
+  
+  reciver:
+    listens: [client1_client,client2_client]
+    flows: [request_channel]

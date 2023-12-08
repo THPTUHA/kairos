@@ -7,7 +7,6 @@ const (
 type Task struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
-	Deps       string `json:"deps"`
 	Schedule   string `json:"schedule"`
 	Timezone   string `json:"timezone"`
 	Clients    string `json:"clients"`
@@ -18,4 +17,5 @@ type Task struct {
 	Status     int    `json:"status"`
 	Payload    string `json:"payload"`
 	ExpiresAt  string `json:"expires_at"`
+	Wait       string `json:"wait"`
 }

@@ -59,9 +59,8 @@ func (c ConnectError) Error() string {
 
 // Error represents protocol-level error.
 type Error struct {
-	Code      uint32
-	Message   string
-	Temporary bool
+	Code    uint32
+	Message string
 }
 
 func (e Error) Error() string {

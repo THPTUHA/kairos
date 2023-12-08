@@ -16,6 +16,7 @@ func Authorize() gin.HandlerFunc {
 			return
 		}
 		c.Set("userID", acc.UserID)
+		c.Set("clientID", acc.ClientID)
 		c.Next()
 	}
 }

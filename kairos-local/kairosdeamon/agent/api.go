@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/status"
@@ -51,6 +52,7 @@ func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerF
 	v1.GET("/tasks", h.tasksHandler)
 	v1.GET("/:task/task", h.tasksGetHandler)
 	v1.DELETE("/:task/delete", h.tasksDeleteHandler)
+	v1.POST("/runtask", h.runTask)
 	v1.POST("/tasks", h.taskCreateOrUpdateHandler)
 	v1.GET("/view/:task/executions", h.executionsHandler)
 	v1.POST("/queue", h.queueTest)
@@ -93,6 +95,28 @@ func (h *HTTPTransport) queueGetTest(c *gin.Context) {
 	renderJSON(c, http.StatusCreated, m)
 }
 
+func (h *HTTPTransport) runTask(c *gin.Context) {
+	task := Task{}
+	if err := c.BindJSON(&task); err != nil {
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
+		h.logger.Error(err)
+		return
+	}
+	t, _ := h.agent.GetTask(task.ID)
+	fmt.Printf("TASK CALL %+v\n", *t)
+	ex := NewExecution(t.ID)
+	re := workflow.CmdTask{
+		DeliverID:  1,
+		WorkflowID: 1,
+		Task: &workflow.Task{
+			Output: `{
+				"sql": "select * from users where id in (?,?)",
+				"params": [2,3]
+			}`,
+		},
+	}
+	h.agent.Run(t, ex, &re)
+}
 func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
 	task := Task{}
 
@@ -102,17 +126,27 @@ func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
 		return
 	}
 
+	fmt.Printf("CREATE TASK %+v\n", task)
 	if err := task.Validate(); err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Task contains invalid value: %s.", err))
 		return
 	}
 
-	if err := h.agent.SetTaskAndSched(&task); err != nil {
-		s := status.Convert(err)
-		c.AbortWithStatus(http.StatusInternalServerError)
-		_, _ = c.Writer.WriteString(s.Message())
-		return
+	if task.Schedule == "" {
+		if err := h.agent.SetTaskAndRun(&task); err != nil {
+			s := status.Convert(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			_, _ = c.Writer.WriteString(s.Message())
+			return
+		}
+	} else {
+		if err := h.agent.SetTaskAndSched(&task); err != nil {
+			s := status.Convert(err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			_, _ = c.Writer.WriteString(s.Message())
+			return
+		}
 	}
 
 	c.Header("Location", fmt.Sprintf("%s/%s", c.Request.RequestURI, task.Name))

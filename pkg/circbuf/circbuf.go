@@ -1,9 +1,5 @@
 package circbuf
 
-import (
-	"fmt"
-)
-
 // Buffer implements a circular buffer. It is a fixed size,
 // and new writes overwrite older data, such that for a buffer
 // of size N, for any amount of writes, only the last N bytes
@@ -17,16 +13,13 @@ type Buffer struct {
 
 // NewBuffer creates a new buffer of a given size. The size
 // must be greater than 0.
-func NewBuffer(size int64) (*Buffer, error) {
-	if size <= 0 {
-		return nil, fmt.Errorf("Size must be positive")
-	}
+func NewBuffer(size int64) *Buffer {
 
 	b := &Buffer{
 		size: size,
 		data: make([]byte, size),
 	}
-	return b, nil
+	return b
 }
 
 // Write writes up to len(buf) bytes to the internal ring,

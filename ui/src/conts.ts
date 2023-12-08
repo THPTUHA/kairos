@@ -5,8 +5,8 @@ const ColorWhite = "#ffffff"
 
 const KairosPoint = 0
 const ClientPoint = 1
-const BrokerPoint = 2
-const ChannelPoint = 3
+const ChannelPoint = 2
+const BrokerPoint = 3
 const TaskPoint = 4
 
 const Pending = 0
@@ -31,6 +31,7 @@ const ReplySetTaskCmd = 0;
 const ReplyStartTaskCmd = 1;
 const ReplyOutputTaskCmd = 2;
 const ReplyInputTaskCmd = 3;
+const ReplyMessageCmd = 4;
 
 const SetTaskCmd=0;
 const TriggerStartTaskCmd=1;
@@ -38,6 +39,12 @@ const InputTaskCmd = 2;
 
 const DeliverFlow = 0;
 const RecieverFlow = 1;
+
+const KairosPointColor =  ` text-[#800080] `;
+const ClientPointColor = ` text-blue-500 `;
+const BrokerPointColor = ` text-[#FFA500] `;
+const ChannelPointColor = `text-white`;
+const TaskPointColor = ` text-pink-600 `;
 
 export {
   ColorGreen,
@@ -69,6 +76,7 @@ export {
   ReplyStartTaskCmd,
   ReplyOutputTaskCmd,
   ReplyInputTaskCmd,
+  ReplyMessageCmd,
 
   SetTaskCmd,
   TriggerStartTaskCmd,
@@ -76,4 +84,10 @@ export {
 
   DeliverFlow,
   RecieverFlow,
+
+  KairosPointColor,
+  ClientPointColor,
+  BrokerPointColor,
+  ChannelPointColor,
+  TaskPointColor,
 }

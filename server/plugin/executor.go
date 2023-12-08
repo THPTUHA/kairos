@@ -10,6 +10,7 @@ import (
 
 type StatusHelper interface {
 	Update([]byte, bool) (int64, error)
+	Input() []byte
 }
 
 type Executor interface {
@@ -48,6 +49,14 @@ func (m *GRPCStatusHelperClient) Update(b []byte, c bool) (int64, error) {
 	return resp.R, err
 }
 
+func (m *GRPCStatusHelperClient) Input() []byte {
+	resp, err := m.client.Input(context.Background(), &proto.StatusInputRequest{})
+	if err != nil {
+		return nil
+	}
+	return resp.Input
+}
+
 type ExecutorPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
 	Executor Executor
@@ -73,6 +82,14 @@ func (m *GRPCStatusHelperServer) Update(ctx context.Context, req *proto.StatusUp
 		return nil, err
 	}
 	return &proto.StatusUpdateResponse{R: r}, err
+}
+
+func (m *GRPCStatusHelperServer) Input(ctx context.Context, req *proto.StatusInputRequest) (resp *proto.StatusInputResponse, err error) {
+	r := m.Impl.Input()
+	if err != nil {
+		return nil, err
+	}
+	return &proto.StatusInputResponse{Input: r}, err
 }
 
 type Broker interface {

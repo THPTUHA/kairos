@@ -11,13 +11,9 @@ type reconnectStrategy interface {
 }
 
 type backoffReconnect struct {
-	// Factor is the multiplying factor for each increment step.
-	Factor float64
-	// Jitter eases contention by randomizing backoff steps.
-	Jitter bool
-	// MinMilliseconds is a minimum value of reconnect interval.
+	Factor   float64
+	Jitter   bool
 	MinDelay time.Duration
-	// MaxMilliseconds is a maximum value of reconnect interval.
 	MaxDelay time.Duration
 }
 

@@ -35,7 +35,7 @@ func NewMemoryBroker(n *Node, _ MemoryBrokerConfig) (*MemoryBroker, error) {
 func (b *MemoryBroker) pubLock(ch string) *sync.Mutex {
 	return b.pubLocks[index(ch, numPubLocks)]
 }
-func (b *MemoryBroker) Publish(ch string, data []byte, opts PublishOptions) (StreamPosition, error) {
+func (b *MemoryBroker) Publish(ch string, data []byte, opts PublishOptions) error {
 	mu := b.pubLock(ch)
 	mu.Lock()
 	defer mu.Unlock()
@@ -45,7 +45,7 @@ func (b *MemoryBroker) Publish(ch string, data []byte, opts PublishOptions) (Str
 		Info: opts.ClientInfo,
 		Tags: opts.Tags,
 	}
-	return StreamPosition{}, b.eventHandler.HandlePublication(ch, pub, StreamPosition{})
+	return b.eventHandler.HandlePublication(ch, pub)
 }
 
 func (b *MemoryBroker) PublishControl(data []byte, _, _ string) error {

@@ -4,6 +4,8 @@ import { Entry } from "../models/entry"
 import { useRecoilValue } from "recoil"
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom"
 import { BrokerPoint, DeliverFlow, LogMessageFlow, RecieverFlow } from "../conts"
+import { useAsync } from "react-use"
+import { services } from "../services"
 
 // const Entries = [
 //     {
@@ -87,13 +89,60 @@ import { BrokerPoint, DeliverFlow, LogMessageFlow, RecieverFlow } from "../conts
 // ]
 const DashBoardPage = () => {
     const [entries, setEntries] = useState<Entry[]>([])
-    const [lastUpdated, setLastUpdated] = useState(0)
     const wfCmd = useRecoilValue(workflowMonitorAtom)
     const cnt = useRef(0)
+    const [view, setView] = useState(0);
     const entriesRef = useRef<Entry[]>([])
 
+    useAsync(async () => {
+        if (view) {
+            const records = await services.records
+                .getMessageRecord()
+                .catch()
+            console.log({records})
+            const entries : Entry[] = []
+            for(const record of records){
+                console.log("RUN", record)
+                cnt.current++;
+                entries.push({
+                    id: cnt.current,
+                    flow_id: record.id,
+                    status: record.status,
+                    timestamp: record.created_at,
+                    src: {
+                        id: record.sender_id,
+                        name: record.sender_name,
+                        type: record.sender_type,
+                    },
+                    dst: {
+                        id: record.receiver_id,
+                        name: record.receiver_name,
+                        type: record.receiver_type,
+                    },
+                    outgoing: false,
+                    requestSize: record.request_size ? record.request_size : -1,
+                    responseSize: record.response_size ? record.response_size : -1,
+                    elapsedTime: record.elapsed_time,
+                    workflow: {
+                        name: wfCmd.workflow_name,
+                        id: wfCmd.workflow_id,
+                    },
+                    cmd: record.cmd,
+                    request: record.flow === DeliverFlow ? record.message ? JSON.parse(record.message):'' : '',
+                    response: record.flow === RecieverFlow ?  record.message ? JSON.parse(record.message):'' : '',
+                    reply: record.flow === RecieverFlow
+                })
+            }
+            console.log({entries})
+            setEntries(entries)
+        }else{
+            setEntries([])
+        }
+
+    }, [view])
+
     useEffect(() => {
-        if (wfCmd && wfCmd.cmd == LogMessageFlow) {
+        if (wfCmd && wfCmd.cmd == LogMessageFlow &&!view) {
             const data = wfCmd.data
             const from = data.from
             const receiver = data.receiver
@@ -144,8 +193,7 @@ const DashBoardPage = () => {
         <>
             <TrafficViewer
                 entries={entries}
-                setEntries={setEntries}
-                setLastUpdated={setLastUpdated}
+                setView={setView}
             />
         </>
     )

@@ -162,8 +162,6 @@ func (c *Client) NewSubscription(channel string, config ...SubscriptionConfig) (
 	return sub, nil
 }
 
-// RemoveSubscription removes Subscription from the internal client registry.
-// Make sure Subscription is in unsubscribed state before removing it.
 func (c *Client) RemoveSubscription(sub *Subscription) error {
 	if sub.State() != SubStateUnsubscribed {
 		return errors.New("subscription must be unsubscribed to be removed")
@@ -174,7 +172,6 @@ func (c *Client) RemoveSubscription(sub *Subscription) error {
 	return nil
 }
 
-// GetSubscription allows getting Subscription from the internal client registry.
 func (c *Client) GetSubscription(channel string) (*Subscription, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -182,7 +179,6 @@ func (c *Client) GetSubscription(channel string) (*Subscription, bool) {
 	return s, ok
 }
 
-// Subscriptions returns a map with all currently registered client-side subscriptions.
 func (c *Client) Subscriptions() map[string]*Subscription {
 	subs := make(map[string]*Subscription)
 	c.mu.Lock()
@@ -630,17 +626,6 @@ func (c *Client) handlePush(push *deliverprotocol.Push) {
 }
 
 func (c *Client) handleServerPublication(channel string, pub *deliverprotocol.Publication) {
-	c.mu.Lock()
-	serverSub, ok := c.serverSubs[channel]
-	if !ok {
-		c.mu.Unlock()
-		return
-	}
-	if serverSub.Recoverable && pub.Offset > 0 {
-		serverSub.Offset = pub.Offset
-	}
-	c.mu.Unlock()
-
 	var handler ServerPublicationHandler
 	if c.events != nil && c.events.onServerPublication != nil {
 		handler = c.events.onServerPublication
@@ -699,11 +684,7 @@ func (c *Client) handleServerSub(channel string, sub *deliverprotocol.Subscribe)
 		c.mu.Unlock()
 		return
 	}
-	c.serverSubs[channel] = &serverSub{
-		Offset:      sub.Offset,
-		Epoch:       sub.Epoch,
-		Recoverable: sub.Recoverable,
-	}
+	c.serverSubs[channel] = &serverSub{}
 	c.mu.Unlock()
 
 	var handler ServerSubscribedHandler
@@ -713,16 +694,8 @@ func (c *Client) handleServerSub(channel string, sub *deliverprotocol.Subscribe)
 	if handler != nil {
 		c.runHandlerSync(func() {
 			ev := ServerSubscribedEvent{
-				Channel:     channel,
-				Positioned:  sub.GetPositioned(),
-				Recoverable: sub.GetRecoverable(),
-				Data:        sub.GetData(),
-			}
-			if ev.Positioned || ev.Recoverable {
-				ev.StreamPosition = &StreamPosition{
-					Epoch:  sub.GetEpoch(),
-					Offset: sub.GetOffset(),
-				}
+				Channel: channel,
+				Data:    sub.GetData(),
 			}
 			handler(ev)
 		})
@@ -862,7 +835,7 @@ func (c *Client) startReconnecting() error {
 					_ = c.startReconnecting()
 				})
 				return
-			} else if isServerError(err) && !isTemporaryError(err) {
+			} else if isServerError(err) {
 				var serverError *Error
 				if errors.As(err, &serverError) {
 					c.moveToDisconnected(serverError.Code, serverError.Message)
@@ -900,7 +873,6 @@ func (c *Client) startReconnecting() error {
 			handler := c.events.onConnected
 			ev := ConnectedEvent{
 				ClientID: res.Client,
-				Version:  res.Version,
 				Data:     res.Data,
 			}
 			c.runHandlerSync(func() {
@@ -921,18 +893,8 @@ func (c *Client) startReconnecting() error {
 		for channel, subRes := range res.Subs {
 			c.mu.Lock()
 			sub, ok := c.serverSubs[channel]
-			if ok {
-				sub.Epoch = subRes.Epoch
-				sub.Recoverable = subRes.Recoverable
-			} else {
-				sub = &serverSub{
-					Epoch:       subRes.Epoch,
-					Offset:      subRes.Offset,
-					Recoverable: subRes.Recoverable,
-				}
-			}
-			if len(subRes.Publications) == 0 {
-				sub.Offset = subRes.Offset
+			if !ok {
+				sub = &serverSub{}
 			}
 			c.serverSubs[channel] = sub
 			c.mu.Unlock()
@@ -940,18 +902,8 @@ func (c *Client) startReconnecting() error {
 			if subscribeHandler != nil {
 				c.runHandlerSync(func() {
 					ev := ServerSubscribedEvent{
-						Channel:       channel,
-						Data:          subRes.GetData(),
-						Recovered:     subRes.GetRecovered(),
-						WasRecovering: subRes.GetWasRecovering(),
-						Positioned:    subRes.GetPositioned(),
-						Recoverable:   subRes.GetRecoverable(),
-					}
-					if ev.Positioned || ev.Recoverable {
-						ev.StreamPosition = &StreamPosition{
-							Epoch:  subRes.GetEpoch(),
-							Offset: subRes.GetOffset(),
-						}
+						Channel: channel,
+						Data:    subRes.GetData(),
 					}
 					subscribeHandler(ev)
 				})
@@ -960,9 +912,6 @@ func (c *Client) startReconnecting() error {
 				c.runHandlerSync(func() {
 					for _, pub := range subRes.Publications {
 						c.mu.Lock()
-						if sub, ok := c.serverSubs[channel]; ok {
-							sub.Offset = pub.Offset
-						}
 						c.serverSubs[channel] = sub
 						c.mu.Unlock()
 						publishHandler(ServerPublicationEvent{Channel: channel, Publication: pubFromProto(pub)})
@@ -1062,13 +1011,6 @@ func isServerError(err error) bool {
 	return false
 }
 
-func isTemporaryError(err error) bool {
-	if e, ok := err.(*Error); ok && e.Temporary {
-		return true
-	}
-	return false
-}
-
 func (c *Client) refreshToken() (string, error) {
 	handler := c.config.GetToken
 	if handler == nil {
@@ -1117,14 +1059,8 @@ func (c *Client) sendRefresh() {
 				c.mu.Unlock()
 				return
 			}
-			if r.Error.Temporary {
-				c.handleError(RefreshError{err})
-				c.refreshTimer = time.AfterFunc(10*time.Second, c.sendRefresh)
-				c.mu.Unlock()
-			} else {
-				c.mu.Unlock()
-				c.moveToDisconnected(r.Error.Code, r.Error.Message)
-			}
+			c.mu.Unlock()
+			c.moveToDisconnected(r.Error.Code, r.Error.Message)
 			return
 		}
 		expires := r.Refresh.Expires
@@ -1182,16 +1118,6 @@ func (c *Client) sendConnect(fn func(*deliverprotocol.ConnectResult, error)) err
 
 	if len(c.serverSubs) > 0 {
 		subs := make(map[string]*deliverprotocol.SubscribeRequest)
-		for channel, serverSub := range c.serverSubs {
-			if !serverSub.Recoverable {
-				continue
-			}
-			subs[channel] = &deliverprotocol.SubscribeRequest{
-				Recover: true,
-				Epoch:   serverSub.Epoch,
-				Offset:  serverSub.Offset,
-			}
-		}
 		req.Subs = subs
 	}
 	cmd.Connect = req
@@ -1209,27 +1135,12 @@ func (c *Client) sendConnect(fn func(*deliverprotocol.ConnectResult, error)) err
 	})
 }
 
-type StreamPosition struct {
-	Offset uint64
-	Epoch  string
-}
-
-func (c *Client) sendSubscribe(channel string, data []byte, recover bool, streamPos StreamPosition, token string, positioned bool, recoverable bool, joinLeave bool, fn func(res *deliverprotocol.SubscribeResult, err error)) error {
+func (c *Client) sendSubscribe(channel string, data []byte, token string, joinLeave bool, fn func(res *deliverprotocol.SubscribeResult, err error)) error {
 	params := &deliverprotocol.SubscribeRequest{
 		Channel: channel,
 	}
-
-	if recover {
-		params.Recover = true
-		if streamPos.Offset > 0 {
-			params.Offset = streamPos.Offset
-		}
-		params.Epoch = streamPos.Epoch
-	}
 	params.Token = token
 	params.Data = data
-	params.Positioned = positioned
-	params.Recoverable = recoverable
 	params.JoinLeave = joinLeave
 
 	cmd := &deliverprotocol.Command{
@@ -1615,8 +1526,4 @@ type disconnect struct {
 	Reconnect bool
 }
 
-type serverSub struct {
-	Offset      uint64
-	Epoch       string
-	Recoverable bool
-}
+type serverSub struct{}

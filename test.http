@@ -54,7 +54,6 @@ Content-Type: application/json
   "name": "task2",
   "schedule": "@every 2s",
   "timezone": "Europe/Berlin",
-  "disabled": false,
   "tags": {
     "server": "true:1"
   },
@@ -77,9 +76,8 @@ Content-Type: application/json
 {
   "id": "2",
   "name": "task2",
-  "schedule": "@every 2s",
+  "schedule": "@every 30s",
   "timezone": "Europe/Berlin",
-  "disabled": false,
   "tags": {
     "server": "true:1"
   },
@@ -91,6 +89,117 @@ Content-Type: application/json
     "path": "./main.go"
   }
 } 
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "script",
+  "executor_config": {
+    "command": "./test.sh"
+  }
+} 
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "sql",
+  "executor_config": {
+    "driver": "mysql",
+    "host": "localhost",
+    "port": "3306",
+    "user": "nghia",
+    "password": "root",
+    "dbname": "workflow",
+    "instance": "multi"
+  }
+} 
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "sql",
+  "executor_config": {
+    "driver": "mysql",
+    "host": "localhost",
+    "port": "3306",
+    "user": "nghia",
+    "password": "root",
+    "dbname": "workflow",
+    "sql": "select * from users limit 2",
+    "instance": "multi"
+  }
+} 
+###
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "3",
+  "name": "postgres",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "sql",
+  "executor_config": {
+   "driver": "postgres",
+    "host": "localhost",
+    "port": "5432",
+    "user": "kairos",
+    "password": "kairos",
+    "dbname": "kairos",
+    "otherConfig": "sslmode = disable",
+    "sql": "select * from users"
+  }
+} 
+
+###
+GET http://localhost:8090
+###
+POST http://localhost:8080/v1/runtask
+Content-Type: application/json
+
+{
+  "id": "2"
+}
 ###
 POST http://localhost:8080/v1/queue
 Content-Type: application/json
@@ -108,6 +217,7 @@ Content-Type: application/json
 ###
 GET http://localhost:8080/v1/tasks
 Content-Type: application/json
+
 ###
 GET http://localhost:8080/v1/293/task
 Content-Type: application/json
@@ -120,10 +230,8 @@ Content-Type: application/json
 DELETE http://localhost:8081/v1/295/delete
 Content-Type: application/json
 
-
-
 ###
-GET http://localhost:8080/v1/view/335/executions
+GET http://localhost:8080/v1/view/2/executions
 
 ###
 GET http://localhost:3111/apis/login
@@ -173,14 +281,94 @@ POST http://localhost:8001/apis/v1/service/certificate/create
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIwIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIwIn0.qSvwg2tjV0v050_2i4XZwybDv2aNjmYl0S84MdBzgU8
 
-[
+{
+  "name":"hello",
+  "channel_permissions": [
   {
     "channel_id": 1,
-    "role": 1
+    "role": 3
   }
 ]
+}
 
 ###
 GET http://localhost:8001/apis/v1/service/certificate/list
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIwIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIwIn0.qSvwg2tjV0v050_2i4XZwybDv2aNjmYl0S84MdBzgU8
+
+###
+GET http://localhost:8001/apis/v1/service/certificate/permit
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIxIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.HTwiFg-FhRf9zBsQeoEScu0JONH5j3JVzNhgLHZy0RY
+api-key: 6e679f0a-7ce1-4d9f-a00a-c8ecc086ba57
+
+###
+POST http://localhost:8001/apis/v1/service/workflow/request/sync
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+api-key: 6e679f0a-7ce1-4d9f-a00a-c8ecc086ba57
+
+{
+  "cmd": 4,
+  "run_on": "a_channel",
+  "content":{
+    "msg":{
+      "user_id": 98
+    }
+  }
+}
+
+###
+POST http://localhost:8001/apis/v1/service/functions/create
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+{
+  "content": "function hello(){return \"hello\"}",
+  "name":"hello"
+}
+
+
+###
+GET http://localhost:8001/apis/v1/service/functions/list
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+###
+POST http://localhost:8001/apis/v1/service/graph/get
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+{
+  "workflow_ids": [22,23]
+}
+
+###
+POST http://localhost:8001/apis/v1/service/graph/data
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+{
+  "workflow_ids": [22,23]
+}
+###
+
+GET http://localhost:8001/apis/v1/service/record/client/1
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+###
+POST http://localhost:8001/apis/v1/service/record/message_flows
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+{
+  
+}
+
+###
+POST https://webhook.site/e968b886-1ac0-4549-b584-6d38fe5dac09
+
+{
+  "hello":"OK"
+}

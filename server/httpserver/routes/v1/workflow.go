@@ -11,5 +11,6 @@ func Workflow(ginApp *gin.RouterGroup, ctr *controllers.Controller) {
 	routeGroup.DELETE("/:id/drop", ctr.DropWorkflow)
 	routeGroup.GET("/list", ctr.ListWorkflow)
 	routeGroup.GET("/:id/detail", ctr.DetailWorkflow)
+	routeGroup.POST("/request/sync", ctr.RequestSyncWorkflow)
 
 }

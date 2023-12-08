@@ -1,54 +1,28 @@
 version: '1'
 name: debug
 vars:
-  PAYLOADA: |
-    {
-      "method": "GET",
-      "url": "http://example.com",
-      "headers": "[]",
-      "body": "",
-      "timeout": "30",
-      "expectCode": "200",
-      "expectBody": ""
-    }
-  MY_URL: http://beta.api.nexta.vn
 tasks:
-  a:
-    schedule: '@every 10s'
-    timezone: Asia/Ho_Chi_Minh
-    executor: http
-    clients:
-      - client1
-    payload: |
-      {{.PAYLOADA}} 
-  b:
-    schedule: '@every 5s'
-    deps:
-      - a_task
-    timezone: Asia/Ho_Chi_Minh
-    executor: http
-    clients:
-      - client2
+  user_sql:
+    executor: sql
+    clients: [client1]
     payload: |
       {
-        "method": "GET",
-        "url": "{{.A_TASK_OUTPUT}}",
-        "headers": "[]",
-        "body": "",
-        "timeout": "30",
-        "expectCode": "200",
-        "expectBody": ""
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": "workflow"
       }
+
 brokers:
   brok:
-    listens:
-      - a_task
+    listens: [a_channel]
     flows: |
-      {{if .A_TASK_SUCCESS }}
-        {{set .A_TASK_OUTPUT .MY_URL}}
-        {{send .A_TASK .B_TASK}}
-      {{endif}}
-  brok2:
-    listens:
-      - b_task
-    flows: [a_task]
+      {{get .a_channel ("content") | get ("msg")  
+          | .data | parse | get ("user_id") | .user_id }}{{end}}
+      {{printf ("select *  from users where id = %v") .user_id 
+          | .sql_user }}
+      {{define .req map | put ("sql") .sql_user | .req }}{{end}}
+      {{sendsync .req  .user_sql_task | .result }}
+      {{get .result ("result") |  get ("output") | getp (0) | return }}{{end}}

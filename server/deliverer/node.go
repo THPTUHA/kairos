@@ -306,8 +306,6 @@ func (n *Node) Info() (Info, error) {
 	}, nil
 }
 
-// handleControl handles messages from control channel - control messages used for internal
-// communication between nodes to share state or proto.
 func (n *Node) handleControl(data []byte) error {
 	cmd, err := n.controlDecoder.DecodeCommand(data)
 	if err != nil {
@@ -332,11 +330,7 @@ func (n *Node) handleControl(data []byte) error {
 		return n.hub.unsubscribe(cmd.User, cmd.Channel, Unsubscribe{Code: cmd.Code, Reason: cmd.Reason}, cmd.Client)
 	} else if cmd.Subscribe != nil {
 		cmd := cmd.Subscribe
-		var recoverSince *StreamPosition
-		if cmd.RecoverSince != nil {
-			recoverSince = &StreamPosition{Offset: cmd.RecoverSince.Offset, Epoch: cmd.RecoverSince.Epoch}
-		}
-		return n.hub.subscribe(cmd.User, cmd.Channel, cmd.Client, WithExpireAt(cmd.ExpireAt), WithChannelInfo(cmd.ChannelInfo), WithEmitPresence(cmd.EmitPresence), WithEmitJoinLeave(cmd.EmitJoinLeave), WithPushJoinLeave(cmd.PushJoinLeave), WithSubscribeData(cmd.Data), WithRecoverSince(recoverSince), WithSubscribeSource(uint8(cmd.Source)))
+		return n.hub.subscribe(cmd.User, cmd.Channel, cmd.Client, WithExpireAt(cmd.ExpireAt), WithChannelInfo(cmd.ChannelInfo), WithEmitPresence(cmd.EmitPresence), WithEmitJoinLeave(cmd.EmitJoinLeave), WithPushJoinLeave(cmd.PushJoinLeave), WithSubscribeData(cmd.Data), WithSubscribeSource(uint8(cmd.Source)))
 	} else if cmd.Disconnect != nil {
 		cmd := cmd.Disconnect
 		return n.hub.disconnect(cmd.User, Disconnect{Code: cmd.Code, Reason: cmd.Reason}, cmd.Client, cmd.Whitelist)
@@ -347,13 +341,13 @@ func (n *Node) handleControl(data []byte) error {
 	return nil
 }
 
-func (n *Node) handlePublication(ch string, pub *Publication, sp StreamPosition) error {
+func (n *Node) handlePublication(ch string, pub *Publication) error {
 	numSubscribers := n.hub.NumSubscribers(ch)
 	hasCurrentSubscribers := numSubscribers > 0
 	if !hasCurrentSubscribers {
 		return nil
 	}
-	return n.hub.BroadcastPublication(ch, pub, sp)
+	return n.hub.BroadcastPublication(ch, pub)
 }
 
 func (n *Node) handleJoin(ch string, info *ClientInfo) error {
@@ -378,16 +372,12 @@ func (n *Node) publish(ch string, data []byte, opts ...PublishOption) (PublishRe
 	for _, opt := range opts {
 		opt(pubOpts)
 	}
-	streamPos, err := n.broker.Publish(ch, data, *pubOpts)
-	if err != nil {
-		return PublishResult{}, err
-	}
-	return PublishResult{StreamPosition: streamPos}, nil
+	err := n.broker.Publish(ch, data, *pubOpts)
+	return PublishResult{}, err
 }
 
 // PublishResult returned from Publish operation.
 type PublishResult struct {
-	StreamPosition
 }
 
 func (n *Node) Publish(channel string, data []byte, opts ...PublishOption) (PublishResult, error) {
@@ -400,8 +390,6 @@ func (n *Node) publishJoin(ch string, info *ClientInfo) error {
 	return n.broker.PublishJoin(ch, info)
 }
 
-// publishLeave allows publishing join message into channel when someone subscribes on it
-// or leave message when someone unsubscribes from channel.
 func (n *Node) publishLeave(ch string, info *ClientInfo) error {
 	return n.broker.PublishLeave(ch, info)
 }
@@ -462,12 +450,6 @@ func (n *Node) pubSubscribe(user string, ch string, opts SubscribeOptions) error
 		Client:        opts.clientID,
 		Data:          opts.Data,
 		Source:        uint32(opts.Source),
-	}
-	if opts.RecoverSince != nil {
-		subscribe.RecoverSince = &controlpb.StreamPosition{
-			Offset: opts.RecoverSince.Offset,
-			Epoch:  opts.RecoverSince.Epoch,
-		}
 	}
 	cmd := &controlpb.Command{
 		Uid:       n.uid,
@@ -773,10 +755,9 @@ func pubToProto(pub *Publication) *deliverprotocol.Publication {
 		return nil
 	}
 	return &deliverprotocol.Publication{
-		Offset: pub.Offset,
-		Data:   pub.Data,
-		Info:   infoToProto(pub.Info),
-		Tags:   pub.Tags,
+		Data: pub.Data,
+		Info: infoToProto(pub.Info),
+		Tags: pub.Tags,
 	}
 }
 
@@ -785,10 +766,9 @@ func pubFromProto(pub *deliverprotocol.Publication) *Publication {
 		return nil
 	}
 	return &Publication{
-		Offset: pub.GetOffset(),
-		Data:   pub.Data,
-		Info:   infoFromProto(pub.GetInfo()),
-		Tags:   pub.GetTags(),
+		Data: pub.Data,
+		Info: infoFromProto(pub.GetInfo()),
+		Tags: pub.GetTags(),
 	}
 }
 
@@ -817,14 +797,6 @@ func (n *Node) PresenceStats(ch string) (PresenceStatsResult, error) {
 		return result.(PresenceStatsResult), err
 	}
 	return n.presenceStats(ch)
-}
-
-// HistoryResult contains Publications and current stream top StreamPosition.
-type HistoryResult struct {
-	// StreamPosition embedded here describes current stream top offset and epoch.
-	StreamPosition
-	// Publications extracted from history storage according to HistoryFilter.
-	Publications []*Publication
 }
 
 type nodeRegistry struct {
@@ -965,11 +937,11 @@ type brokerEventHandler struct {
 	node *Node
 }
 
-func (h *brokerEventHandler) HandlePublication(ch string, pub *Publication, sp StreamPosition) error {
+func (h *brokerEventHandler) HandlePublication(ch string, pub *Publication) error {
 	if pub == nil {
 		panic("nil Publication received, this must never happen")
 	}
-	return h.node.handlePublication(ch, pub, sp)
+	return h.node.handlePublication(ch, pub)
 }
 
 // HandleJoin coming from Broker.

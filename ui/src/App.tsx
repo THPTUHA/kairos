@@ -8,6 +8,8 @@ import CommonLayout from './layout/CommonLayout';
 import ClientPage from './pages/clients';
 import ChannelPage from './pages/channels';
 import CertificatePage from './pages/certificates';
+import FuntionPage from './pages/functions';
+import GraphPage from './pages/graph';
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
         <Route path="/clients" element={<ClientPage />} />
         <Route path="/channels" element={<ChannelPage />} />
         <Route path="/certificates" element={<CertificatePage />} />
+        <Route path="/functions" element={<FuntionPage />} />
+        <Route path="/graphs" element={<GraphPage />} />
       </Routes>
     </CommonLayout>
   );

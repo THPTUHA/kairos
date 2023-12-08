@@ -10,11 +10,7 @@ type PresenceStats struct {
 
 // PresenceManager is responsible for channel presence management.
 type PresenceManager interface {
-	// Presence returns actual presence information for channel.
 	Presence(ch string) (map[string]*ClientInfo, error)
-	// PresenceStats returns short stats of current presence data
-	// suitable for scenarios when caller does not need full client
-	// info returned by presence method.
 	PresenceStats(ch string) (PresenceStats, error)
 	// AddPresence sets or updates presence information in channel
 	// for connection with specified identifier. PresenceManager should

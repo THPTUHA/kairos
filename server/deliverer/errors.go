@@ -14,9 +14,8 @@ type Error struct {
 
 func (e *Error) toProto() *deliverprotocol.Error {
 	return &deliverprotocol.Error{
-		Code:      e.Code,
-		Message:   e.Message,
-		Temporary: e.Temporary,
+		Code:    e.Code,
+		Message: e.Message,
 	}
 }
 

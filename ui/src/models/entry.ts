@@ -1,5 +1,5 @@
 
-interface Point {
+export interface Point {
     id: number;
     name: string;
     type: number;
@@ -8,6 +8,7 @@ interface Point {
 
 export interface Entry {
     id: number;
+    flow_id: number;
     status: number;
     timestamp: number;
     src: Point;

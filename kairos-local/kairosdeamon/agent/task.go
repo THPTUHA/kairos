@@ -1,12 +1,9 @@
 package agent
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
-	"strings"
-	"text/template"
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/extcron"
@@ -50,17 +47,14 @@ type Task struct {
 	Next           time.Time                   `json:"next"`
 	Ephemeral      bool                        `json:"ephemeral"`
 	ExpiresAt      ntime.NullableTime          `json:"expires_at"`
-	Deps           []string                    `json:"deps"`
-
-	UserDefineVars map[string]string `json:"user_define_vars,omitempty"`
-	DynamicVars    map[string]bool   `json:"dynamic_vars,omitempty"`
+	UserDefineVars map[string]string           `json:"user_define_vars,omitempty"`
+	Wait           string                      `json:"wait"`
 
 	logger *logrus.Entry
 }
 
 func (t *Task) Setup(wt *workflow.Task) error {
 	var ec plugin.ExecutorPluginConfig
-	fmt.Println("...............")
 	fmt.Println(wt.Payload)
 	err := json.Unmarshal([]byte(wt.Payload), &ec)
 	if err != nil {
@@ -75,9 +69,8 @@ func (t *Task) Setup(wt *workflow.Task) error {
 	t.Retries = wt.Retries
 	t.Executor = wt.Executor
 	t.ExecutorConfig = ec
-	t.Deps = wt.Deps
-	t.DynamicVars = wt.DynamicVars
 	t.UserDefineVars = wt.UserDefineVars
+	t.Wait = wt.Wait
 	return nil
 }
 
@@ -109,111 +102,37 @@ func (t *Task) isRunnable(logger *logrus.Entry) bool {
 		return false
 	}
 
-	// TODO check thời gian còn lại của schedule, nếu hết hạn mà chưa đủ điều kiện chạy thì set về no schedule
-	fmt.Printf("Dynamic Variable %+v\n", t.DynamicVars)
-	if len(t.Deps) > 0 && len(t.DynamicVars) > 0 {
-		vars := make(map[string]string)
-		err := t.Agent.Store.GetQueue(fmt.Sprint(t.WorkflowID), &vars)
-		fmt.Printf("[run 1] %+v\n", vars)
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"task":   t.Name,
-				"action": "check runnable",
-			}).Error(err)
-			return false
-		}
-		fmt.Println("[run 2]")
-		tempVars := map[string]string{}
-		accept := true
-		for k := range t.DynamicVars {
-			c := workflow.GetRootDefaultVar(k)
-			fmt.Println("???", c)
-			value, ok := vars[c]
-			if !ok {
-				accept = false
-				break
-			}
-			if strings.HasSuffix(k, workflow.SubTaskOutPut) {
-				var t workflow.Task
-				err := json.Unmarshal([]byte(value), &t)
-				if err != nil {
-					logger.WithFields(logrus.Fields{
-						"task":   t.Name,
-						"action": "unmarshal task",
-					}).Error(err)
-					return false
-				}
-				tempVars[k] = t.Input
-			}
-			// TODO Check INPUT
-		}
-		fmt.Printf("[run 3] %+v\n", tempVars)
-		if !accept {
-			for k, v := range vars {
-				t.Agent.Store.SetQueue(fmt.Sprint(t.WorkflowID), k, v)
-				if err != nil {
-					logger.WithFields(logrus.Fields{
-						"task":   t.Name,
-						"action": "rolback queue",
-					}).Error(err)
-				}
-			}
-			return false
-		}
-
-		fmt.Println("[run 4]")
-		tmp := t.ExecutorConfig
-		c, err := json.Marshal(t.ExecutorConfig)
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"task":   t.Name,
-				"action": "marshal executor",
-			}).Error(err)
-			return false
-		}
-		fmt.Println("[run 5]")
-		// TODO compile config
-		tmpl, err := template.New("compile").Parse(string(c))
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"task":   t.Name,
-				"action": "compile executor",
-			}).Error(err)
-			return false
-		}
-		fmt.Println("[run 6]")
-		var buf bytes.Buffer
-		// to upper
-		parse := make(map[string]string)
-		for k, v := range tempVars {
-			parse[strings.ToUpper(k)] = v
-		}
-		err = tmpl.Execute(&buf, &parse)
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"task":   t.Name,
-				"action": "execute compile executor",
-			}).Error(err)
-			return false
-		}
-		fmt.Println("[run 7]")
-		err = json.Unmarshal(buf.Bytes(), &tmp)
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"task":   t.Name,
-				"action": "unmarshal executor",
-			}).Error(err)
-			return false
-		}
-		fmt.Println("[run 8]")
-		t.ExecutorConfig = tmp
-		fmt.Printf("[FUCKING GO HERE] config = %+v\n", tmp)
-	}
 	return true
 }
 
 func (t *Task) ToBytes() ([]byte, error) {
 	return json.Marshal(&t)
+}
+
+func (t *Task) RequestRun(re *workflow.CmdTask) {
+	t.logger.WithFields(logrus.Fields{
+		"task": t.Name,
+		"id":   t.ID,
+	}).Debug("start request task")
+
+	if t.Agent == nil {
+		t.logger.Fatal("task: agent not set")
+	}
+
+	if t.isRunnable(t.logger) {
+		t.logger.WithFields(logrus.Fields{
+			"task":     t.Name,
+			"schedule": t.Schedule,
+		}).Debug("task: Run task")
+
+		cronInspect.Set(t.ID, t)
+
+		ex := NewExecution(t.ID)
+
+		if err := t.Agent.Run(t, ex, re); err != nil {
+			t.logger.WithError(err).Error("task: Error running task")
+		}
+	}
 }
 
 // Impletation corn
@@ -237,10 +156,68 @@ func (t *Task) Run() {
 
 		ex := NewExecution(t.ID)
 
-		if err := t.Agent.Run(t, ex); err != nil {
+		if err := t.Agent.Run(t, ex, nil); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
 		}
 	}
+}
+
+func (t *Task) RunTrigger(re *workflow.CmdTask) error {
+	t.logger.WithFields(logrus.Fields{
+		"task": t.Name,
+		"id":   t.ID,
+	}).Debug("start task sync")
+
+	if t.Agent == nil {
+		t.logger.Fatal("task: agent not set")
+	}
+
+	if t.isRunnable(t.logger) {
+		t.logger.WithFields(logrus.Fields{
+			"task":     t.Name,
+			"schedule": t.Schedule,
+		}).Debug("task: Run task")
+
+		cronInspect.Set(t.ID, t)
+
+		ex := NewExecution(t.ID)
+
+		if err := t.Agent.Run(t, ex, re); err != nil {
+			t.logger.WithError(err).Error("task: Error running task")
+			return err
+		}
+	}
+	return fmt.Errorf("task can't run")
+}
+
+func (t *Task) RunSync(re *workflow.CmdTask) (*workflow.Result, error) {
+	t.logger.WithFields(logrus.Fields{
+		"task": t.Name,
+		"id":   t.ID,
+	}).Debug("start task sync")
+
+	if t.Agent == nil {
+		t.logger.Fatal("task: agent not set")
+	}
+
+	if t.isRunnable(t.logger) {
+		t.logger.WithFields(logrus.Fields{
+			"task":     t.Name,
+			"schedule": t.Schedule,
+		}).Debug("task: Run task")
+
+		cronInspect.Set(t.ID, t)
+
+		ex := NewExecution(t.ID)
+
+		if result, err := t.Agent.RunSync(t, ex, re); err != nil {
+			t.logger.WithError(err).Error("task: Error running task")
+			return result, err
+		} else {
+			return result, nil
+		}
+	}
+	return nil, fmt.Errorf("task can't run")
 }
 
 func (t *Task) Validate() error {

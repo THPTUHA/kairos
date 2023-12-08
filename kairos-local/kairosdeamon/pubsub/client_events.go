@@ -18,13 +18,8 @@ type ServerPublicationEvent struct {
 }
 
 type ServerSubscribedEvent struct {
-	Channel        string
-	WasRecovering  bool
-	Recovered      bool
-	Recoverable    bool
-	Positioned     bool
-	StreamPosition *StreamPosition
-	Data           []byte
+	Channel string
+	Data    []byte
 }
 
 // ServerJoinEvent has info about user who left channel.

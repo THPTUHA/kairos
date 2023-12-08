@@ -110,17 +110,10 @@ const EntrySummary: React.FC<EntrySummaryProps> = ({ entry }) => {
     </div>
 };
 
-
-
-
 export const EntryDetailed: React.FC = () => {
     const focusedItem = useRecoilValue(focusedItemAtom);
     const query = useRecoilValue(queryAtom);
     const [isLoading, setIsLoading] = useState(false);
-    // const [items, setItems] = useS
-    // useEffect(()=>{
-
-    // },[focusedItem])
     const items: TabsProps['items'] = [
         {
             key: '1',

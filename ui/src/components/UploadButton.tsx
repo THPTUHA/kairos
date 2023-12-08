@@ -3,8 +3,7 @@ import { parse } from "../helper/objectParser";
 
 export const UploadButton = <T extends any>(props: { onUpload: (value: T) => void; onError: (error: Error) => void }) => {
     const handleFiles = (files: FileList) => {
-        console.log(files[0])
-        files[0]
+        files && files[0] && files[0]
             .text()
             .then(value => props.onUpload(parse(value) as T))
             .catch(props.onError);

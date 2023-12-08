@@ -51,7 +51,7 @@ func (s *HTTP) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*pr
 }
 
 func (s *HTTP) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
-	output, _ := circbuf.NewBuffer(maxBufSize)
+	output := circbuf.NewBuffer(maxBufSize)
 	var debug bool
 	if args.Config["debug"] != "" {
 		debug = true

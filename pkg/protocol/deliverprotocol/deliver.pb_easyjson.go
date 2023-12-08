@@ -203,10 +203,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.Expires = bool(in.Bool())
 		case "ttl":
 			out.Ttl = uint32(in.Uint32())
-		case "recoverable":
-			out.Recoverable = bool(in.Bool())
-		case "epoch":
-			out.Epoch = string(in.String())
 		case "publications":
 			if in.IsNull() {
 				in.Skip()
@@ -238,18 +234,10 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				}
 				in.Delim(']')
 			}
-		case "recovered":
-			out.Recovered = bool(in.Bool())
-		case "offset":
-			out.Offset = uint64(in.Uint64())
-		case "positioned":
-			out.Positioned = bool(in.Bool())
 		case "data":
 			if data := in.Raw(); in.Ok() {
 				in.AddError((out.Data).UnmarshalJSON(data))
 			}
-		case "was_recovering":
-			out.WasRecovering = bool(in.Bool())
 		default:
 			in.SkipRecursive()
 		}
@@ -280,26 +268,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		out.Uint32(uint32(in.Ttl))
 	}
-	if in.Recoverable {
-		const prefix string = ",\"recoverable\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Recoverable))
-	}
-	if in.Epoch != "" {
-		const prefix string = ",\"epoch\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Epoch))
-	}
 	if len(in.Publications) != 0 {
 		const prefix string = ",\"publications\":"
 		if first {
@@ -323,36 +291,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawByte(']')
 		}
 	}
-	if in.Recovered {
-		const prefix string = ",\"recovered\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Recovered))
-	}
-	if in.Offset != 0 {
-		const prefix string = ",\"offset\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Uint64(uint64(in.Offset))
-	}
-	if in.Positioned {
-		const prefix string = ",\"positioned\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Positioned))
-	}
 	if len(in.Data) != 0 {
 		const prefix string = ",\"data\":"
 		if first {
@@ -362,16 +300,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		out.Raw((in.Data).MarshalJSON())
-	}
-	if in.WasRecovering {
-		const prefix string = ",\"was_recovering\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.WasRecovering))
 	}
 	out.RawByte('}')
 }
@@ -408,20 +336,10 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.Channel = string(in.String())
 		case "token":
 			out.Token = string(in.String())
-		case "recover":
-			out.Recover = bool(in.Bool())
-		case "epoch":
-			out.Epoch = string(in.String())
-		case "offset":
-			out.Offset = uint64(in.Uint64())
 		case "data":
 			if data := in.Raw(); in.Ok() {
 				in.AddError((out.Data).UnmarshalJSON(data))
 			}
-		case "positioned":
-			out.Positioned = bool(in.Bool())
-		case "recoverable":
-			out.Recoverable = bool(in.Bool())
 		case "join_leave":
 			out.JoinLeave = bool(in.Bool())
 		default:
@@ -454,36 +372,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		out.String(string(in.Token))
 	}
-	if in.Recover {
-		const prefix string = ",\"recover\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Recover))
-	}
-	if in.Epoch != "" {
-		const prefix string = ",\"epoch\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Epoch))
-	}
-	if in.Offset != 0 {
-		const prefix string = ",\"offset\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Uint64(uint64(in.Offset))
-	}
 	if len(in.Data) != 0 {
 		const prefix string = ",\"data\":"
 		if first {
@@ -493,26 +381,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		out.Raw((in.Data).MarshalJSON())
-	}
-	if in.Positioned {
-		const prefix string = ",\"positioned\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Positioned))
-	}
-	if in.Recoverable {
-		const prefix string = ",\"recoverable\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Recoverable))
 	}
 	if in.JoinLeave {
 		const prefix string = ",\"join_leave\":"
@@ -555,14 +423,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			continue
 		}
 		switch key {
-		case "recoverable":
-			out.Recoverable = bool(in.Bool())
-		case "epoch":
-			out.Epoch = string(in.String())
-		case "offset":
-			out.Offset = uint64(in.Uint64())
-		case "positioned":
-			out.Positioned = bool(in.Bool())
 		case "data":
 			if data := in.Raw(); in.Ok() {
 				in.AddError((out.Data).UnmarshalJSON(data))
@@ -581,50 +441,10 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 	out.RawByte('{')
 	first := true
 	_ = first
-	if in.Recoverable {
-		const prefix string = ",\"recoverable\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.Bool(bool(in.Recoverable))
-	}
-	if in.Epoch != "" {
-		const prefix string = ",\"epoch\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Epoch))
-	}
-	if in.Offset != 0 {
-		const prefix string = ",\"offset\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Uint64(uint64(in.Offset))
-	}
-	if in.Positioned {
-		const prefix string = ",\"positioned\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Positioned))
-	}
 	if len(in.Data) != 0 {
 		const prefix string = ",\"data\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
+		first = false
+		out.RawString(prefix[1:])
 		out.Raw((in.Data).MarshalJSON())
 	}
 	out.RawByte('}')
@@ -769,72 +589,7 @@ func (v SubRefreshRequest) MarshalEasyJSON(w *writer) {
 func (v *SubRefreshRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild7(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(in *jlexer.Lexer, out *StreamPosition) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "offset":
-			out.Offset = uint64(in.Uint64())
-		case "epoch":
-			out.Epoch = string(in.String())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(out *writer, in StreamPosition) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	if in.Offset != 0 {
-		const prefix string = ",\"offset\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.Uint64(uint64(in.Offset))
-	}
-	if in.Epoch != "" {
-		const prefix string = ",\"epoch\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Epoch))
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v StreamPosition) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *StreamPosition) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(in *jlexer.Lexer, out *SendRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(in *jlexer.Lexer, out *SendRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -867,7 +622,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(out *writer, in SendRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(out *writer, in SendRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -882,14 +637,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v SendRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *SendRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild8(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(in *jlexer.Lexer, out *Reply) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(in *jlexer.Lexer, out *Reply) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -990,16 +745,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				}
 				(*out.PresenceStats).UnmarshalEasyJSON(in)
 			}
-		case "history":
-			if in.IsNull() {
-				in.Skip()
-				out.History = nil
-			} else {
-				if out.History == nil {
-					out.History = new(HistoryResult)
-				}
-				(*out.History).UnmarshalEasyJSON(in)
-			}
 		case "ping":
 			if in.IsNull() {
 				in.Skip()
@@ -1009,16 +754,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 					out.Ping = new(PingResult)
 				}
 				(*out.Ping).UnmarshalEasyJSON(in)
-			}
-		case "rpc":
-			if in.IsNull() {
-				in.Skip()
-				out.Rpc = nil
-			} else {
-				if out.Rpc == nil {
-					out.Rpc = new(RPCResult)
-				}
-				(*out.Rpc).UnmarshalEasyJSON(in)
 			}
 		case "refresh":
 			if in.IsNull() {
@@ -1050,7 +785,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(out *writer, in Reply) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(out *writer, in Reply) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1140,16 +875,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		(*in.PresenceStats).MarshalEasyJSON(out)
 	}
-	if in.History != nil {
-		const prefix string = ",\"history\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		(*in.History).MarshalEasyJSON(out)
-	}
 	if in.Ping != nil {
 		const prefix string = ",\"ping\":"
 		if first {
@@ -1159,16 +884,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		(*in.Ping).MarshalEasyJSON(out)
-	}
-	if in.Rpc != nil {
-		const prefix string = ",\"rpc\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		(*in.Rpc).MarshalEasyJSON(out)
 	}
 	if in.Refresh != nil {
 		const prefix string = ",\"refresh\":"
@@ -1195,14 +910,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Reply) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Reply) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild9(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(in *jlexer.Lexer, out *RefreshResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(in *jlexer.Lexer, out *RefreshResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1239,7 +954,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(out *writer, in RefreshResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(out *writer, in RefreshResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1284,14 +999,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v RefreshResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *RefreshResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild10(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(in *jlexer.Lexer, out *RefreshRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(in *jlexer.Lexer, out *RefreshRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1322,7 +1037,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(out *writer, in RefreshRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(out *writer, in RefreshRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1337,14 +1052,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v RefreshRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *RefreshRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild11(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(in *jlexer.Lexer, out *Refresh) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(in *jlexer.Lexer, out *Refresh) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1377,7 +1092,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(out *writer, in Refresh) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(out *writer, in Refresh) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1402,136 +1117,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Refresh) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Refresh) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild12(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(in *jlexer.Lexer, out *RPCResult) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "data":
-			if data := in.Raw(); in.Ok() {
-				in.AddError((out.Data).UnmarshalJSON(data))
-			}
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(out *writer, in RPCResult) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	if len(in.Data) != 0 {
-		const prefix string = ",\"data\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.Raw((in.Data).MarshalJSON())
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v RPCResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *RPCResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(in *jlexer.Lexer, out *RPCRequest) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "data":
-			if data := in.Raw(); in.Ok() {
-				in.AddError((out.Data).UnmarshalJSON(data))
-			}
-		case "method":
-			out.Method = string(in.String())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(out *writer, in RPCRequest) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	if len(in.Data) != 0 {
-		const prefix string = ",\"data\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.Raw((in.Data).MarshalJSON())
-	}
-	if in.Method != "" {
-		const prefix string = ",\"method\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Method))
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v RPCRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *RPCRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(in *jlexer.Lexer, out *Push) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(in *jlexer.Lexer, out *Push) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1652,7 +1245,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(out *writer, in Push) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(out *writer, in Push) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1757,14 +1350,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Push) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Push) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild13(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(in *jlexer.Lexer, out *PublishResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(in *jlexer.Lexer, out *PublishResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1793,7 +1386,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(out *writer, in PublishResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(out *writer, in PublishResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1802,14 +1395,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PublishResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PublishResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild14(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(in *jlexer.Lexer, out *PublishRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(in *jlexer.Lexer, out *PublishRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1844,7 +1437,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(out *writer, in PublishRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(out *writer, in PublishRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1869,14 +1462,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PublishRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PublishRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild15(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(in *jlexer.Lexer, out *Publication) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(in *jlexer.Lexer, out *Publication) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -1909,8 +1502,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				}
 				(*out.Info).UnmarshalEasyJSON(in)
 			}
-		case "offset":
-			out.Offset = uint64(in.Uint64())
 		case "tags":
 			if in.IsNull() {
 				in.Skip()
@@ -1941,7 +1532,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(out *writer, in Publication) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(out *writer, in Publication) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -1960,16 +1551,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		(*in.Info).MarshalEasyJSON(out)
-	}
-	if in.Offset != 0 {
-		const prefix string = ",\"offset\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Uint64(uint64(in.Offset))
 	}
 	if len(in.Tags) != 0 {
 		const prefix string = ",\"tags\":"
@@ -2000,14 +1581,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Publication) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Publication) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild16(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(in *jlexer.Lexer, out *PresenceStatsResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(in *jlexer.Lexer, out *PresenceStatsResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2040,7 +1621,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(out *writer, in PresenceStatsResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(out *writer, in PresenceStatsResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2059,14 +1640,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PresenceStatsResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PresenceStatsResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild17(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(in *jlexer.Lexer, out *PresenceStatsRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(in *jlexer.Lexer, out *PresenceStatsRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2097,7 +1678,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(out *writer, in PresenceStatsRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(out *writer, in PresenceStatsRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2112,14 +1693,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PresenceStatsRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PresenceStatsRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild18(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(in *jlexer.Lexer, out *PresenceResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(in *jlexer.Lexer, out *PresenceResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2172,7 +1753,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(out *writer, in PresenceResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(out *writer, in PresenceResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2206,14 +1787,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PresenceResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PresenceResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild19(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(in *jlexer.Lexer, out *PresenceRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(in *jlexer.Lexer, out *PresenceRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2244,7 +1825,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(out *writer, in PresenceRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(out *writer, in PresenceRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2259,14 +1840,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PresenceRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PresenceRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild20(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(in *jlexer.Lexer, out *PingResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(in *jlexer.Lexer, out *PingResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2295,7 +1876,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(out *writer, in PingResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(out *writer, in PingResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2304,14 +1885,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PingResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PingResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild21(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(in *jlexer.Lexer, out *PingRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(in *jlexer.Lexer, out *PingRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2340,7 +1921,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(out *writer, in PingRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(out *writer, in PingRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2349,14 +1930,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v PingRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *PingRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild22(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(in *jlexer.Lexer, out *Message) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(in *jlexer.Lexer, out *Message) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2389,7 +1970,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(out *writer, in Message) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(out *writer, in Message) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2404,14 +1985,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Message) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Message) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild23(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(in *jlexer.Lexer, out *Leave) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(in *jlexer.Lexer, out *Leave) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2450,7 +2031,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(out *writer, in Leave) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(out *writer, in Leave) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2465,14 +2046,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Leave) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Leave) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild24(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(in *jlexer.Lexer, out *Join) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(in *jlexer.Lexer, out *Join) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2511,7 +2092,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(out *writer, in Join) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(out *writer, in Join) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2526,221 +2107,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Join) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Join) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild25(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(in *jlexer.Lexer, out *HistoryResult) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "publications":
-			if in.IsNull() {
-				in.Skip()
-				out.Publications = nil
-			} else {
-				in.Delim('[')
-				if out.Publications == nil {
-					if !in.IsDelim(']') {
-						out.Publications = make([]*Publication, 0, 8)
-					} else {
-						out.Publications = []*Publication{}
-					}
-				} else {
-					out.Publications = (out.Publications)[:0]
-				}
-				for !in.IsDelim(']') {
-					var v8 *Publication
-					if in.IsNull() {
-						in.Skip()
-						v8 = nil
-					} else {
-						if v8 == nil {
-							v8 = new(Publication)
-						}
-						(*v8).UnmarshalEasyJSON(in)
-					}
-					out.Publications = append(out.Publications, v8)
-					in.WantComma()
-				}
-				in.Delim(']')
-			}
-		case "epoch":
-			out.Epoch = string(in.String())
-		case "offset":
-			out.Offset = uint64(in.Uint64())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(out *writer, in HistoryResult) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	{
-		const prefix string = ",\"publications\":"
-		out.RawString(prefix[1:])
-		if in.Publications == nil && (out.Flags&nilSliceAsEmpty) == 0 {
-			out.RawString("null")
-		} else {
-			out.RawByte('[')
-			for v9, v10 := range in.Publications {
-				if v9 > 0 {
-					out.RawByte(',')
-				}
-				if v10 == nil {
-					out.RawString("null")
-				} else {
-					(*v10).MarshalEasyJSON(out)
-				}
-			}
-			out.RawByte(']')
-		}
-	}
-	{
-		const prefix string = ",\"epoch\":"
-		out.RawString(prefix)
-		out.String(string(in.Epoch))
-	}
-	{
-		const prefix string = ",\"offset\":"
-		out.RawString(prefix)
-		out.Uint64(uint64(in.Offset))
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v HistoryResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *HistoryResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(in *jlexer.Lexer, out *HistoryRequest) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "channel":
-			out.Channel = string(in.String())
-		case "limit":
-			out.Limit = int32(in.Int32())
-		case "since":
-			if in.IsNull() {
-				in.Skip()
-				out.Since = nil
-			} else {
-				if out.Since == nil {
-					out.Since = new(StreamPosition)
-				}
-				(*out.Since).UnmarshalEasyJSON(in)
-			}
-		case "reverse":
-			out.Reverse = bool(in.Bool())
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(out *writer, in HistoryRequest) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	if in.Channel != "" {
-		const prefix string = ",\"channel\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.String(string(in.Channel))
-	}
-	if in.Limit != 0 {
-		const prefix string = ",\"limit\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Int32(int32(in.Limit))
-	}
-	if in.Since != nil {
-		const prefix string = ",\"since\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		(*in.Since).MarshalEasyJSON(out)
-	}
-	if in.Reverse {
-		const prefix string = ",\"reverse\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Reverse))
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v HistoryRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *HistoryRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(in *jlexer.Lexer, out *Error) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(in *jlexer.Lexer, out *Error) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2763,8 +2137,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.Code = uint32(in.Uint32())
 		case "message":
 			out.Message = string(in.String())
-		case "temporary":
-			out.Temporary = bool(in.Bool())
 		default:
 			in.SkipRecursive()
 		}
@@ -2775,7 +2147,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(out *writer, in Error) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(out *writer, in Error) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2795,108 +2167,19 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		out.String(string(in.Message))
 	}
-	if in.Temporary {
-		const prefix string = ",\"temporary\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Temporary))
-	}
 	out.RawByte('}')
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Error) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Error) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild26(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(in *jlexer.Lexer, out *EmulationRequest) {
-	isTopLevel := in.IsStart()
-	if in.IsNull() {
-		if isTopLevel {
-			in.Consumed()
-		}
-		in.Skip()
-		return
-	}
-	in.Delim('{')
-	for !in.IsDelim('}') {
-		key := in.UnsafeFieldName(false)
-		in.WantColon()
-		if in.IsNull() {
-			in.Skip()
-			in.WantComma()
-			continue
-		}
-		switch key {
-		case "node":
-			out.Node = string(in.String())
-		case "session":
-			out.Session = string(in.String())
-		case "data":
-			if data := in.Raw(); in.Ok() {
-				in.AddError((out.Data).UnmarshalJSON(data))
-			}
-		default:
-			in.SkipRecursive()
-		}
-		in.WantComma()
-	}
-	in.Delim('}')
-	if isTopLevel {
-		in.Consumed()
-	}
-}
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(out *writer, in EmulationRequest) {
-	out.RawByte('{')
-	first := true
-	_ = first
-	if in.Node != "" {
-		const prefix string = ",\"node\":"
-		first = false
-		out.RawString(prefix[1:])
-		out.String(string(in.Node))
-	}
-	if in.Session != "" {
-		const prefix string = ",\"session\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Session))
-	}
-	if len(in.Data) != 0 {
-		const prefix string = ",\"data\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Raw((in.Data).MarshalJSON())
-	}
-	out.RawByte('}')
-}
-
-// MarshalEasyJSON supports easyjson.Marshaler interface
-func (v EmulationRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(w, v)
-}
-
-// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
-func (v *EmulationRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(l, v)
-}
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild33(in *jlexer.Lexer, out *Disconnect) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(in *jlexer.Lexer, out *Disconnect) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2931,7 +2214,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild33(out *writer, in Disconnect) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(out *writer, in Disconnect) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -2966,14 +2249,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Disconnect) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild33(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Disconnect) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild33(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild27(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild34(in *jlexer.Lexer, out *ConnectResult) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(in *jlexer.Lexer, out *ConnectResult) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -2994,8 +2277,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		switch key {
 		case "client":
 			out.Client = string(in.String())
-		case "version":
-			out.Version = string(in.String())
 		case "expires":
 			out.Expires = bool(in.Bool())
 		case "ttl":
@@ -3017,25 +2298,23 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				for !in.IsDelim('}') {
 					key := string(in.String())
 					in.WantColon()
-					var v11 *SubscribeResult
+					var v8 *SubscribeResult
 					if in.IsNull() {
 						in.Skip()
-						v11 = nil
+						v8 = nil
 					} else {
-						if v11 == nil {
-							v11 = new(SubscribeResult)
+						if v8 == nil {
+							v8 = new(SubscribeResult)
 						}
-						(*v11).UnmarshalEasyJSON(in)
+						(*v8).UnmarshalEasyJSON(in)
 					}
-					(out.Subs)[key] = v11
+					(out.Subs)[key] = v8
 					in.WantComma()
 				}
 				in.Delim('}')
 			}
 		case "ping":
 			out.Ping = uint32(in.Uint32())
-		case "pong":
-			out.Pong = bool(in.Bool())
 		case "session":
 			out.Session = string(in.String())
 		case "node":
@@ -3050,7 +2329,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild34(out *writer, in ConnectResult) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(out *writer, in ConnectResult) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -3059,16 +2338,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		first = false
 		out.RawString(prefix[1:])
 		out.String(string(in.Client))
-	}
-	if in.Version != "" {
-		const prefix string = ",\"version\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Version))
 	}
 	if in.Expires {
 		const prefix string = ",\"expires\":"
@@ -3110,19 +2379,19 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		{
 			out.RawByte('{')
-			v12First := true
-			for v12Name, v12Value := range in.Subs {
-				if v12First {
-					v12First = false
+			v9First := true
+			for v9Name, v9Value := range in.Subs {
+				if v9First {
+					v9First = false
 				} else {
 					out.RawByte(',')
 				}
-				out.String(string(v12Name))
+				out.String(string(v9Name))
 				out.RawByte(':')
-				if v12Value == nil {
+				if v9Value == nil {
 					out.RawString("null")
 				} else {
-					(*v12Value).MarshalEasyJSON(out)
+					(*v9Value).MarshalEasyJSON(out)
 				}
 			}
 			out.RawByte('}')
@@ -3137,16 +2406,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		out.Uint32(uint32(in.Ping))
-	}
-	if in.Pong {
-		const prefix string = ",\"pong\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Pong))
 	}
 	if in.Session != "" {
 		const prefix string = ",\"session\":"
@@ -3173,14 +2432,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v ConnectResult) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild34(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *ConnectResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild34(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild28(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild35(in *jlexer.Lexer, out *ConnectRequest) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(in *jlexer.Lexer, out *ConnectRequest) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -3218,25 +2477,23 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				for !in.IsDelim('}') {
 					key := string(in.String())
 					in.WantColon()
-					var v13 *SubscribeRequest
+					var v10 *SubscribeRequest
 					if in.IsNull() {
 						in.Skip()
-						v13 = nil
+						v10 = nil
 					} else {
-						if v13 == nil {
-							v13 = new(SubscribeRequest)
+						if v10 == nil {
+							v10 = new(SubscribeRequest)
 						}
-						(*v13).UnmarshalEasyJSON(in)
+						(*v10).UnmarshalEasyJSON(in)
 					}
-					(out.Subs)[key] = v13
+					(out.Subs)[key] = v10
 					in.WantComma()
 				}
 				in.Delim('}')
 			}
 		case "name":
 			out.Name = string(in.String())
-		case "version":
-			out.Version = string(in.String())
 		default:
 			in.SkipRecursive()
 		}
@@ -3247,7 +2504,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild35(out *writer, in ConnectRequest) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(out *writer, in ConnectRequest) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -3277,19 +2534,19 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		{
 			out.RawByte('{')
-			v14First := true
-			for v14Name, v14Value := range in.Subs {
-				if v14First {
-					v14First = false
+			v11First := true
+			for v11Name, v11Value := range in.Subs {
+				if v11First {
+					v11First = false
 				} else {
 					out.RawByte(',')
 				}
-				out.String(string(v14Name))
+				out.String(string(v11Name))
 				out.RawByte(':')
-				if v14Value == nil {
+				if v11Value == nil {
 					out.RawString("null")
 				} else {
-					(*v14Value).MarshalEasyJSON(out)
+					(*v11Value).MarshalEasyJSON(out)
 				}
 			}
 			out.RawByte('}')
@@ -3305,29 +2562,19 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		out.String(string(in.Name))
 	}
-	if in.Version != "" {
-		const prefix string = ",\"version\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.String(string(in.Version))
-	}
 	out.RawByte('}')
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v ConnectRequest) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild35(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *ConnectRequest) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild35(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild29(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild36(in *jlexer.Lexer, out *Connect) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(in *jlexer.Lexer, out *Connect) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -3365,17 +2612,17 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				for !in.IsDelim('}') {
 					key := string(in.String())
 					in.WantColon()
-					var v15 *SubscribeResult
+					var v12 *SubscribeResult
 					if in.IsNull() {
 						in.Skip()
-						v15 = nil
+						v12 = nil
 					} else {
-						if v15 == nil {
-							v15 = new(SubscribeResult)
+						if v12 == nil {
+							v12 = new(SubscribeResult)
 						}
-						(*v15).UnmarshalEasyJSON(in)
+						(*v12).UnmarshalEasyJSON(in)
 					}
-					(out.Subs)[key] = v15
+					(out.Subs)[key] = v12
 					in.WantComma()
 				}
 				in.Delim('}')
@@ -3386,8 +2633,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.Ttl = uint32(in.Uint32())
 		case "ping":
 			out.Ping = uint32(in.Uint32())
-		case "pong":
-			out.Pong = bool(in.Bool())
 		case "session":
 			out.Session = string(in.String())
 		case "node":
@@ -3402,7 +2647,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild36(out *writer, in Connect) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(out *writer, in Connect) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -3432,19 +2677,19 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		{
 			out.RawByte('{')
-			v16First := true
-			for v16Name, v16Value := range in.Subs {
-				if v16First {
-					v16First = false
+			v13First := true
+			for v13Name, v13Value := range in.Subs {
+				if v13First {
+					v13First = false
 				} else {
 					out.RawByte(',')
 				}
-				out.String(string(v16Name))
+				out.String(string(v13Name))
 				out.RawByte(':')
-				if v16Value == nil {
+				if v13Value == nil {
 					out.RawString("null")
 				} else {
-					(*v16Value).MarshalEasyJSON(out)
+					(*v13Value).MarshalEasyJSON(out)
 				}
 			}
 			out.RawByte('}')
@@ -3480,16 +2725,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		out.Uint32(uint32(in.Ping))
 	}
-	if in.Pong {
-		const prefix string = ",\"pong\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		out.Bool(bool(in.Pong))
-	}
 	if in.Session != "" {
 		const prefix string = ",\"session\":"
 		if first {
@@ -3515,14 +2750,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Connect) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild36(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Connect) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild36(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild30(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild37(in *jlexer.Lexer, out *Command) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(in *jlexer.Lexer, out *Command) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -3603,16 +2838,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 				}
 				(*out.PresenceStats).UnmarshalEasyJSON(in)
 			}
-		case "history":
-			if in.IsNull() {
-				in.Skip()
-				out.History = nil
-			} else {
-				if out.History == nil {
-					out.History = new(HistoryRequest)
-				}
-				(*out.History).UnmarshalEasyJSON(in)
-			}
 		case "ping":
 			if in.IsNull() {
 				in.Skip()
@@ -3632,16 +2857,6 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 					out.Send = new(SendRequest)
 				}
 				(*out.Send).UnmarshalEasyJSON(in)
-			}
-		case "rpc":
-			if in.IsNull() {
-				in.Skip()
-				out.Rpc = nil
-			} else {
-				if out.Rpc == nil {
-					out.Rpc = new(RPCRequest)
-				}
-				(*out.Rpc).UnmarshalEasyJSON(in)
 			}
 		case "refresh":
 			if in.IsNull() {
@@ -3673,7 +2888,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild37(out *writer, in Command) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(out *writer, in Command) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -3743,16 +2958,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		}
 		(*in.PresenceStats).MarshalEasyJSON(out)
 	}
-	if in.History != nil {
-		const prefix string = ",\"history\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		(*in.History).MarshalEasyJSON(out)
-	}
 	if in.Ping != nil {
 		const prefix string = ",\"ping\":"
 		if first {
@@ -3772,16 +2977,6 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 			out.RawString(prefix)
 		}
 		(*in.Send).MarshalEasyJSON(out)
-	}
-	if in.Rpc != nil {
-		const prefix string = ",\"rpc\":"
-		if first {
-			first = false
-			out.RawString(prefix[1:])
-		} else {
-			out.RawString(prefix)
-		}
-		(*in.Rpc).MarshalEasyJSON(out)
 	}
 	if in.Refresh != nil {
 		const prefix string = ",\"refresh\":"
@@ -3808,14 +3003,14 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Command) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild37(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Command) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild37(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild31(l, v)
 }
-func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild38(in *jlexer.Lexer, out *ClientInfo) {
+func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(in *jlexer.Lexer, out *ClientInfo) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -3856,7 +3051,7 @@ func easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 		in.Consumed()
 	}
 }
-func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild38(out *writer, in ClientInfo) {
+func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(out *writer, in ClientInfo) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -3885,10 +3080,10 @@ func easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v ClientInfo) MarshalEasyJSON(w *writer) {
-	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild38(w, v)
+	easyjsonFb554811EncodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(w, v)
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *ClientInfo) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild38(l, v)
+	easyjsonFb554811DecodeGithubComTHPTUHAKairosPkgProtocolDeliverprotocolBuild32(l, v)
 }
