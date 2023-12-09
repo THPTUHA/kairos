@@ -438,7 +438,7 @@ func DetailWorkflow(workflowID int64, userID string) (*workflow.Workflow, error)
 		w.Tasks.Set(t.Name, &task)
 	}
 
-	brokerM, err := GetBrokers(&BrokerQuery{workflowID: workflowID})
+	brokerM, err := GetBrokers(&BrokerQuery{WorkflowID: workflowID})
 	if err != nil {
 		fmt.Println("err 3")
 		return nil, err
@@ -559,17 +559,27 @@ func GetTasks(q *TaskQuery) ([]*models.Task, error) {
 }
 
 type BrokerQuery struct {
-	workflowID int64
+	WorkflowID int64
+	ID         int64
 }
 
 func GetBrokers(q *BrokerQuery) ([]*models.Broker, error) {
 	query := `
 		SELECT id, name, listens, flows, workflow_id, status
 		FROM brokers
-		WHERE workflow_id = $1
 	`
+	whereQ := make([]string, 0)
+	if q.WorkflowID > 0 {
+		whereQ = append(whereQ, fmt.Sprintf(" workflow_id = %d ", q.WorkflowID))
+	}
+	if q.ID > 0 {
+		whereQ = append(whereQ, fmt.Sprintf(" id = %d ", q.ID))
+	}
 
-	rows, err := Get().Query(query, q.workflowID)
+	if len(whereQ) > 0 {
+		query += fmt.Sprintf(" WHERE %s ", strings.Join(whereQ, " AND "))
+	}
+	rows, err := Get().Query(query)
 	if err != nil {
 		return nil, err
 	}

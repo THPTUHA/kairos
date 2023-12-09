@@ -94,17 +94,20 @@ const GraphPage = () => {
 
     const pointRecord = useAsync(async () => {
         if (selectedNodes.length == 0) {
-            return []
+            return {
+                records: [],
+                obj: {},
+            }
         }
         const node = selectedNodes[0].split("-")
         console.log(node)
         const node_id = node[0]
         const node_type = node[1]
         if (node_type === "client") {
-            const records = await services.records
+            const result = await services.records
                 .getClientRecord(parseInt(node_id))
                 .catch(setError)
-            for (const r of records) {
+            for (const r of result.client_records) {
                 r.type = "client"
                 for (const client of clients) {
                     if (client.id === r.client_id) {
@@ -120,14 +123,18 @@ const GraphPage = () => {
                     }
                 }
             }
-            return records
+            return {
+                records: result.client_records as [],
+                obj: result.client
+            }
         }
 
         if (node_type === "broker") {
-            const records = await services.records
+            const result = await services.records
                 .getBrokerRecord(parseInt(node_id))
                 .catch(setError)
-            for (const r of records) {
+            console.log({result})
+            for (const r of result.broker_records) {
                 r.type = "broker"
                 for (const broker of brokers) {
                     if (broker.id === r.broker_id) {
@@ -138,14 +145,17 @@ const GraphPage = () => {
             }
 
            
-            return records
+            return {
+                records: result.broker_records as [],
+                obj: result.broker,
+            }
         }
 
         if (node_type === "task") {
-            const records = await services.records
+            const result = await services.records
                 .getTaskRecord(parseInt(node_id))
                 .catch(setError)
-            for (const r of records) {
+            for (const r of result.task_records) {
                 r.type = "task"
                 for (const task of tasks) {
                     if (task.id === r.task_id) {
@@ -154,9 +164,15 @@ const GraphPage = () => {
                     }
                 }
             }
-            return records
+            return {
+                records: result.task_records as [],
+                obj: result.task,
+            }
         }
-        return []
+        return {
+            records: [],
+            obj: {},
+        }
 
     }, [selectedNodes])
 
@@ -377,9 +393,15 @@ const GraphPage = () => {
                 {
                     pointRecord.loading ? <div>Loading</div> :
                         <div>
+                            <div>
+                                {
+                                    pointRecord.value && pointRecord.value.obj &&
+                                    <ReactJson src={pointRecord.value.obj} />
+                                }
+                            </div>
                             {
                                 pointRecord.value && 
-                                pointRecord.value.map((item: any) => (
+                                pointRecord.value.records.map((item: any) => (
                                     <div key={item.id}>
                                        {
                                             item.type === "client" || item.type === "task" ?

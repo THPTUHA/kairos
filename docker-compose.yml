@@ -1,0 +1,14 @@
+---
+version: '2'
+services:
+  httpserver:
+    build: .
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+    command: kairos httpserver --file httpserver.yaml
+  deliverer:
+    build: .
+    ports:
+     - "8003:8003"
+    command: kairos deliverer --file deliverer.yaml

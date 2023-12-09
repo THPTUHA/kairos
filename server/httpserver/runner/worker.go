@@ -618,38 +618,21 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 
 				fmt.Printf(" REPLY --- %+v\n", replies)
 				trun := broker.Template.NewRutime(replies)
-				delivers, _, err := trun.Execute()
-				if err != nil {
-					w.conf.Logger.Error(err)
-					w.CBQueue.Push(func(duration time.Duration) {
-						input, err := json.Marshal(replies)
-						if err != nil {
-							w.conf.Logger.Error(err)
-							return
-						}
-						output, err := json.Marshal(err)
-						if err != nil {
-							w.conf.Logger.Error(err)
-							return
-						}
-						w.saveBrokerRecord(broker.ID, string(input), string(output), workflow.BrokerExecuteFault)
-					})
-					return err
-				} else {
-					w.CBQueue.Push(func(duration time.Duration) {
-						input, err := json.Marshal(replies)
-						if err != nil {
-							w.conf.Logger.Error(err)
-							return
-						}
-						output, err := json.Marshal(delivers)
-						if err != nil {
-							w.conf.Logger.Error(err)
-							return
-						}
-						w.saveBrokerRecord(broker.ID, string(input), string(output), workflow.BrokerExecuteSuccess)
-					})
-				}
+				exeOutput := trun.Execute()
+				delivers := exeOutput.DeliverFlows
+				w.CBQueue.Push(func(duration time.Duration) {
+					input, err := json.Marshal(replies)
+					if err != nil {
+						w.conf.Logger.Error(err)
+						return
+					}
+					output, err := json.Marshal(exeOutput)
+					if err != nil {
+						w.conf.Logger.Error(err)
+						return
+					}
+					w.saveBrokerRecord(broker.ID, string(input), string(output), workflow.BrokerExecuteSuccess)
+				})
 
 				// TODO Get Vars
 				// if err == nil {
@@ -776,9 +759,12 @@ func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *
 
 		}
 
-		delivers, result, err := trun.Execute()
-		if err != nil && resultCh != nil {
-			resultCh <- []byte(err.Error())
+		exeOutput := trun.Execute()
+		delivers := exeOutput.DeliverFlows
+		track := exeOutput.Tracking
+		result := exeOutput.Result
+		if track.Err != "" && resultCh != nil {
+			resultCh <- []byte(track.Err)
 		}
 		if len(delivers) > 0 {
 			w.handleDeliver(from, delivers, reply, req, trun, resultCh)

@@ -51,7 +51,7 @@ func handleLog(e deliverer.LogEntry) {
 }
 
 func createPubSub(pubsub chan *PubSubPayload) (*deliverer.Node, error) {
-	node, err := deliverer.New(deliverer.Config{
+	node, err := deliverer.NewNode(deliverer.Config{
 		LogLevel:   deliverer.LogLevelDebug,
 		LogHandler: handleLog,
 	})

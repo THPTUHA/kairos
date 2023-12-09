@@ -734,12 +734,32 @@ func (t *Template) NewRutime(outputVars map[string]ReplyData) *TemplateRuntime {
 	}
 }
 
-func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
+type TrackLog struct {
+	Err string `json:"err"`
+	Exp string `json:"exp"`
+}
+type Tracking struct {
+	Err  string      `json:"err"`
+	Logs []*TrackLog `json:"tracks"`
+}
+
+type ExecOutput struct {
+	DeliverFlows []*DeliverFlow `json:"deliver_flows,omitempty"`
+	Tracking     *Tracking      `json:"tracking,omitempty"`
+	Result       []byte         `json:"result,omitempty"`
+}
+
+func (t *TemplateRuntime) Execute() *ExecOutput {
 	dfs := make([]*DeliverFlow, 0)
 	index := strings.Split(t.expIndex, "-")
 	rowIdx, _ := strconv.Atoi(index[0])
 	expIdx, _ := strconv.Atoi(index[1])
 	rangeStack := make([]*RangeValue, 0)
+	var exeOutput = ExecOutput{
+		DeliverFlows: make([]*DeliverFlow, 0),
+		Tracking:     &Tracking{},
+	}
+
 	for idx := rowIdx; idx < len(t.exps); idx++ {
 		exp := t.exps[idx]
 		for _, e := range exp {
@@ -755,18 +775,24 @@ func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
 			out, err := e.Execute(t.golbalVar, t.outputVars, t.varTemp, t.FuncCall)
 
 			fmt.Println(e.Func, out, err)
+
 			if err != nil {
-				log.Error(err)
+				fmt.Println("ERR R-----", err)
+				exeOutput.Tracking.Logs = append(exeOutput.Tracking.Logs, &TrackLog{
+					Err: err.Error(),
+					Exp: fmt.Sprintf("expression number %+v: %s", idx+1, fmt.Sprintf("%s %s", e.Func, strings.Join(e.Params, " "))),
+				})
 			}
 			if err != nil && e.Func == WAIT_EXP {
-				return nil, nil, err
+				return &exeOutput
 			}
+
 			if e.Func == SENDSYNC || e.Func == SEND || e.Func == SENDU {
 				if err != nil {
-					return nil, nil, err
+					return &exeOutput
 				}
 				if len(out) == 0 {
-					return nil, nil, fmt.Errorf("exp %s must value to send", e.Func)
+					return &exeOutput
 				}
 				var df DeliverFlow
 				if len(e.Params) == 2 {
@@ -780,7 +806,8 @@ func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
 				dfs = append(dfs, &df)
 
 				if e.Func == SENDSYNC {
-					return dfs, nil, err
+					exeOutput.DeliverFlows = dfs
+					return &exeOutput
 				}
 				continue
 			}
@@ -843,7 +870,8 @@ func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
 
 			if e.Func == RETURN_EXP {
 				v, _ := json.Marshal(out)
-				return nil, v, err
+				exeOutput.Result = v
+				return &exeOutput
 			}
 
 			if e.Func == END_EXP {
@@ -906,7 +934,8 @@ func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
 
 			if err != nil && t.indexRun[idx] == 0 {
 				fmt.Printf("ERR EXP %+v func=%s \n", err, e.Func)
-				return nil, nil, err
+				exeOutput.Tracking.Err = err.Error()
+				return &exeOutput
 			}
 
 			if e.Func == ELSE_EXP {
@@ -917,16 +946,23 @@ func (t *TemplateRuntime) Execute() ([]*DeliverFlow, []byte, error) {
 			if (len(out) == 1 && (out[0] == "" || out[0] == false) || err != nil) &&
 				t.indexRun[idx] > 0 {
 				fmt.Println("RUN FORWARD ERR", err)
+				fmt.Printf("EXP ERR %+v\n", e)
 				idx = t.indexRun[idx]
 				break
 			}
 
 			t.ExpInput = out
+
+			if err != nil {
+				log.Error(err)
+				return &exeOutput
+			}
 		}
 
 		t.ExpInput = []interface{}{}
 	}
-	return dfs, nil, nil
+	exeOutput.DeliverFlows = dfs
+	return &exeOutput
 }
 
 type Stack struct {

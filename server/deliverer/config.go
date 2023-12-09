@@ -1,6 +1,11 @@
 package deliverer
 
-import "time"
+import (
+	"os"
+	"time"
+
+	"gopkg.in/yaml.v2"
+)
 
 type Config struct {
 	Version string
@@ -117,4 +122,38 @@ func getPingPongPeriodValues(config PingPongConfig) (time.Duration, time.Duratio
 		pongTimeout = 10 * time.Second
 	}
 	return pingInterval, pongTimeout
+}
+
+type ServerConfig struct {
+	Auth struct {
+		HmacSecret string `yaml:"hmacsecret"`
+		HmrfSecret string `yaml:"hmrfsecret"`
+	}
+	Deliverer struct {
+		Port int `yaml:"port"`
+	}
+
+	Nats struct {
+		URL  string `yaml:"url"`
+		Name string `yaml:"name"`
+	}
+}
+
+func SetConfig(f string) (*ServerConfig, error) {
+	config := &ServerConfig{}
+	file, err := os.ReadFile(f)
+	if err != nil {
+		return nil, err
+	}
+	err = GetYaml(file, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
+func GetYaml(f []byte, s interface{}) error {
+	y := yaml.Unmarshal(f, s)
+	return y
 }

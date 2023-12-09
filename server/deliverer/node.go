@@ -47,7 +47,7 @@ const (
 )
 
 // New creates Node with provided Config.
-func New(c Config) (*Node, error) {
+func NewNode(c Config) (*Node, error) {
 	if c.NodeInfoMetricsAggregateInterval == 0 {
 		c.NodeInfoMetricsAggregateInterval = 60 * time.Second
 	}

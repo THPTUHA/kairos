@@ -83,6 +83,22 @@ func (ctr *Controller) GetBrokerRecord(c *gin.Context) {
 		})
 		return
 	}
+	brokers, err := storage.GetBrokers(&storage.BrokerQuery{
+		ID: bid,
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	if len(brokers) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"err": "Broker not found",
+		})
+		return
+	}
 
 	brs, err := storage.GetBrokerRecords(bid, 10)
 	if err != nil {
@@ -95,6 +111,7 @@ func (ctr *Controller) GetBrokerRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message":        "list broker record",
 		"broker_records": brs,
+		"broker":         brokers[0],
 	})
 }
 

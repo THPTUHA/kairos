@@ -1,4 +1,4 @@
-package main
+package httpserver
 
 import (
 	"context"
@@ -80,6 +80,87 @@ func (server *HttpServer) start() {
 	}
 }
 
+func NewHTTPServer(file string) (*HttpServer, error) {
+	config, err := config.Set(file)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+	events.Init()
+
+	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		config.DB.Postgres.URI,
+		config.DB.Postgres.Port,
+		config.DB.Postgres.Username,
+		config.DB.Postgres.Password,
+		config.DB.Postgres.DatabaseName,
+	))
+
+	auth.Init(config.Auth.HmacSecret, config.Auth.HmrfSecret)
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	NatConn, err := nats.Connect(config.Nats.URL, nats.Name(config.Nats.Name))
+	if err != nil {
+		log.Error().Msg(err.Error())
+		return nil, err
+	}
+
+	httpserver := HttpServer{
+		Config:     config,
+		Logger:     logger.InitLogger("debug", "runner"),
+		NatConn:    NatConn,
+		PubsubChan: make(chan *pubsub.PubSubPayload),
+	}
+
+	return &httpserver, nil
+}
+
+func (server *HttpServer) Start() error {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals,
+		os.Interrupt,
+	)
+
+	worklowRunner := runner.NewRunner(runner.Configs{
+		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
+		Logger:                logger.InitLogger("debug", "runner"),
+	})
+
+	server.Router = routes.New(&routes.RouteConfig{
+		Pubsub:   server.PubsubChan,
+		WfRunner: worklowRunner,
+		Nats:     server.NatConn,
+	})
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", server.Config.HTTPServer.Port),
+		Handler: server.Router.Build(),
+	}
+
+	go worklowRunner.Start(signals)
+	go server.serviceNats()
+	go func() {
+		<-signals
+		log.Warn().Msg("Shutting down...")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := srv.Shutdown(ctx)
+		if err != nil {
+			log.Error().Err(err).Send()
+		}
+		os.Exit(0)
+	}()
+
+	log.Info().Msg("Starting the server...")
+	if err := server.Router.Run(fmt.Sprintf(":%d", server.Config.HTTPServer.Port)); err != nil {
+		log.Error().Err(err).Msg("Server is not running!")
+	}
+	return nil
+}
+
 func main() {
 	config, err := config.Set("httpserver.yaml")
 	if err != nil {
@@ -87,6 +168,7 @@ func main() {
 		return
 	}
 
+	fmt.Printf("CONFIG %+v\n", config)
 	events.Init()
 
 	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",

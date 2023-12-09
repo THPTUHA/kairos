@@ -87,7 +87,7 @@ func setValue(vm *ValueMap) (map[string]interface{}, error) {
 			continue
 		}
 		fmt.Printf("[ FUNC ] Var = %s not exist\n", p)
-		return nil, ErrorVariableNotReady
+		return nil, fmt.Errorf("var %s not ready", p)
 	}
 	return mp, nil
 }

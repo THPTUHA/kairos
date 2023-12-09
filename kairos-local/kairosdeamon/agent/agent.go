@@ -496,12 +496,6 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 			}),
 		}
 
-		// // test
-		// time.AfterFunc(2*time.Second, func() {
-		// 	fmt.Println(" RUN HERE BABY")
-		// 	helper.Send([]byte("SELECT * FROM users\n"))
-		// })
-
 		out, err := executor.Execute(&proto.ExecuteRequest{
 			TaskId: id,
 			Config: exc,
@@ -524,7 +518,22 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		}
 
 	} else {
-		agent.logger.WithField("executor", jex).Error("agent: Specified executor is not present")
+		err := fmt.Errorf("deamon: specified executor is not present")
+		execution.Success = false
+		execution.Output = err.Error()
+		execution.FinishedAt = time.Now()
+		agent.logger.WithField("executor", jex).Error(err)
+		execution.Offset++
+		err = agent.SaveExecutorResult(execution)
+		if err != nil {
+			agent.logger.WithField("executor", "set").Error(err)
+			return err
+		}
+
+		t := task.ToCmdReplyTask()
+		t.Cmd = workflow.ReplyOutputTaskCmd
+		t.Result = execution.GetResult()
+		go agent.hub.Publish(t)
 	}
 
 	return nil
@@ -608,7 +617,7 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 	}
 
 	fmt.Println("FINSH EXECUTOR SYNC")
-	return nil, fmt.Errorf("agent: Specified executor is not present")
+	return nil, fmt.Errorf("deamon: specified executor is not present")
 }
 
 func (a *Agent) SaveExecutorResult(e *Execution) error {

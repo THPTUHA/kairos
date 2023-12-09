@@ -62,14 +62,12 @@ func waitExitSignal(n *deliverer.Node, s *http.Server) {
 
 const exampleChannel = "chat:index"
 
-// Check whether channel is allowed for subscribing. In real case permission
-// check will probably be more complex than in this example.
 func channelSubscribeAllowed(channel string) bool {
 	return channel == exampleChannel
 }
 
 func main() {
-	node, _ := deliverer.New(deliverer.Config{
+	node, _ := deliverer.NewNode(deliverer.Config{
 		LogLevel:   deliverer.LogLevelInfo,
 		LogHandler: handleLog,
 	})
