@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var delivererConfigFile string
 var delievererCmd = &cobra.Command{
 	Use:   "deliverer",
 	Short: "Deliver message on kairos",
@@ -15,10 +16,11 @@ var delievererCmd = &cobra.Command{
 
 func init() {
 	kairosCmd.AddCommand(delievererCmd)
+	delievererCmd.PersistentFlags().StringVar(&delivererConfigFile, "file", "deliverer.yaml", "File apply")
 }
 
 func delivererRun(args ...string) error {
-	server, err := deliverer.NewDelivererServer("deliverer.yaml")
+	server, err := deliverer.NewDelivererServer(delivererConfigFile)
 	if err != nil {
 		return err
 	}
