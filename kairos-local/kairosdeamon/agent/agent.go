@@ -58,8 +58,6 @@ type Agent struct {
 	logger *logrus.Entry
 }
 
-type ProcessorFactory func() (Processor, error)
-
 type AgentOption func(agent *Agent)
 
 func NewAgent(config *AgentConfig, options ...AgentOption) *Agent {

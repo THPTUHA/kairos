@@ -89,10 +89,6 @@ type grpcStdioClient struct {
 	stdioClient plugin.GRPCStdio_StreamStdioClient
 }
 
-// newGRPCStdioClient creates a grpcStdioClient. This will perform the
-// initial connection to the stdio service. If the stdio service is unavailable
-// then this will be a no-op. This allows this to work without error for
-// plugins that don't support this.
 func newGRPCStdioClient(
 	ctx context.Context,
 	log hclog.Logger,
@@ -100,12 +96,8 @@ func newGRPCStdioClient(
 ) (*grpcStdioClient, error) {
 	client := plugin.NewGRPCStdioClient(conn)
 
-	// Connect immediately to the endpoint
 	stdioClient, err := client.StreamStdio(ctx, &empty.Empty{})
 
-	// If we get an Unavailable or Unimplemented error, this means that the plugin isn't
-	// updated and linking to the latest version of go-plugin that supports
-	// this. We fall back to the previous behavior of just not syncing anything.
 	if status.Code(err) == codes.Unavailable || status.Code(err) == codes.Unimplemented {
 		log.Warn("stdio service not available, stdout/stderr syncing unavailable")
 		stdioClient = nil

@@ -17,14 +17,12 @@ import (
 )
 
 type Plugins struct {
-	Processors map[string]Processor
-	Executors  map[string]plugin.Executor
-	LogLevel   string
-	NodeName   string
+	Executors map[string]plugin.Executor
+	LogLevel  string
+	NodeName  string
 }
 
 func (p *Plugins) DiscoverPlugins() error {
-	p.Processors = make(map[string]Processor)
 	p.Executors = make(map[string]plugin.Executor)
 	pluginDir := filepath.Join("~", "Code", "myproject", "kairos")
 

@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package grpcmux
 
 import (
@@ -10,8 +7,6 @@ import (
 
 var _ net.Listener = (*blockedServerListener)(nil)
 
-// blockedServerListener accepts connections for a specific gRPC broker stream
-// ID on the server (plugin) side of the connection.
 type blockedServerListener struct {
 	addr     net.Addr
 	acceptCh chan acceptResult

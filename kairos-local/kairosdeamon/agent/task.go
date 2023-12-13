@@ -40,7 +40,6 @@ type Task struct {
 	Metadata       map[string]string           `json:"metadata"`
 	Agent          *Agent                      `json:"-"`
 	Retries        int                         `json:"retries"`
-	Processors     map[string]Config           `json:"processors"`
 	Executor       string                      `json:"executor"`
 	ExecutorConfig plugin.ExecutorPluginConfig `json:"executor_config"`
 	Status         string                      `json:"status"`

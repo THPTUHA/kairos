@@ -57,7 +57,6 @@ func (m *GRPCStatusHelperClient) Input() []byte {
 }
 
 type ExecutorPlugin struct {
-	NetRPCUnsupportedPlugin
 	Executor Executor
 }
 

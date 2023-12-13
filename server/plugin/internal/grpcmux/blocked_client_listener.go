@@ -37,7 +37,6 @@ func (b *blockedClientListener) Addr() net.Addr {
 }
 
 func (b *blockedClientListener) Close() error {
-	// We don't close the session, the client muxer is responsible for that.
 	return nil
 }
 
