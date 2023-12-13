@@ -104,6 +104,7 @@ func (w *Workflow) Compile(funcs *goja.Runtime) error {
 	}
 
 	err := w.Brokers.Range(func(_ string, b *Broker) error {
+		b.WorkflowID = w.ID
 		return b.Compile(w.Vars, w.Clients, w.Channels, &w.Tasks, funcs)
 	})
 	if err != nil {
@@ -114,5 +115,6 @@ func (w *Workflow) Compile(funcs *goja.Runtime) error {
 		err := t.Compile(vars)
 		return err
 	})
+
 	return err
 }

@@ -90,9 +90,12 @@ func (h *Hub) Connections() map[string]*Client {
 	return conns
 }
 
-// UserConnections returns all user connections to the current Node.
 func (h *Hub) UserConnections(userID string) map[string]*Client {
 	return h.connShards[index(userID, numHubShards)].userConnections(userID)
+}
+
+func (h *Hub) InfoUser(userID string) *UserInfo {
+	return h.connShards[index(userID, numHubShards)].infoUser(userID)
 }
 
 func (h *Hub) refresh(userID string, clientID string, opts ...RefreshOption) error {
@@ -121,14 +124,6 @@ func (h *Hub) removeSub(ch string, c *Client) (bool, error) {
 
 func (h *Hub) BroadcastPublication(ch string, pub *Publication) error {
 	return h.subShards[index(ch, numHubShards)].broadcastPublication(ch, pubToProto(pub))
-}
-
-func (h *Hub) broadcastJoin(ch string, info *ClientInfo) error {
-	return h.subShards[index(ch, numHubShards)].broadcastJoin(ch, &deliverprotocol.Join{Info: infoToProto(info)})
-}
-
-func (h *Hub) broadcastLeave(ch string, info *ClientInfo) error {
-	return h.subShards[index(ch, numHubShards)].broadcastLeave(ch, &deliverprotocol.Leave{Info: infoToProto(info)})
 }
 
 func (h *Hub) NumSubscribers(ch string) int {
@@ -346,6 +341,22 @@ func (h *connShard) disconnect(user string, disconnect Disconnect, clientID stri
 	return firstErr
 }
 
+type UserInfo struct {
+	ID     string `json:"id"`
+	Online bool   `json:"online"`
+}
+
+func (h *connShard) infoUser(userID string) *UserInfo {
+	online := false
+	if len(h.userConnections(userID)) > 0 {
+		online = true
+	}
+	return &UserInfo{
+		ID:     userID,
+		Online: online,
+	}
+}
+
 func (h *connShard) userConnections(userID string) map[string]*Client {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -367,7 +378,6 @@ func (h *connShard) userConnections(userID string) map[string]*Client {
 	return conns
 }
 
-// Add connection into clientHub connections registry.
 func (h *connShard) add(c *Client) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -534,98 +544,12 @@ func (h *subShard) broadcastPublication(channel string, pub *deliverprotocol.Pub
 	return nil
 }
 
-// broadcastJoin sends message to all clients subscribed on channel.
-func (h *subShard) broadcastJoin(channel string, join *deliverprotocol.Join) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	channelSubscribers, ok := h.subs[channel]
-	if !ok {
-		return nil
-	}
-
-	var (
-		jsonReply     []byte
-		jsonEncodeErr *encodeError
-	)
-
-	for _, c := range channelSubscribers {
-		protoType := c.Transport().Protocol().toProto()
-		if protoType == deliverprotocol.TypeJSON {
-			if jsonEncodeErr != nil {
-				go func(c *Client) { c.Disconnect(DisconnectInappropriateProtocol) }(c)
-				continue
-			}
-			if jsonReply == nil {
-				push := &deliverprotocol.Push{Channel: channel, Join: join}
-				var err error
-				jsonReply, err = deliverprotocol.DefaultJsonReplyEncoder.Encode(&deliverprotocol.Reply{Push: push})
-				if err != nil {
-					jsonEncodeErr = &encodeError{client: c.ID(), user: c.UserID(), error: err}
-					go func(c *Client) { c.Disconnect(DisconnectInappropriateProtocol) }(c)
-					continue
-				}
-			}
-			_ = c.writeJoin(channel, join, jsonReply)
-		}
-	}
-	if jsonEncodeErr != nil && h.logger.enabled(LogLevelWarn) {
-		// Log that we had clients with inappropriate deliverprotocol, and point to the first such client.
-		h.logger.log(NewLogEntry(LogLevelWarn, "inappropriate deliverprotocol join", map[string]any{
-			"channel": channel,
-			"user":    jsonEncodeErr.user,
-			"client":  jsonEncodeErr.client,
-			"error":   jsonEncodeErr.error,
-		}))
-	}
-	return nil
-}
-
-func (h *subShard) broadcastLeave(channel string, leave *deliverprotocol.Leave) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	channelSubscribers, ok := h.subs[channel]
-	if !ok {
-		return nil
-	}
-
-	var (
-		jsonReply     []byte
-		jsonEncodeErr *encodeError
-	)
-
-	for _, c := range channelSubscribers {
-		if jsonReply == nil {
-			push := &deliverprotocol.Push{Channel: channel, Leave: leave}
-			var err error
-			jsonReply, err = deliverprotocol.DefaultJsonReplyEncoder.Encode(&deliverprotocol.Reply{Push: push})
-			if err != nil {
-				jsonEncodeErr = &encodeError{client: c.ID(), user: c.UserID(), error: err}
-				go func(c *Client) { c.Disconnect(DisconnectInappropriateProtocol) }(c)
-				continue
-			}
-		}
-		_ = c.writeLeave(channel, leave, jsonReply)
-	}
-	if jsonEncodeErr != nil && h.logger.enabled(LogLevelWarn) {
-		h.logger.log(NewLogEntry(LogLevelWarn, "inappropriate deliverprotocol leave", map[string]any{
-			"channel": channel,
-			"user":    jsonEncodeErr.user,
-			"client":  jsonEncodeErr.client,
-			"error":   jsonEncodeErr.error,
-		}))
-	}
-	return nil
-}
-
 func (h *subShard) NumChannels() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.subs)
 }
 
-// NumSubscriptions returns total number of subscriptions.
 func (h *subShard) NumSubscriptions() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -636,7 +560,6 @@ func (h *subShard) NumSubscriptions() int {
 	return total
 }
 
-// Channels returns a slice of all active channels.
 func (h *subShard) Channels() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -649,7 +572,6 @@ func (h *subShard) Channels() []string {
 	return channels
 }
 
-// NumSubscribers returns number of current subscribers for a given channel.
 func (h *subShard) NumSubscribers(ch string) int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

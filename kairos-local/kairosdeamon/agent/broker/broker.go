@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Broker The broker related meta data
 type Broker struct {
 	subscribers Subscribers
 	sLock       sync.RWMutex
@@ -14,7 +13,6 @@ type Broker struct {
 	tLock  sync.RWMutex
 }
 
-// NewBroker Create new broker
 func NewBroker() *Broker {
 	return &Broker{
 		subscribers: Subscribers{},
@@ -24,7 +22,6 @@ func NewBroker() *Broker {
 	}
 }
 
-// Attach Create a new subscriber and register it into our main broker
 func (b *Broker) Attach() (*Subscriber, error) {
 	s, err := NewSubscriber()
 
@@ -39,7 +36,6 @@ func (b *Broker) Attach() (*Subscriber, error) {
 	return s, nil
 }
 
-// Subscribe subscribes the specified subscriber "s" to the specified list of topic(s)
 func (b *Broker) Subscribe(s *Subscriber, topics ...string) {
 	b.tLock.Lock()
 	defer b.tLock.Unlock()
@@ -54,7 +50,6 @@ func (b *Broker) Subscribe(s *Subscriber, topics ...string) {
 
 }
 
-// Unsubscribe Unsubscribe the specified subscriber from the specified topic(s)
 func (b *Broker) Unsubscribe(s *Subscriber, topics ...string) {
 	for _, topic := range topics {
 		b.tLock.Lock()
@@ -68,7 +63,6 @@ func (b *Broker) Unsubscribe(s *Subscriber, topics ...string) {
 	}
 }
 
-// Detach remove the specified subscriber from the broker
 func (b *Broker) Detach(s *Subscriber) {
 	s.destroy()
 	b.sLock.Lock()
@@ -77,7 +71,6 @@ func (b *Broker) Detach(s *Subscriber) {
 	defer b.sLock.Unlock()
 }
 
-// Broadcast broadcast the specified payload to all the topic(s) subscribers
 func (b *Broker) Broadcast(payload interface{}, topics ...string) {
 	for _, topic := range topics {
 		if b.Subscribers(topic) < 1 {
@@ -98,14 +91,12 @@ func (b *Broker) Broadcast(payload interface{}, topics ...string) {
 	}
 }
 
-// Subscribers Get the subscribers count
 func (b *Broker) Subscribers(topic string) int {
 	b.tLock.RLock()
 	defer b.tLock.RUnlock()
 	return len(b.topics[topic])
 }
 
-// GetTopics Returns a slice of topics
 func (b *Broker) GetTopics() []string {
 	b.tLock.RLock()
 	brokerTopics := b.topics

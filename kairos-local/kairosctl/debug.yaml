@@ -1,10 +1,11 @@
 version: '1'
-name: debug
+name: debug2
 vars:
 tasks:
   user_sql:
     executor: sql
     clients: [client1]
+    wait: "input"
     payload: |
       {
         "driver": "mysql",
@@ -14,15 +15,22 @@ tasks:
         "password": "root",
         "dbname": "workflow"
       }
-
+  user_file:
+    executor: file
+    clients: [client1]
+    payload: |
+      {
+        "method": "read",
+        "path": "/text.txt"
+      }
 brokers:
   brok:
-    listens: [a_channel]
+    clients: [client1]
+    listens: [user_sql_task, user_file_task]
     flows: |
-      {{get .a_channel ("content") | get ("msg")  
-          | .data | parse | get ("user_id") | .user_id }}{{end}}
-      {{printf ("select *  from users where id = %v") .user_id 
-          | .sql_user }}
-      {{define .req map | put ("sql") .sql_user | .req }}{{end}}
-      {{sendsync .req  .user_sql_task | .result }}
-      {{get .result ("result") |  get ("output") | getp (0) | return }}{{end}}
+      {{get .user_file_task ("result") | .result | get ("output") | .output}}
+        {{hello | script | .sql }}
+        {{define .mp map | put ("sql") .output | put ("sql") .sql  | .result}}
+          {{send .result .user_sql_task}}
+        {{end}}
+      {{end}}

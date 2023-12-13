@@ -4,4 +4,5 @@ export interface Client {
     name: string;
     active_since: number;
     created_at: number;
+    status: number;
 }

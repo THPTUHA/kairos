@@ -9,6 +9,7 @@ const (
 	WfCmdUpdate
 	WfCmdDelete
 	WfCmdStart
+	WfCmdRecover
 )
 
 type WfEvent struct {
@@ -22,7 +23,7 @@ const (
 )
 
 const (
-	DeleteWorker = iota
+	DestroyWorker = iota
 )
 
 var wfChan chan *WfEvent

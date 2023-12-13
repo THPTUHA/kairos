@@ -76,19 +76,10 @@ func (r *Runner) Start(signals chan os.Signal) {
 			r.mu.Unlock()
 			break
 		case events.WfCmdDelete:
-			log.Debug().Msg(fmt.Sprintf("Delete workflow id=%d", wfe.Workflow.ID))
-			r.mu.Lock()
-			worker := r.wfMap[wfe.Workflow.ID]
-			r.mu.Unlock()
-			if worker != nil {
-				worker.Destroy()
-			}
-
-			r.mu.Lock()
-			delete(r.wfMap, wfe.Workflow.ID)
-			r.mu.Unlock()
+			go r.DestroyWorker(wfe)
+		case events.WfCmdRecover:
+			go r.RecoverWorker(wfe)
 		}
-
 		wg.Done()
 	}, ants.WithPreAlloc(true))
 
@@ -114,6 +105,33 @@ func (r *Runner) Start(signals chan os.Signal) {
 	wg.Wait()
 	<-signals
 	log.Info().Msg("exist runner")
+}
+
+func (r *Runner) DestroyWorker(wfe *events.WfEvent) {
+	log.Debug().Msg(fmt.Sprintf("Delete workflow id=%d", wfe.Workflow.ID))
+	r.mu.Lock()
+	worker := r.wfMap[wfe.Workflow.ID]
+	r.mu.Unlock()
+	var success bool
+	if worker != nil {
+		success = worker.Destroy()
+	}
+
+	if success {
+		r.mu.Lock()
+		delete(r.wfMap, wfe.Workflow.ID)
+		r.mu.Unlock()
+	}
+}
+
+func (r *Runner) RecoverWorker(wfe *events.WfEvent) {
+	log.Debug().Msg(fmt.Sprintf("Recover workflow id=%d", wfe.Workflow.ID))
+	r.mu.Lock()
+	worker := r.wfMap[wfe.Workflow.ID]
+	r.mu.Unlock()
+	if worker != nil {
+		worker.Recover()
+	}
 }
 
 func (r *Runner) startInitWorkflow(isFirst bool) error {
@@ -165,6 +183,7 @@ func (r *Runner) SetWfStatus(wfs []*models.Workflow) {
 	for _, wf := range wfs {
 		we := r.wfMap[wf.ID]
 		if we != nil {
+			fmt.Printf("Workflow id = %d status = %d\n", we.workflow.ID, we.workflow.Status)
 			wf.Status = we.workflow.Status
 		}
 	}

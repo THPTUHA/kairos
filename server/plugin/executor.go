@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/THPTUHA/kairos/server/plugin/proto"
-	"github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 )
 
@@ -22,7 +21,7 @@ type ExecutorPluginConfig map[string]string
 type ExecutorServer struct {
 	proto.ExecutorServer
 	Impl   Executor
-	broker *plugin.GRPCBroker
+	broker *GRPCBroker
 }
 
 func (m ExecutorServer) Execute(ctx context.Context, req *proto.ExecuteRequest) (*proto.ExecuteResponse, error) {
@@ -58,16 +57,16 @@ func (m *GRPCStatusHelperClient) Input() []byte {
 }
 
 type ExecutorPlugin struct {
-	plugin.NetRPCUnsupportedPlugin
+	NetRPCUnsupportedPlugin
 	Executor Executor
 }
 
-func (p *ExecutorPlugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
+func (p *ExecutorPlugin) GRPCServer(broker *GRPCBroker, s *grpc.Server) error {
 	proto.RegisterExecutorServer(s, ExecutorServer{Impl: p.Executor, broker: broker})
 	return nil
 }
 
-func (p *ExecutorPlugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+func (p *ExecutorPlugin) GRPCClient(ctx context.Context, broker *GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
 	return &ExecutorClient{client: proto.NewExecutorClient(c), broker: broker}, nil
 }
 

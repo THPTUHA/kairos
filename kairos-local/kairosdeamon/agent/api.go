@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -49,14 +50,25 @@ func (h *HTTPTransport) ServeHTTP() {
 
 func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerFunc) {
 	v1 := r.Group("/v1")
-	v1.GET("/tasks", h.tasksHandler)
+	v1.POST("/tasks/list", h.tasksHandler)
 	v1.GET("/:task/task", h.tasksGetHandler)
-	v1.DELETE("/:task/delete", h.tasksDeleteHandler)
+	v1.DELETE("/task/:task/delete", h.tasksDeleteHandler)
+	v1.DELETE("/broker/:broker/delete", h.brokerDeleteHanddler)
+	v1.DELETE("/workflow/:workflow/delete", h.workflowDeleteHandler)
+
+	v1.GET("/workflow/:workflow/detail", h.workflowDetailHandler)
+
 	v1.POST("/runtask", h.runTask)
 	v1.POST("/tasks", h.taskCreateOrUpdateHandler)
 	v1.GET("/view/:task/executions", h.executionsHandler)
 	v1.POST("/queue", h.queueTest)
 	v1.GET("/:task/queue", h.queueGetTest)
+	v1.POST("/broker/record", h.brokerRecordHandler)
+
+	v1.POST("/script/:name/upload", h.uploadScript)
+	v1.GET("/script/:name/show", h.showScript)
+	v1.GET("/script/list", h.listScript)
+	v1.DELETE("/script/:name/drop", h.dropScript)
 }
 
 type Queue struct {
@@ -78,8 +90,66 @@ func (h *HTTPTransport) queueTest(c *gin.Context) {
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Queue contains invalid value: %s.", err))
 		return
 	}
-
 	renderJSON(c, http.StatusCreated, &q)
+}
+
+func (h *HTTPTransport) uploadScript(c *gin.Context) {
+	name := c.Param("name")
+	multipartReader, err := c.Request.MultipartReader()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	for {
+		part, err := multipartReader.NextPart()
+		if err != nil {
+			break
+		}
+
+		data, err := io.ReadAll(part)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		err = h.agent.SetupScript(name, string(data))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		fmt.Println("Read data:", string(data))
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Data read successfully."})
+}
+
+func (h *HTTPTransport) showScript(c *gin.Context) {
+	name := c.Param("name")
+	s, err := h.agent.Store.GetScript(name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, s)
+}
+
+func (h *HTTPTransport) listScript(c *gin.Context) {
+	s, err := h.agent.Store.ListScript()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, s)
+}
+
+func (h *HTTPTransport) dropScript(c *gin.Context) {
+	name := c.Param("name")
+	err := h.agent.dropScript(name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, "Delete script successfully")
 }
 
 func (h *HTTPTransport) queueGetTest(c *gin.Context) {
@@ -96,27 +166,19 @@ func (h *HTTPTransport) queueGetTest(c *gin.Context) {
 }
 
 func (h *HTTPTransport) runTask(c *gin.Context) {
-	task := Task{}
-	if err := c.BindJSON(&task); err != nil {
+	cmdtask := workflow.CmdTask{}
+	if err := c.BindJSON(&cmdtask); err != nil {
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
 		h.logger.Error(err)
 		return
 	}
-	t, _ := h.agent.GetTask(task.ID)
+	fmt.Println("GO TO HERE----")
+	t, _ := h.agent.GetTask(fmt.Sprint(cmdtask.Task.ID))
 	fmt.Printf("TASK CALL %+v\n", *t)
 	ex := NewExecution(t.ID)
-	re := workflow.CmdTask{
-		DeliverID:  1,
-		WorkflowID: 1,
-		Task: &workflow.Task{
-			Output: `{
-				"sql": "select * from users where id in (?,?)",
-				"params": [2,3]
-			}`,
-		},
-	}
-	h.agent.Run(t, ex, &re)
+	h.agent.Run(t, ex, &cmdtask)
 }
+
 func (h *HTTPTransport) taskCreateOrUpdateHandler(c *gin.Context) {
 	task := Task{}
 
@@ -158,8 +220,61 @@ func (h *HTTPTransport) tasksDeleteHandler(c *gin.Context) {
 	err := h.agent.DeleteTask(taskID)
 	if err != nil {
 		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
 	}
 	renderJSON(c, http.StatusOK, nil)
+}
+
+func (h *HTTPTransport) brokerDeleteHanddler(c *gin.Context) {
+	borkerID := c.Param("broker")
+	err := h.agent.Store.DeleteBroker(borkerID)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	renderJSON(c, http.StatusOK, nil)
+}
+
+func (h *HTTPTransport) workflowDeleteHandler(c *gin.Context) {
+	workflowID := c.Param("workflow")
+	id, err := strconv.ParseInt(workflowID, 10, 64)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	err = h.agent.DeleteWorkflow(id)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	renderJSON(c, http.StatusOK, nil)
+}
+
+func (h *HTTPTransport) workflowDetailHandler(c *gin.Context) {
+	workflowID := c.Param("workflow")
+	wfi, err := h.agent.Store.GetWorkflow(workflowID)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	renderJSON(c, http.StatusOK, wfi)
+}
+
+func (h *HTTPTransport) brokerRecordHandler(c *gin.Context) {
+	var bro BrOptions
+	if err := c.BindJSON(&bro); err != nil {
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
+		h.logger.Error(err)
+		return
+	}
+
+	bros, err := h.agent.Store.GetBrokerRecord(&bro)
+	if err != nil {
+		renderJSON(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	renderJSON(c, http.StatusOK, bros)
 }
 
 func (h *HTTPTransport) tasksGetHandler(c *gin.Context) {
@@ -172,26 +287,16 @@ func (h *HTTPTransport) tasksGetHandler(c *gin.Context) {
 }
 
 func (h *HTTPTransport) tasksHandler(c *gin.Context) {
-	metadata := c.QueryMap("metadata")
-	sort := c.DefaultQuery("_sort", "id")
-	if sort == "id" {
-		sort = "name"
+	var to TaskOptions
+	if err := c.BindJSON(&to); err != nil {
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
+		h.logger.Error(err)
+		return
 	}
-	order := c.DefaultQuery("_order", "ASC")
-	q := c.Query("q")
 
-	tasks, err := h.agent.Store.GetTasks(
-		&TaskOptions{
-			Metadata: metadata,
-			Sort:     sort,
-			Order:    order,
-			Query:    q,
-			Status:   c.Query("status"),
-			Disabled: c.Query("disabled"),
-		},
-	)
+	tasks, err := h.agent.Store.GetTasks(&to)
 	if err != nil {
-		h.logger.WithError(err).Error("api: Unable to get tasks, store not reachable.")
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to get tasks: %s.", err))
 		return
 	}
 

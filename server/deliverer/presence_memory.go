@@ -23,27 +23,22 @@ func NewMemoryPresenceManager(n *Node, c MemoryPresenceManagerConfig) (*MemoryPr
 	}, nil
 }
 
-// AddPresence - see PresenceManager interface description.
 func (m *MemoryPresenceManager) AddPresence(ch string, uid string, info *ClientInfo) error {
 	return m.presenceHub.add(ch, uid, info)
 }
 
-// RemovePresence - see PresenceManager interface description.
 func (m *MemoryPresenceManager) RemovePresence(ch string, uid string) error {
 	return m.presenceHub.remove(ch, uid)
 }
 
-// Presence - see PresenceManager interface description.
 func (m *MemoryPresenceManager) Presence(ch string) (map[string]*ClientInfo, error) {
 	return m.presenceHub.get(ch)
 }
 
-// PresenceStats - see PresenceManager interface description.
 func (m *MemoryPresenceManager) PresenceStats(ch string) (PresenceStats, error) {
 	return m.presenceHub.getStats(ch)
 }
 
-// Close is noop for now.
 func (m *MemoryPresenceManager) Close(_ context.Context) error {
 	return nil
 }

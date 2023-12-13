@@ -1,7 +1,7 @@
 deliverer:
   port: 8003
 nats:
-  url: nats://10.1.64.77:4222
+  url: nats://127.0.0.1:4222
   name: deliverer
 auth:
   hmacsecret: kairosauthac

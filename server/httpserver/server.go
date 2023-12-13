@@ -142,6 +142,8 @@ func (server *HttpServer) Start() error {
 
 	go worklowRunner.Start(signals)
 	go server.serviceNats()
+	go pubsub.Start(server.Config, server.PubsubChan)
+
 	go func() {
 		<-signals
 		log.Warn().Msg("Shutting down...")

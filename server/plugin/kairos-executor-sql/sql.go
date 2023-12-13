@@ -57,7 +57,6 @@ func initDB(args *proto.ExecuteRequest) (*sql.DB, error) {
 	if db != nil && args.Config["instance"] == "one" {
 		return db, nil
 	}
-	fmt.Println("CONNECT")
 	driver := args.Config["driver"]
 	host := args.Config["host"]
 	port := args.Config["port"]
@@ -132,6 +131,7 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (
 					}
 					input.WorkflowID = wid
 				}
+
 				input.Sql = args.Config["sql"]
 				if args.Config["params"] != "" {
 					err := json.Unmarshal([]byte(args.Config["params"]), &input.Params)

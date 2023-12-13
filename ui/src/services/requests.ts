@@ -26,4 +26,5 @@ export default {
     post(url: string) {
         return auth(superagent.post(apiUrl(url)));
     },
+
 }

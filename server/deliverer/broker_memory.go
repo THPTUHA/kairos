@@ -52,14 +52,6 @@ func (b *MemoryBroker) PublishControl(data []byte, _, _ string) error {
 	return b.eventHandler.HandleControl(data)
 }
 
-func (b *MemoryBroker) PublishJoin(ch string, info *ClientInfo) error {
-	return b.eventHandler.HandleJoin(ch, info)
-}
-
-func (b *MemoryBroker) PublishLeave(ch string, info *ClientInfo) error {
-	return b.eventHandler.HandleLeave(ch, info)
-}
-
 func (b *MemoryBroker) Subscribe(_ string) error {
 	return nil
 }

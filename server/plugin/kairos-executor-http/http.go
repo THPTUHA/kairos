@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/circbuf"
-	kplugin "github.com/THPTUHA/kairos/server/plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 )
 
@@ -28,20 +28,7 @@ const (
 type HTTP struct {
 }
 
-// Execute Process method of the plugin
-// "executor": "http",
-//
-//	"executor_config": {
-//	    "method": "GET",             // Request method in uppercase
-//	    "url": "http://example.com", // Request url
-//	    "headers": "[]"              // Json string, such as "[\"Content-Type: application/json\"]"
-//	    "body": "",                  // POST body
-//	    "timeout": "30",             // Request timeout, unit seconds
-//	    "expectCode": "200",         // Expect response code, such as 200,206
-//	    "expectBody": "",            // Expect response body, support regexp, such as /success/
-//	    "debug": "true"              // Debug option, will log everything when this option is not empty
-//	}
-func (s *HTTP) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*proto.ExecuteResponse, error) {
+func (s *HTTP) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 	out, err := s.ExecuteImpl(args)
 	resp := &proto.ExecuteResponse{Output: out}
 	if err != nil {

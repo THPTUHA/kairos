@@ -558,7 +558,6 @@ func (c *Client) getSendPushReply(data []byte) ([]byte, error) {
 	})
 }
 
-// Unsubscribe allows unsubscribing client from channel.
 func (c *Client) Unsubscribe(ch string, unsubscribe ...Unsubscribe) {
 	if len(unsubscribe) > 1 {
 		panic("Client.Unsubscribe called with more than 1 unsubscribe argument")
@@ -1210,9 +1209,6 @@ func (c *Client) handleSubscribe(req *deliverprotocol.SubscribeRequest, cmd *del
 			return
 		}
 
-		if channelHasFlag(ctx.channelContext.flags, flagEmitJoinLeave) && ctx.clientInfo != nil {
-			go func() { _ = c.node.publishJoin(req.Channel, ctx.clientInfo) }()
-		}
 	}
 	c.eventHub.subscribeHandler(event, cb)
 	return nil
@@ -1708,16 +1704,6 @@ func (c *Client) connectCmd(req *deliverprotocol.ConnectRequest, cmd *deliverpro
 
 	c.unlockServerSideSubscriptions(subCtxMap)
 
-	if len(subCtxMap) > 0 {
-		for channel, subCtx := range subCtxMap {
-			go func(channel string, subCtx subscribeContext) {
-				if channelHasFlag(subCtx.channelContext.flags, flagEmitJoinLeave) && subCtx.clientInfo != nil {
-					_ = c.node.publishJoin(channel, subCtx.clientInfo)
-				}
-			}(channel, subCtx)
-		}
-	}
-
 	return res, nil
 }
 
@@ -1828,9 +1814,6 @@ func (c *Client) Subscribe(channel string, opts ...SubscribeOption) error {
 	err = c.transportEnqueue(replyData, channel, deliverprotocol.FrameTypePushSubscribe)
 	if err != nil {
 		return err
-	}
-	if channelHasFlag(subCtx.channelContext.flags, flagEmitJoinLeave) && subCtx.clientInfo != nil {
-		_ = c.node.publishJoin(channel, subCtx.clientInfo)
 	}
 	return nil
 }
@@ -2128,7 +2111,6 @@ func (c *Client) writeLeave(ch string, leave *deliverprotocol.Leave, data []byte
 
 func (c *Client) unsubscribe(channel string, unsubscribe Unsubscribe, disconnect *Disconnect) error {
 	c.mu.RLock()
-	info := c.clientInfo(channel)
 	chCtx, ok := c.channels[channel]
 	c.mu.RUnlock()
 	if !ok {
@@ -2146,10 +2128,6 @@ func (c *Client) unsubscribe(channel string, unsubscribe Unsubscribe, disconnect
 		if err != nil {
 			c.node.logger.log(newLogEntry(LogLevelError, "error removing channel presence", map[string]any{"channel": channel, "user": c.user, "client": c.uid, "error": err.Error()}))
 		}
-	}
-
-	if channelHasFlag(chCtx.flags, flagEmitJoinLeave) && channelHasFlag(chCtx.flags, flagSubscribed) {
-		_ = c.node.publishLeave(channel, info)
 	}
 
 	if err := c.node.removeSubscription(channel, c); err != nil {

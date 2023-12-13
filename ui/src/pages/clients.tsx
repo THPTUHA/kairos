@@ -9,6 +9,9 @@ import { formatDate } from "../helper/date"
 import { Toast } from "../components/Toast"
 import { GrSystem } from "react-icons/gr"
 import Modal from "react-responsive-modal"
+import { useRecoilState } from "recoil"
+import workflowMonitorAtom from "../recoil/workflowMonitor/atom"
+import { ClientActive } from "../models"
 
 const locale = {
     emptyText: <span>Empty client</span>,
@@ -20,12 +23,15 @@ const ClientPage = () => {
     const [showModalForm, setShowModalForm] = useState(false)
     const [clientName, setClientName] = useState("")
     const [reload, setReload] = useState(0)
+    const [wfCmd, setWfCmd] = useRecoilState(workflowMonitorAtom)
+    const [clients, setClients] = useState<Client[]>([])
 
-    const clients = useAsync(async () => {
+    useAsync(async () => {
         const ws = await services.clients
             .list()
             .catch(setError)
         if (Array.isArray(ws)) {
+            setClients(ws)
             return ws
         }
         return []
@@ -44,14 +50,29 @@ const ClientPage = () => {
         }
     }, [error])
 
+    useEffect(() => {
+        if (wfCmd) {
+            console.log({ wfCmd })
+            if (wfCmd.cmd === ClientActive) {
+                const data = wfCmd.data
+                for (const c of clients) {
+                    if (c.id == data.client_id) {
+                        c.status = wfCmd.data.status
+                    }
+                }
+                setClients([...clients])
+            }
+        }
+    }, [wfCmd])
+
     const columns: ColumnsType<Client> = [
         {
             title: 'Status',
-            dataIndex: 'stauts',
+            dataIndex: 'status',
             width: 20,
             render: (value: number) => {
                 return <>{
-                    value === 0 ? <div>Stop</div> : <div>Running</div>
+                    value === 1 ? <div>Running</div> : <div>Stop</div>
                 }</>
             }
         },
@@ -70,7 +91,7 @@ const ClientPage = () => {
             title: 'Active since',
             dataIndex: 'active_since',
             render: (value: number) => {
-                return <>{!value ?"No active" :formatDate(value)}</>
+                return <>{!value ? "No active" : formatDate(value)}</>
             }
         },
     ];
@@ -104,13 +125,12 @@ const ClientPage = () => {
                     : ""}
             </div>
             {
-                clients.value ?
-                    <Table
-                        rowSelection={rowSelection}
-                        columns={columns}
-                        dataSource={clients.value}
-                        locale={locale}
-                    /> : <div>Loading</div>
+                <Table
+                    rowSelection={rowSelection}
+                    columns={columns}
+                    dataSource={clients}
+                    locale={locale}
+                />
             }
 
             <Modal

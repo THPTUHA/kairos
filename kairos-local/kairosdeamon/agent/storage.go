@@ -17,4 +17,15 @@ type Storage interface {
 	GetQueue(workflowID string, value *map[string]string) error
 	SetBroker(broker *workflow.Broker) error
 	GetBrokers() ([]*workflow.Broker, error)
+	DeleteBroker(id string) error
+	SetBrokerRecord(br *BrokerRecordLocal) error
+	GetBrokerRecord(options *BrOptions) ([]*BrokerRecordLocal, error)
+	DeleteWorkflow(id string) error
+	GetWorkflow(id string) (*WorkflowInfo, error)
+
+	SetScript(name, script string) error
+	GetScript(name string) (string, error)
+	GetScripts() ([]string, error)
+	DeleteScript(name string) error
+	ListScript() ([]string, error)
 }

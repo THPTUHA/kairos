@@ -13,9 +13,13 @@ const Pending = 0
 const Delivering = 1
 const Running = 2
 const Pause = 3
+const Destroying = 4
+const Recovering = 5
 
 const SetStatusWorkflow = 0
 const LogMessageFlow = 1
+const DestroyWorkflow = 2
+const RecoverWorkflow = 3
 
 const PendingDeliver = 0
 const SuccessSetTask = 1
@@ -60,8 +64,13 @@ export {
   Delivering,
   Running,
   Pause,
+  Destroying,
+  Recovering,
+
   SetStatusWorkflow,
   LogMessageFlow,
+  DestroyWorkflow,
+  RecoverWorkflow,
 
   PendingDeliver,
   SuccessSetTask,

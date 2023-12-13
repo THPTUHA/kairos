@@ -34,7 +34,6 @@ func NewSubscriber() (*Subscriber, error) {
 	}, nil
 }
 
-// GetID return the subscriber id
 func (s *Subscriber) GetID() string {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -42,7 +41,6 @@ func (s *Subscriber) GetID() string {
 	return s.id
 }
 
-// GetCreatedAt return `time.Time` of the creation time
 func (s *Subscriber) GetCreatedAt() int64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
@@ -50,21 +48,18 @@ func (s *Subscriber) GetCreatedAt() int64 {
 	return s.createdAt
 }
 
-// AddTopic Adds a new topic to the subscriber
 func (s *Subscriber) AddTopic(topic string) {
 	s.lock.Lock()
 	s.topics[topic] = true
 	s.lock.Unlock()
 }
 
-// RemoveTopic Removes a topic from the subscriber
 func (s *Subscriber) RemoveTopic(topic string) {
 	s.lock.Lock()
 	delete(s.topics, topic)
 	s.lock.Unlock()
 }
 
-// GetTopics return slice of subscriber topics
 func (s *Subscriber) GetTopics() []string {
 	s.lock.RLock()
 	subscriberTopics := s.topics
@@ -77,12 +72,10 @@ func (s *Subscriber) GetTopics() []string {
 	return topics
 }
 
-// GetMessages returns a channel of *Message to listen on
 func (s *Subscriber) GetMessages() <-chan *Message {
 	return s.messages
 }
 
-// Signal sends a message to subscriber
 func (s *Subscriber) Signal(m *Message) *Subscriber {
 	s.lock.RLock()
 	if !s.destroyed {
@@ -93,11 +86,20 @@ func (s *Subscriber) Signal(m *Message) *Subscriber {
 	return s
 }
 
-// close the underlying channels/resources
 func (s *Subscriber) destroy() {
 	s.lock.Lock()
 	s.destroyed = true
 	s.lock.Unlock()
 
 	close(s.messages)
+}
+
+func (s *Subscriber) HandleMessage(fn func(v interface{})) {
+	for {
+		if msg, ok := <-s.messages; ok {
+			fn(msg.payload)
+		} else {
+			break
+		}
+	}
 }

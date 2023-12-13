@@ -77,16 +77,14 @@ func (hub *Hub) HandleConnectServer(auth *config.Auth) error {
 	client.OnPublication(func(e pubsub.ServerPublicationEvent) {
 		var cmd workflow.CmdTask
 		json.Unmarshal(e.Data, &cmd)
-		if cmd.Task != nil {
-			fmt.Printf("[HUB ONPUBLICATION] task= %+v\n, cmd=%d \n", cmd.Task, cmd.Cmd)
-			if err != nil {
-				hub.logger.WithField("task", "publication receiver task").Error(err)
-				return
-			}
-			go func() {
-				hub.taskCh <- &cmd
-			}()
+		if err != nil {
+			hub.logger.WithField("task", "publication receiver task").Error(err)
+			return
 		}
+		go func() {
+			fmt.Printf("ON PUBLICATION CMD = %+v \n", cmd)
+			hub.taskCh <- &cmd
+		}()
 	})
 
 	return nil

@@ -3,7 +3,7 @@ package agent
 import (
 	"net/rpc"
 
-	"github.com/hashicorp/go-plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 )
 
 type Processor interface {

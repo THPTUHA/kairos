@@ -101,7 +101,6 @@ func (d *DelivererServer) createNode() error {
 				Role: models.ReadWriteRole,
 			})
 		case models.ChannelUser:
-			// TODO add premission
 			certID, _ := strconv.ParseInt(user.ClientID, 10, 64)
 			req := proto.ChannelPermitRequest{
 				CertID: certID,
@@ -222,7 +221,7 @@ func (s *DelivererServer) Start() error {
 	)
 
 	go s.startSub(signals)
-	auth.Init("kairosauthac", "kairosauthrf")
+	auth.Init(s.config.Auth.HmacSecret, s.config.Auth.HmrfSecret)
 	router := mux.NewRouter().StrictSlash(true)
 	router.Handle("/pubsub", NewWebsocketHandler(s.node, WebsocketConfig{
 		CheckOrigin: s.checkSameHost,
@@ -250,7 +249,6 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 			s.logger.WithField("deliver", "receiver data").Error(err)
 			return
 		}
-		// s.redis.Set(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID), string(msg.Data), 10*time.Minute)
 		s.node.Publish(cmd.Channel, msg.Data)
 		s.logger.WithField("deliver", "receiver deliver cmd").Debug(fmt.Sprintf("id=%d channel=%s", cmd.DeliverID, cmd.Channel))
 	}
@@ -265,7 +263,20 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 		s.node.Publish(fmt.Sprintf("kairosuser-%d", cmd.UserID), msg.Data)
 		fmt.Printf("[ DELIVER MONITOR] %+v \n", cmd)
 	}
+	s.sub.Con.Subscribe(messaging.CLIENT_STATUS, func(msg *nats.Msg) {
+		var userIDs []string
+		err := json.Unmarshal(msg.Data, &userIDs)
+		if err != nil {
+			s.logger.WithField("deliver", "client status").Error(err)
+			return
+		}
+		userInfos := s.node.InfoUsers(userIDs)
+		data, _ := json.Marshal(userInfos)
+		msg.Respond(data)
+	})
+
 	s.sub.Subscribes(subList, signals)
+
 }
 
 func (s *DelivererServer) checkSameHost(r *http.Request) bool {

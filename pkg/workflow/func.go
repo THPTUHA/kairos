@@ -52,7 +52,6 @@ type ValueMap struct {
 func setValue(vm *ValueMap) (map[string]interface{}, error) {
 	mp := make(map[string]interface{})
 	for _, p := range vm.params {
-
 		if isContants(p) == nil {
 			v := getConstVar(p)
 			if strings.HasPrefix(v, `"`) {
@@ -63,11 +62,6 @@ func setValue(vm *ValueMap) (map[string]interface{}, error) {
 			}
 			continue
 		}
-		// if vm.rv != nil && (p == vm.rv.KeyVar || p == vm.rv.ValueVar) {
-		// 	mp[vm.rv.KeyVar] = vm.rv.Value[vm.rv.Index].key
-		// 	mp[vm.rv.ValueVar] = vm.rv.Value[vm.rv.Index].value
-		// 	continue
-		// }
 
 		v := vm.tempvarTemp.GetValue(p)
 		if v == nil {
@@ -125,7 +119,6 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		outputVars:  outputVars,
 		tempvarTemp: tempvarTemp,
 	}
-
 	switch exp.Func {
 	case IF_EXP, ELSEIF_EXP:
 		fmt.Println("DEBUG TEMP VAR")
@@ -296,7 +289,6 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			return nil, errors.New(fmt.Sprintf("Can't send %s, it must be default alias err =%+v", exp.Params[0], err))
 		}
 		return []interface{}{ac}, nil
-
 	case WAIT_EXP:
 		vm.params = exp.Params
 		_, e := setValue(&vm)
@@ -486,7 +478,6 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		}
 		rd[key] = value
 		return []interface{}{rd}, nil
-
 	case RETURN_EXP:
 		vm.params = exp.Params
 		if len(exp.Params) == 0 {
@@ -546,11 +537,12 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		}
 		return result, nil
 	default:
-		if funcCall != nil {
+		if funcCall != nil && funcCall.Funcs != nil {
+			fmt.Println("RUN HERE EXP")
 			vm.params = exp.Params
-			f := funcCall.call[exp.Func]
+			f := funcCall.GetFunction(exp.Func)
 			if f == nil {
-				return nil, fmt.Errorf("exp %s not define", exp.Func)
+				return nil, fmt.Errorf("expression '%s' not define", exp.Func)
 			}
 			mp, err := setValue(&vm)
 			if err != nil {
@@ -559,18 +551,22 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			tempvarTemp.String()
 			items := make([]goja.Value, 0)
 			for _, e := range exp.Input {
-				items = append(items, funcCall.funcs.ToValue(e))
+				items = append(items, funcCall.Funcs.ToValue(e))
 			}
 			for _, e := range exp.Params {
-				fmt.Printf("INPUT  Params %+v Value = %+v\n", e, mp[e])
-				items = append(items, funcCall.funcs.ToValue(mp[e]))
+				items = append(items, funcCall.Funcs.ToValue(mp[e]))
 			}
 
 			result, err := f(goja.Undefined(), items...)
+			fmt.Printf("RESULT --- %+v\n", result)
+			if err != nil {
+				fmt.Printf("RESULT 222--- %+v\n", err)
+				return nil, err
+			}
 			var rt interface{}
 			switch result.ExportType().Kind() {
 			case reflect.Map, reflect.Array:
-				obj := result.ToObject(funcCall.funcs)
+				obj := result.ToObject(funcCall.Funcs)
 				mp := make(map[string]interface{})
 				for _, k := range obj.Keys() {
 					mp[k] = obj.Get(k)
@@ -586,6 +582,8 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 
 			fmt.Printf("RESULT --- %+v ERR= %+v  type=%+v\n", rt, err, result.ExportType())
 			return []interface{}{rt}, nil
+		} else {
+			return nil, fmt.Errorf("expression '%s' not found", exp.Func)
 		}
 	}
 	return nil, nil

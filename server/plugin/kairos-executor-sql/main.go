@@ -1,15 +1,14 @@
 package main
 
 import (
-	kplugin "github.com/THPTUHA/kairos/server/plugin"
-	"github.com/hashicorp/go-plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 )
 
 func main() {
 	plugin.Serve(&plugin.ServeConfig{
-		HandshakeConfig: kplugin.Handshake,
+		HandshakeConfig: plugin.Handshake,
 		Plugins: map[string]plugin.Plugin{
-			"executor": &kplugin.ExecutorPlugin{Executor: &Sql{}},
+			"executor": &plugin.ExecutorPlugin{Executor: &Sql{}},
 		},
 
 		GRPCServer: plugin.DefaultGRPCServer,

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/workflow"
+	"github.com/THPTUHA/kairos/server/storage/models"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/tidwall/buntdb"
@@ -29,12 +30,14 @@ const (
 )
 
 var (
-	workflowBucket   = []byte("workflows")
-	tasksBucket      = []byte("tasks")
-	executionsBucket = []byte("executions")
-	metaBucket       = []byte("meta")
-	brokersBucket    = []byte("brokers")
-	queueBucket      = []byte("queue")
+	workflowBucket     = []byte("workflows")
+	tasksBucket        = []byte("tasks")
+	executionsBucket   = []byte("executions")
+	metaBucket         = []byte("meta")
+	brokersBucket      = []byte("brokers")
+	queueBucket        = []byte("queue")
+	brokerRecordBucket = []byte("broker_record")
+	scriptBucket       = []byte("script")
 )
 
 var (
@@ -78,13 +81,13 @@ func NewStore(database string, logger *logrus.Entry, local bool) (*Store, error)
 
 type TaskOptions struct {
 	Metadata    map[string]string `json:"tags"`
-	Sort        string
-	WorkflowID  int64
-	Order       string
-	Query       string
-	Status      string
-	Disabled    string
-	NoScheduler bool
+	Sort        string            `json:"sort"`
+	WorkflowID  int64             `json:"workflow_id"`
+	Query       string            `json:"query"`
+	Status      string            `json:"status"`
+	Disabled    string            `json:"disabled"`
+	NoScheduler string            `json:"no_scheduler"`
+	Name        string            `json:"name"`
 }
 
 func (s *Store) taskHasMetadata(task *Task, metadata map[string]string) bool {
@@ -145,8 +148,93 @@ func (s *Store) setMetaTxFunc(key, value string) func(tx *bolt.Tx) error {
 	}
 }
 
+func (s *Store) setBrokerRecordTxFunc(br *BrokerRecordLocal) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		mBRkt, err := tx.CreateBucketIfNotExists(brokerRecordBucket)
+		if err != nil {
+			return err
+		}
+		kt, err := mBRkt.CreateBucketIfNotExists([]byte(fmt.Sprint(br.BrokerID)))
+		if err != nil {
+			return err
+		}
+		v, err := json.Marshal(br)
+		if err != nil {
+			return err
+		}
+		kt.Put([]byte(fmt.Sprint(br.BrokerID)), []byte(v))
+		return nil
+	}
+}
+
+func (s *Store) deleteBrokerRecordTxFunc(brokerID string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		mBRkt, err := tx.CreateBucketIfNotExists(brokerRecordBucket)
+		if err != nil {
+			return err
+		}
+		err = mBRkt.DeleteBucket([]byte(brokerID))
+		return err
+	}
+}
+
+func (s *Store) SetBrokerRecord(br *BrokerRecordLocal) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setBrokerRecordTxFunc(br)(tx)
+	})
+}
+
+type BrOptions struct {
+	WorkflowID int64  `json:"workflow_id"`
+	BrokerID   int64  `json:"broker_id"`
+	Limit      string `json:"limit"`
+}
+
+type BrokerRecordLocal struct {
+	models.BrokerRecord
+	WorkflowID int64 `json:"worklow_id"`
+}
+
+func (s *Store) GetBrokerRecord(options *BrOptions) ([]*BrokerRecordLocal, error) {
+	brs := make([]*BrokerRecordLocal, 0)
+	tx, err := s.db.Begin(true)
+	if err != nil {
+		return nil, err
+	}
+
+	mBRkt, err := tx.CreateBucketIfNotExists(brokerRecordBucket)
+	if err != nil {
+		return nil, err
+	}
+	kt, err := mBRkt.CreateBucketIfNotExists([]byte(fmt.Sprint(options.BrokerID)))
+	if err != nil {
+		return nil, err
+	}
+	c := kt.Cursor()
+
+	brFn := func(br *BrokerRecordLocal) bool {
+		if options == nil ||
+			(options.WorkflowID == 0 || options.WorkflowID == br.WorkflowID) {
+			return true
+		}
+		return false
+	}
+
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var br BrokerRecordLocal
+		err := json.Unmarshal(v, &br)
+		if err != nil {
+			return brs, err
+		}
+		if brFn(&br) {
+			brs = append(brs, &br)
+		}
+	}
+
+	return brs, tx.Commit()
+}
+
 func (s *Store) GetTasks(options *TaskOptions) ([]*Task, error) {
-	s.logger.Debug(" GetTasks-----")
 	tasks := make([]*Task, 0)
 	tx, err := s.db.Begin(true)
 	if err != nil {
@@ -169,56 +257,58 @@ func (s *Store) GetTasks(options *TaskOptions) ([]*Task, error) {
 	tasksFn := func(task *Task) bool {
 		task.logger = s.logger
 		if options == nil ||
-			(options.WorkflowID != 0 || options.WorkflowID == task.WorkflowID) &&
+			(options.WorkflowID == 0 || options.WorkflowID == task.WorkflowID) &&
 				(options.Metadata == nil || len(options.Metadata) == 0 || s.taskHasMetadata(task, options.Metadata)) &&
 				(options.Query == "" || strings.Contains(task.Name, options.Query)) &&
 				(options.Disabled == "" || strconv.FormatBool(task.Disabled) == options.Disabled) &&
 				(task.Status == "" || (options.Status == "" || task.Status == options.Status)) &&
-				(task.Schedule != "" || options.NoScheduler) {
+				(options.NoScheduler == "" || (options.NoScheduler == "true" && task.Schedule == "") || (options.NoScheduler == "false" && task.Schedule != "")) &&
+				(options.Name == "" || task.Name == options.Name) {
 			return true
 		}
 		return false
 	}
 
-	if options.WorkflowID == 0 {
-		c := taskBkt.Cursor()
-		for k, v := c.First(); k != nil; k, v = c.Next() {
-			s.logger.Debug("taskID = ", string(k))
-			var task Task
-			err := json.Unmarshal(v, &task)
-			if err != nil {
-				return tasks, err
-			}
-			if tasksFn(&task) {
-				s.logger.Debug("taskID Pass = ", string(k))
-				task.logger = s.logger
-				tasks = append(tasks, &task)
-			}
-		}
-	} else {
-		workflowBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+	c := taskBkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		// s.logger.Debug("taskID = ", string(k))
+		var task Task
+		err := json.Unmarshal(v, &task)
 		if err != nil {
 			return tasks, err
 		}
-
-		r := workflowBkt.Get([]byte(fmt.Sprint(options.WorkflowID)))
-		ids := strings.Split(string(r), ",")
-		for _, id := range ids {
-			v := taskBkt.Get([]byte(id))
-			if v != nil {
-				var task Task
-				err := json.Unmarshal(v, &task)
-				if err != nil {
-					return tasks, err
-				}
-				if tasksFn(&task) {
-					task.logger = s.logger
-					tasks = append(tasks, &task)
-				}
-			}
+		if tasksFn(&task) {
+			// s.logger.Debug("taskID Pass = ", string(k))
+			task.logger = s.logger
+			tasks = append(tasks, &task)
 		}
-
 	}
+
+	// if options.WorkflowID == 0 {
+
+	// } else {
+	// 	workflowBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+	// 	if err != nil {
+	// 		return tasks, err
+	// 	}
+
+	// 	r := workflowBkt.Get([]byte(fmt.Sprint(options.WorkflowID)))
+	// 	ids := strings.Split(string(r), ",")
+	// 	for _, id := range ids {
+	// 		v := taskBkt.Get([]byte(id))
+	// 		if v != nil {
+	// 			var task Task
+	// 			err := json.Unmarshal(v, &task)
+	// 			if err != nil {
+	// 				return tasks, err
+	// 			}
+	// 			if tasksFn(&task) {
+	// 				task.logger = s.logger
+	// 				tasks = append(tasks, &task)
+	// 			}
+	// 		}
+	// 	}
+	// }
 	return tasks, tx.Commit()
 }
 
@@ -245,15 +335,30 @@ func (s *Store) SetTask(task *Task) error {
 
 func (s *Store) setBrokerTxFunc(broker *workflow.Broker) func(tx *bolt.Tx) error {
 	return func(tx *bolt.Tx) error {
+		k := []byte(fmt.Sprint(broker.WorkflowID))
+		wBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+		wtBkt, err := wBkt.CreateBucketIfNotExists(k)
+		if err != nil {
+			return err
+		}
+		wtdBkt, err := wtBkt.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+
 		brokerBkt, err := tx.CreateBucketIfNotExists(brokersBucket)
 		if err != nil {
 			return err
 		}
-		bt, err := json.Marshal(brokerBkt)
+		bt, err := json.Marshal(broker)
 		if err != nil {
 			return err
 		}
 		brokerBkt.Put([]byte(fmt.Sprint(broker.ID)), bt)
+		wtdBkt.Put(k, bt)
 		return nil
 	}
 }
@@ -300,21 +405,163 @@ func (s *Store) GetBrokers() ([]*workflow.Broker, error) {
 	}
 	defer bx.Rollback()
 
-	brokerBkt, err := bx.CreateBucketIfNotExists(tasksBucket)
+	brokerBkt, err := bx.CreateBucketIfNotExists(brokersBucket)
 	if err != nil {
 		return brokers, err
 	}
 
 	c := brokerBkt.Cursor()
 	for k, v := c.First(); k != nil; k, v = c.Next() {
+		fmt.Println("Broker value", string(v))
 		var broker workflow.Broker
 		err := json.Unmarshal(v, &broker)
 		if err != nil {
 			return brokers, err
 		}
+		if broker.ID != 0 {
+			brokers = append(brokers, &broker)
+		}
 	}
 
 	return brokers, bx.Commit()
+}
+
+func (s *Store) deleteBrokerTxFunc(brokerID string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+
+		brokerBkt, err := tx.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+		be := brokerBkt.Get([]byte(brokerID))
+		if be == nil {
+			return ErrNotFound
+		}
+		var broker workflow.Broker
+		err = json.Unmarshal(be, &broker)
+		if err != nil {
+			return err
+		}
+
+		wBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+
+		wtBkt, err := wBkt.CreateBucketIfNotExists([]byte(fmt.Sprint(broker.WorkflowID)))
+		if err != nil {
+			return err
+		}
+		wtdBkt, err := wtBkt.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+
+		if err = wtdBkt.Delete([]byte(fmt.Sprint(broker.WorkflowID))); err != nil {
+			return err
+		}
+
+		if err = brokerBkt.Delete([]byte(brokerID)); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (s *Store) DeleteBroker(id string) error {
+	s.db.Update(func(tx *bolt.Tx) error {
+		err := s.deleteBrokerTxFunc(id)(tx)
+		if err != nil {
+			return err
+		}
+		return s.deleteBrokerRecordTxFunc(id)(tx)
+	})
+	return nil
+}
+
+func (s *Store) deleteWorkflowTxFunc(workflowID string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+
+		workflowBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+		wdBkt, err := workflowBkt.CreateBucketIfNotExists([]byte(workflowID))
+		if err != nil {
+			return err
+		}
+		tBkt, err := wdBkt.CreateBucketIfNotExists(tasksBucket)
+		bBkt, err := wdBkt.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+
+		tc := tBkt.Cursor()
+		for k, _ := tc.First(); k != nil; k, _ = tc.Next() {
+			s.deleteTaskTxFunc(string(k))(tx)
+		}
+
+		bc := bBkt.Cursor()
+		for k, _ := bc.First(); k != nil; k, _ = tc.Next() {
+			s.deleteBrokerTxFunc(string(k))(tx)
+		}
+
+		err = workflowBkt.DeleteBucket([]byte(workflowID))
+		return err
+	}
+}
+
+func (s *Store) DeleteWorkflow(id string) error {
+	s.db.Update(func(tx *bolt.Tx) error {
+		return s.deleteWorkflowTxFunc(id)(tx)
+	})
+	return nil
+}
+
+type WorkflowInfo struct {
+	TaskIDs   []int64
+	BrokerIDs []int64
+}
+
+func (s *Store) getWorklowTxFunc(workflowID string, wfi *WorkflowInfo) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+
+		workflowBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+		wdBkt, err := workflowBkt.CreateBucketIfNotExists([]byte(workflowID))
+		if err != nil {
+			return err
+		}
+		tBkt, err := wdBkt.CreateBucketIfNotExists(tasksBucket)
+		bBkt, err := wdBkt.CreateBucketIfNotExists(brokersBucket)
+		if err != nil {
+			return err
+		}
+
+		tc := tBkt.Cursor()
+		for k, _ := tc.First(); k != nil; k, _ = tc.Next() {
+			id, _ := strconv.ParseInt(string(k), 10, 64)
+			wfi.TaskIDs = append(wfi.TaskIDs, id)
+		}
+
+		bc := bBkt.Cursor()
+		for k, _ := bc.First(); k != nil; k, _ = tc.Next() {
+			id, _ := strconv.ParseInt(string(k), 10, 64)
+			wfi.BrokerIDs = append(wfi.BrokerIDs, id)
+		}
+
+		return err
+	}
+}
+
+func (s *Store) GetWorkflow(id string) (*WorkflowInfo, error) {
+	var wfi WorkflowInfo
+	s.db.Update(func(tx *bolt.Tx) error {
+		return s.getWorklowTxFunc(id, &wfi)(tx)
+	})
+	return &wfi, nil
 }
 
 func (*Store) setQueueTxFunc(workflowID, k, v string) func(tx *bolt.Tx) error {
@@ -388,6 +635,87 @@ func (s *Store) SetQueue(workflowID, k, v string) error {
 	})
 }
 
+func (*Store) setScriptTxFunc(name, script string) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		sbkt, err := tx.CreateBucketIfNotExists(scriptBucket)
+
+		if err != nil {
+			return err
+		}
+
+		err = sbkt.Put([]byte(name), []byte(script))
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (s *Store) SetScript(name, script string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setScriptTxFunc(name, script)(tx)
+	})
+}
+
+func (s *Store) GetScript(name string) (string, error) {
+	tx, err := s.db.Begin(true)
+
+	sbkt, err := tx.CreateBucketIfNotExists(scriptBucket)
+
+	if err != nil {
+		return "", err
+	}
+
+	script := sbkt.Get([]byte(name))
+	return string(script), tx.Commit()
+}
+
+func (s *Store) GetScripts() ([]string, error) {
+	tx, err := s.db.Begin(true)
+
+	sbkt, err := tx.CreateBucketIfNotExists(scriptBucket)
+	scripts := make([]string, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	c := sbkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		scripts = append(scripts, string(v))
+	}
+	return scripts, tx.Commit()
+}
+
+func (s *Store) DeleteScript(name string) error {
+	tx, err := s.db.Begin(true)
+
+	sbkt, err := tx.CreateBucketIfNotExists(scriptBucket)
+	if err != nil {
+		return err
+	}
+	err = sbkt.Delete([]byte(name))
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Store) ListScript() ([]string, error) {
+	tx, err := s.db.Begin(true)
+
+	sbkt, err := tx.CreateBucketIfNotExists(scriptBucket)
+	scripts := make([]string, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	c := sbkt.Cursor()
+	for k, _ := c.First(); k != nil; k, _ = c.Next() {
+		scripts = append(scripts, string(k))
+	}
+	return scripts, tx.Commit()
+}
+
 func (s *Store) GetQueue(workflowID string, value *map[string]string) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -418,6 +746,27 @@ func (s *Store) getTaskTxFunc(taskID string, task *Task) func(tx *bolt.Tx) error
 
 func (s *Store) setTaskTxFunc(task *Task) func(tx *bolt.Tx) error {
 	return func(tx *bolt.Tx) error {
+		wBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+		wtdBkt, err := wBkt.CreateBucketIfNotExists([]byte(fmt.Sprint(task.WorkflowID)))
+		if err != nil {
+			return err
+		}
+		wtBkt, err := wtdBkt.CreateBucketIfNotExists(tasksBucket)
+		if err != nil {
+			return err
+		}
+		bt, err := task.ToBytes()
+		if err != nil {
+			return err
+		}
+		err = wtBkt.Put([]byte(fmt.Sprint(task.ID)), bt)
+		if err != nil {
+			return err
+		}
+
 		taskBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
 		te := taskBkt.Get([]byte(task.ID))
 		if te != nil {
@@ -455,10 +804,7 @@ func (s *Store) setTaskTxFunc(task *Task) func(tx *bolt.Tx) error {
 			}
 
 		}
-		bt, err := task.ToBytes()
-		if err != nil {
-			return err
-		}
+
 		taskBkt.Put([]byte(task.ID), bt)
 		return nil
 	}
@@ -475,6 +821,30 @@ func (s *Store) deleteTaskTxFunc(taskID string) func(tx *bolt.Tx) error {
 		if te == nil {
 			return ErrNotFound
 		}
+		var task Task
+		err = json.Unmarshal(te, &task)
+		if err != nil {
+			return err
+		}
+
+		wBkt, err := tx.CreateBucketIfNotExists(workflowBucket)
+		if err != nil {
+			return err
+		}
+
+		wtBkt, err := wBkt.CreateBucketIfNotExists([]byte(fmt.Sprint(task.WorkflowID)))
+		if err != nil {
+			return err
+		}
+		wtdBkt, err := wtBkt.CreateBucketIfNotExists(tasksBucket)
+		if err != nil {
+			return err
+		}
+
+		if err = wtdBkt.Delete([]byte(fmt.Sprint(task.WorkflowID))); err != nil {
+			return err
+		}
+
 		if err = taskBkt.Delete([]byte(taskID)); err != nil {
 			return err
 		}

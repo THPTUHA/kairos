@@ -1,7 +1,6 @@
 import { Google } from '@mui/icons-material';
 import { Layout, Menu } from 'antd';
 import { Content, Footer, Header } from 'antd/es/layout/layout';
-import { Kairos, SubscriptionState } from 'kairos'
 import { Link } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import userInfoAtom from '../recoil/userInfo/atom';

@@ -32,7 +32,7 @@ func init() {
 
 func loginRun() error {
 	fmt.Println("Start login ....")
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s?name=%s", loginConfig.DeamonLoginEndpoint, loginConfig.NodeName), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s?name=%s", fmt.Sprintf("%s/", loginConfig.DeamonLoginEndpoint), loginConfig.NodeName), nil)
 	if err != nil {
 		return err
 	}
@@ -42,10 +42,9 @@ func loginRun() error {
 	if err != nil {
 		return err
 	}
-
 	defer resp.Body.Close()
 	c := &bytes.Buffer{}
 	_, err = c.ReadFrom(resp.Body)
 	fmt.Println(c.String())
-	return nil
+	return err
 }

@@ -30,13 +30,10 @@ type Node struct {
 	shutdownCh      chan struct{}
 	clientEvents    *eventHub
 	logger          *logger
-	// cache control encoder in Node.
-	controlEncoder controlproto.Encoder
-	// cache control decoder in Node.
-	controlDecoder controlproto.Decoder
-	// subLocks synchronizes access to adding/removing subscriptions.
-	subLocks     map[int]*sync.Mutex
-	subDissolver *dissolve.Dissolver
+	controlEncoder  controlproto.Encoder
+	controlDecoder  controlproto.Decoder
+	subLocks        map[int]*sync.Mutex
+	subDissolver    *dissolve.Dissolver
 
 	nowTimeGetter nowtime.Getter
 }
@@ -350,23 +347,6 @@ func (n *Node) handlePublication(ch string, pub *Publication) error {
 	return n.hub.BroadcastPublication(ch, pub)
 }
 
-func (n *Node) handleJoin(ch string, info *ClientInfo) error {
-	numSubscribers := n.hub.NumSubscribers(ch)
-	hasCurrentSubscribers := numSubscribers > 0
-	if !hasCurrentSubscribers {
-		return nil
-	}
-	return n.hub.broadcastJoin(ch, info)
-}
-func (n *Node) handleLeave(ch string, info *ClientInfo) error {
-	numSubscribers := n.hub.NumSubscribers(ch)
-	hasCurrentSubscribers := numSubscribers > 0
-	if !hasCurrentSubscribers {
-		return nil
-	}
-	return n.hub.broadcastLeave(ch, info)
-}
-
 func (n *Node) publish(ch string, data []byte, opts ...PublishOption) (PublishResult, error) {
 	pubOpts := &PublishOptions{}
 	for _, opt := range opts {
@@ -382,16 +362,6 @@ type PublishResult struct {
 
 func (n *Node) Publish(channel string, data []byte, opts ...PublishOption) (PublishResult, error) {
 	return n.publish(channel, data, opts...)
-}
-
-// publishJoin allows publishing join message into channel when someone subscribes on it
-// or leave message when someone unsubscribes from channel.
-func (n *Node) publishJoin(ch string, info *ClientInfo) error {
-	return n.broker.PublishJoin(ch, info)
-}
-
-func (n *Node) publishLeave(ch string, info *ClientInfo) error {
-	return n.broker.PublishLeave(ch, info)
 }
 
 var errNotificationHandlerNotRegistered = errors.New("notification handler not registered")
@@ -509,15 +479,20 @@ func (n *Node) pubDisconnect(user string, disconnect Disconnect, clientID string
 	return n.publishControl(cmd, "")
 }
 
-// addClient registers authenticated connection in clientConnectionHub
-// this allows to make operations with user connection on demand.
 func (n *Node) addClient(c *Client) error {
 	return n.hub.add(c)
 }
 
-// removeClient removes client connection from connection registry.
 func (n *Node) removeClient(c *Client) error {
 	return n.hub.remove(c)
+}
+
+func (n *Node) InfoUsers(userIDs []string) []*UserInfo {
+	uids := make([]*UserInfo, 0)
+	for _, c := range userIDs {
+		uids = append(uids, n.hub.InfoUser(c))
+	}
+	return uids
 }
 
 // addSubscription registers subscription of connection on channel in both
@@ -942,21 +917,6 @@ func (h *brokerEventHandler) HandlePublication(ch string, pub *Publication) erro
 		panic("nil Publication received, this must never happen")
 	}
 	return h.node.handlePublication(ch, pub)
-}
-
-// HandleJoin coming from Broker.
-func (h *brokerEventHandler) HandleJoin(ch string, info *ClientInfo) error {
-	if info == nil {
-		panic("nil join ClientInfo received, this must never happen")
-	}
-	return h.node.handleJoin(ch, info)
-}
-
-func (h *brokerEventHandler) HandleLeave(ch string, info *ClientInfo) error {
-	if info == nil {
-		panic("nil leave ClientInfo received, this must never happen")
-	}
-	return h.node.handleLeave(ch, info)
 }
 
 // HandleControl coming from Broker.

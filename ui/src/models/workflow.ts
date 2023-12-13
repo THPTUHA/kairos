@@ -1,5 +1,8 @@
 
 export const SetStatusWorkflow = 0
+export const LogMessageFlow = 1
+export const DestroyWorkflow = 2
+export const ClientActive = 3
 export interface MonitorWorkflow {
     cmd :number;
     data: any;
@@ -14,6 +17,13 @@ export interface Workflow {
     raw_data: string;
     file: WorkflowFile;
     status: number;
+}
+
+export interface WorkflowRecord {
+    id: number;
+    created_at: number;
+    status: number;
+    record: string;
 }
 
 export interface WorkflowFile {

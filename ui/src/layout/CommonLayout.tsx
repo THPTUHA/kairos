@@ -12,7 +12,7 @@ import { Toast } from "../components/Toast";
 import { useRecoilState } from "recoil";
 import userInfoAtom from "../recoil/userInfo/atom";
 import { Header } from "antd/es/layout/layout";
-import { Kairos, SubscriptionState } from "kairos";
+import { Kairos, SubscriptionState } from "kairos-js";
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
 import { PiFunctionBold } from "react-icons/pi";
 import { FcWorkflow } from "react-icons/fc";
@@ -21,7 +21,7 @@ const MenuItems = [
     { path: "/workflows", title: "workflows", icon: <GoWorkflow /> },
     { path: "/clients", title: "clients", icon: <GrVirtualMachine /> },
     { path: "/channels", title: "channels", icon: <RiWechatChannelsLine /> },
-    { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
+    // { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
     { path: "/certificates", title: "certificates", icon: <GrCertificate /> },
     { path: "/dashboard", title: "dashboard", icon: <TbLayoutDashboard /> },
     { path: "/graphs", title: "graph", icon: <FcWorkflow /> },
@@ -31,7 +31,7 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
     const [error, setError] = useState<Error>();
     const [userInfo, setUserInfo] = useRecoilState(userInfoAtom)
     const [wfCmd, setWfCmd] = useRecoilState(workflowMonitorAtom)
-    
+
     const setup = useAsync(async () => {
         const u = await services.users
             .get()
@@ -41,14 +41,14 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
             console.log(u)
             try {
                 const channel = `kairosuser-${u.id}`
-                const kairos = new Kairos('ws://localhost:8003/pubsub', "",{
+                const kairos = new Kairos('ws://localhost:8003/pubsub', "", {
                     secret_key: localStorage.getItem('accessToken') || "",
                 });
 
-                kairos.on('message', function(ctx){
+                kairos.on('message', function (ctx) {
                     console.log(ctx)
                 })
-                
+
                 kairos.on('connected', function (ctx) {
                     console.log("connected")
                 });
@@ -61,14 +61,16 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                     console.log("disconnected")
                 });
 
-                kairos.on('publication', function(ctx){
+                kairos.on('publication', function (ctx) {
                     // console.log("Reciver message",ctx.data)
+                    console.log("CTX----", ctx)
                     const msg = ctx.data
-                    console.log(ctx)
-                    ctx.data = JSON.parse(msg)
+                    if (msg) {
+                        ctx.data = JSON.parse(msg)
+                    }
                     setWfCmd(ctx)
                 })
-                
+
                 kairos.connect();
 
                 // const sub = kairos.newSubscription("chat:index");
@@ -89,7 +91,7 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
             } catch (error) {
                 console.log("Websocket err ", error)
             }
-             
+
         }
         return u
     }, [])

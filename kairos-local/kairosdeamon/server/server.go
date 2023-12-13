@@ -13,8 +13,8 @@ import (
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/events"
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/routers"
 	"github.com/THPTUHA/kairos/pkg/logger"
+	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/gin-gonic/gin"
-	"github.com/hashicorp/go-plugin"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 )

@@ -17,6 +17,9 @@ const (
 	Delivering
 	Running
 	Pause
+	Destroying
+	Destroyed
+	Recovering
 )
 
 const (
@@ -86,6 +89,7 @@ type Broker struct {
 	Flows       BrokerFlows              `yaml:"flows" json:"flows,omitempty"`
 	Template    *Template                `json:"template,omitempty"`
 	DynamicVars map[string]*CmdReplyTask `json:"dynamic_vars,omitempty"`
+	WorkflowID  int64                    `json:"workflow_id"`
 }
 
 func (b *Broker) IsListen(name string) bool {
@@ -173,12 +177,12 @@ type Workflow struct {
 	Version   *semver.Version `yaml:"version" json:"version"`
 	ID        int64           `json:"id" json:"id"`
 	Name      string          `yaml:"name" json:"name"`
-	Vars      *Vars           `yaml:"vars" json:"vars"`
+	Vars      *Vars           `yaml:"vars" json:"vars,omitempty"`
 	Namespace string          `yaml:"namespace" json:"namespace"`
 	Tasks     Tasks           `yaml:"tasks" json:"tasks"`
 	Brokers   Brokers         `yaml:"brokers" json:"brokers"`
-	Channels  []*Channel      `json:"channels" json:"channels"`
-	Clients   []*Client       `json:"clients" json:"clients"`
+	Channels  []*Channel      `json:"channels" json:"channels,omitempty"`
+	Clients   []*Client       `json:"clients" json:"clients,omitempty"`
 	Status    int             `json:"status" json:"status"`
 	CreatedAt int             `json:"created_at" json:"created_at"`
 	UpdatedAt int             `json:"updated_at" json:"updated_at"`
@@ -619,6 +623,7 @@ const (
 
 	RequestTaskRunSyncCmd
 	SetBrokerCmd
+	RequestDestroyWf
 )
 
 type ResponseActionTask int
@@ -633,6 +638,7 @@ const (
 	ReplyMessageCmd
 	ReplyRequestTaskSyncCmd
 	ReplySetBrokerCmd
+	ReplyDestroyWf
 )
 
 const (
@@ -647,6 +653,8 @@ const (
 	SuccessReceiveRequestRunSyncTaskCmd
 	SuccessSetBroker
 	FaultSetBroker
+	SuccessDestroyWorkflow
+	FaultDestroyWorkflow
 )
 
 type Result struct {
@@ -664,6 +672,7 @@ type CmdReplyTask struct {
 	Cmd        ResponseActionTask `json:"cmd"`
 	TaskID     int64              `json:"task_id,omitempty"`
 	TaskName   string             `json:"task_name,omitempty"`
+	BrokerID   int64              `json:"broker_id,omitempty"`
 	DeliverID  int64              `json:"deliver_id,omitempty"`
 	RunOn      string             `json:"run_on,omitempty"`
 	Status     int                `json:"status"`
@@ -693,6 +702,8 @@ type CmdTask struct {
 const (
 	SetStatusWorkflow = iota
 	LogMessageFlow
+	DestroyWorkflow
+	RecoverWorkflow
 )
 
 const (

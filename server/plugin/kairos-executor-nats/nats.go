@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/THPTUHA/kairos/pkg/circbuf"
-	kplugin "github.com/THPTUHA/kairos/server/plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	"github.com/nats-io/nats.go"
 )
@@ -27,7 +27,7 @@ type Nats struct {
 //	    "userName":"test@hbh.dfg",
 //	    "password":"dfdffs"
 //	}
-func (s *Nats) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*proto.ExecuteResponse, error) {
+func (s *Nats) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 
 	out, err := s.ExecuteImpl(args)
 	resp := &proto.ExecuteResponse{Output: out}

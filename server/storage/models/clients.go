@@ -6,4 +6,5 @@ type Client struct {
 	UserID      int64  `json:"user_id"`
 	CreatedAt   int64  `json:"created_at"`
 	ActiveSince int64  `json:"active_since"`
+	Status      int    `json:"status"`
 }

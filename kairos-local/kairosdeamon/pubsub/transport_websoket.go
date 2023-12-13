@@ -54,10 +54,6 @@ func newWebsocketTransport(url string, protocolType deliverprotocol.Type, config
 	dialer.HandshakeTimeout = config.HandshakeTimeout
 	dialer.EnableCompression = config.EnableCompression
 
-	if protocolType == deliverprotocol.TypeProtobuf {
-		dialer.Subprotocols = []string{"centrifuge-protobuf"}
-	}
-
 	conn, resp, err := dialer.Dial(url, wsHeaders)
 	if err != nil {
 		return nil, fmt.Errorf("error dial: %v", err)

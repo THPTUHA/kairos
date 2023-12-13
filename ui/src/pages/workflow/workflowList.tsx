@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
 import { UploadButton } from "../../components/UploadButton"
-import { SetStatusWorkflow, Workflow, WorkflowFile } from "../../models/workflow";
+import { DestroyWorkflow, SetStatusWorkflow, Workflow, WorkflowFile } from "../../models/workflow";
 import { services } from "../../services";
 import { WorkflowEditor } from "../../components/WorkflowEditor";
-import { Drawer, Table } from "antd";
+import { Drawer, Popconfirm, Table, Tooltip } from "antd";
 import { ColumnsType } from "antd/es/table";
 import { useAsync } from "react-use";
 import { Toast } from "../../components/Toast";
 import { formatDate } from "../../helper/date";
 import { BiSolidShow } from "react-icons/bi";
-import { MdCreate, MdDelete } from "react-icons/md";
+import { MdCreate, MdDelete, MdOutlineSevereCold } from "react-icons/md";
 import { ObjectEditor } from "../../components/ObjectEditor";
 import { IoIosAdd } from "react-icons/io";
-import { Delivering, Pause, Pending, Running } from "../../conts";
-import { useRecoilValue } from "recoil";
+import { Delivering, Pause, Pending, Running, Destroying, Recovering, RecoverWorkflow } from "../../conts";
+import { useRecoilState, useRecoilValue } from "recoil";
 import workflowMonitorAtom from "../../recoil/workflowMonitor/atom";
 import Modal from "react-responsive-modal";
+import { FaPause, FaPlay } from "react-icons/fa6";
+import { RiDeviceRecoverLine } from "react-icons/ri";
 
 const locale = {
     emptyText: <span>Empty workflow</span>,
@@ -33,7 +35,10 @@ const WorkflowListPage = () => {
     const [showYamlEditor, setShowYamlEditor] = useState(false)
     const [reload, setReload] = useState(0)
     const [workflows, setWorkflows] = useState<Workflow[]>([])
-    const wfCmd = useRecoilValue(workflowMonitorAtom)
+    const [openLog, setOpenLog] = useState(0)
+
+    const [wfCmd, setWfCmd] = useRecoilState(workflowMonitorAtom)
+
     const onWfYamlClose = () => {
         setShowYamlEditor(false)
         setWorkflowFile(undefined)
@@ -44,6 +49,18 @@ const WorkflowListPage = () => {
             setWfSelected(selectedRows.length)
         },
     };
+
+    const wflog = useAsync(async () => {
+        if (openLog) {
+            const ws = await services.workflows
+                .record(openLog)
+                .catch(setError)
+            if (Array.isArray(ws)) {
+                return ws
+            }
+        }
+        return []
+    }, [openLog])
 
     const wff = useAsync(async () => {
         const ws = await services.workflows
@@ -63,14 +80,18 @@ const WorkflowListPage = () => {
             width: 20,
             render: (value: number) => {
                 return <>{
-                    value === Pause
+                    value == Pause
                         ? <div>Pause</div>
-                        : value === Delivering
+                        : value == Delivering
                             ? <div>Delivering</div>
-                            : value === Running
+                            : value == Running
                                 ? <div>Running</div>
-                                : value === Pending
-                                    ? <div>Pending</div> : ""
+                                : value == Pending
+                                    ? <div>Pending</div> :
+                                    value == Destroying
+                                        ? <div>Destroying</div> : 
+                                        value == Recovering
+                                        ? <div>Recovering</div>:""
                 }</>
             }
         },
@@ -95,17 +116,50 @@ const WorkflowListPage = () => {
             render: (_: any, record: Workflow) => {
                 return (
                     <div className="flex">
-                        <MdDelete className="w-6 h-6 cursor-pointer"
-
-                        />
-                        <BiSolidShow className="w-6 h-6 cursor-pointer"
-                            onClick={() => {
-                                console.log(record)
-                                setWorkflowFile(record.file)
-                                setOnlyRead(true)
-                                setShowYamlEditor(true)
+                        <Popconfirm
+                            title={"Destroy worklow"}
+                            onConfirm={() => {
+                                services.workflows.drop(record.id).then().catch()
                             }}
-                        />
+                            okText={"yes"}
+                            cancelText={"no"}
+                        >
+                            <Tooltip title={"delete"}>
+                                <MdDelete className="w-6 h-6 cursor-pointer" />
+                            </Tooltip>
+                        </Popconfirm>
+
+
+                        <Tooltip title={"detail"}>
+                            <BiSolidShow className="w-6 h-6 cursor-pointer"
+                                onClick={() => {
+                                    console.log(record)
+                                    setWorkflowFile(record.file)
+                                    setOnlyRead(true)
+                                    setShowYamlEditor(true)
+                                }}
+                            />
+                        </Tooltip>
+                        <Tooltip title={"log"}>
+                            <MdOutlineSevereCold className="w-6 h-6 cursor-pointer"
+                                onClick={() => {
+                                    setOpenLog(record.id)
+                                }}
+                            />
+                        </Tooltip>
+                        <Tooltip title={"recover"}>
+                            <RiDeviceRecoverLine
+                                className="w-6 h-6 cursor-pointer"
+                                onClick={() => {
+                                    services.workflows
+                                        .recover(record.id)
+                                        .then(()=>{
+                                            Toast.success("Start recover")
+                                        })
+                                        .catch(setError)
+                                }}
+                            />
+                        </Tooltip>
                     </div>
                 )
             }
@@ -120,7 +174,7 @@ const WorkflowListPage = () => {
     }, [error])
 
     function onCreateWorkflow(e: any) {
-        if(e && e.err){
+        if (e && e.err) {
             setError(new Error(e.err))
             return
         }
@@ -128,19 +182,35 @@ const WorkflowListPage = () => {
         setReload(e => e + 1)
     }
 
-    useEffect(()=>{
-        if(wfCmd &&wfCmd.cmd === SetStatusWorkflow){
-            console.log({wfCmd})
-            for(const w of workflows){
-                if(w.id == wfCmd.workflow_id){
-                    w.status = wfCmd.data.status
+    useEffect(() => {
+        if (wfCmd) {
+            console.log({ wfCmd })
+            if (wfCmd.cmd === SetStatusWorkflow) {
+                for (const w of workflows) {
+                    if (w.id == wfCmd.workflow_id) {
+                        w.status = wfCmd.data.status
+                    }
                 }
+                setWorkflows([...workflows])
+                console.log(workflows)
             }
-            setWorkflows([...workflows])
-            console.log(workflows)
-        }
-    },[wfCmd])
+            if (wfCmd.cmd === DestroyWorkflow) {
+                const wfs = workflows.filter(item => item.id != wfCmd.workflow_id)
+                setWorkflows(wfs)
+            }
 
+            if(wfCmd.cmd === RecoverWorkflow){
+                if(wfCmd.data.status === "false"){
+                    Toast.error("Workflow recover error")
+                }else if(wfCmd.data.status === "true"){
+                    Toast.success("Workflow recover success")
+                }
+                setWfCmd(null)
+            }
+        }
+    }, [wfCmd])
+
+    console.log("Value", wflog.value)
     return (
         <div>
             <div className="flex">
@@ -175,38 +245,58 @@ const WorkflowListPage = () => {
                 onClose={onWfYamlClose}
                 center
             >
-               <div className="min-w-[800px]">
-               {
-                    workflowFile && onlyRead && <ObjectEditor value={workflowFile} />
-                }
+                <div className="min-w-[800px]">
+                    {
+                        workflowFile && onlyRead && <ObjectEditor value={workflowFile} />
+                    }
 
-                {
-                    !onlyRead && <WorkflowEditor template={workflowFile ? workflowFile : WorklowFileDefault} onChange={setWorkflowFile} />
-                }
-                {
-                    !onlyRead &&
-                    <div className="flex">
-                        <button onClick={() => {
-                            if (workflowFile) {
-                                services.workflows
-                                    .create(workflowFile)
-                                    .then(onCreateWorkflow)
-                                    .catch(setError);
-                            }
-                        }}
-                            className="bg-green-500"
-                        > Apply</button>
-                        <UploadButton onUpload={(e:Workflow)=>{
-                            if(e){
-                                setWorkflowFile(e)
-                            }
-                        }} onError={setError} />
-                    </div>
-                }
-               </div>
-
+                    {
+                        !onlyRead && <WorkflowEditor template={workflowFile ? workflowFile : WorklowFileDefault} onChange={setWorkflowFile} />
+                    }
+                    {
+                        !onlyRead &&
+                        <div className="flex">
+                            <button onClick={() => {
+                                if (workflowFile) {
+                                    services.workflows
+                                        .create(workflowFile)
+                                        .then(onCreateWorkflow)
+                                        .catch(setError);
+                                }
+                            }}
+                                className="bg-green-500"
+                            > Apply</button>
+                            <UploadButton onUpload={(e: Workflow) => {
+                                if (e) {
+                                    setWorkflowFile(e)
+                                }
+                            }} onError={setError} />
+                        </div>
+                    }
+                </div>
             </Modal>
 
+            <Modal
+                open={openLog > 0}
+                onClose={() => { setOpenLog(0) }}
+                center
+            >
+                <div className="min-w-[400px]" >
+                    {
+                        wflog.loading ? <div>Loading </div> :
+                            <div >{wflog.value?.map(v => (
+                                <div key={v.id}>
+                                    <div className={`${v.status == 1 ? "bg-green-500" : "bg-red-500"} flex`}>
+                                        <div>{v.status == 1 ? "Success" : "Fault"}</div>
+                                        <div>{formatDate(v.created_at)}</div>
+                                    </div>
+                                    <div>{v.record}</div>
+                                </div>
+                            ))}</div>
+                    }
+
+                </div>
+            </Modal>
         </div>
     )
 }

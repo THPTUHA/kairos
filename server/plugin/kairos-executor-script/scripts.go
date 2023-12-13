@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	kplugin "github.com/THPTUHA/kairos/server/plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 )
 
 type Script struct {
 }
 
-func (s *Script) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*proto.ExecuteResponse, error) {
+func (s *Script) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 
 	out, err := s.ExecuteImpl(args, cb)
 	resp := &proto.ExecuteResponse{Output: out}
@@ -21,7 +21,7 @@ func (s *Script) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*
 	return resp, nil
 }
 
-func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb kplugin.StatusHelper) ([]byte, error) {
+func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([]byte, error) {
 	command := args.Config["command"]
 	agrsStr := args.Config["commandArgs"]
 	inputStr := args.Config["inputs"]

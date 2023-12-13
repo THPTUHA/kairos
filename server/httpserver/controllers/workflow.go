@@ -14,8 +14,8 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/messaging"
 	"github.com/THPTUHA/kairos/server/storage"
-	"github.com/dop251/goja"
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog/log"
 )
 
 func (ctr *Controller) CreateWorkflow(c *gin.Context) {
@@ -48,7 +48,7 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 		return
 	}
 
-	clientM, err := storage.GetAllClient(userID.(string))
+	clientM, err := storage.GetAllClient(userID.(string), nil)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
@@ -149,18 +149,8 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 	for _, f := range fs {
 		scriptCode += f.Content + "\n"
 	}
-	fmt.Printf("scriptCode --- %s\n", scriptCode)
-	vm := goja.New()
-	prog, err := goja.Compile("", scriptCode, true)
-	_, err = vm.RunProgram(prog)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"err": err.Error(),
-		})
-		return
-	}
 
-	err = workflowFile.Compile(vm)
+	err = workflowFile.Compile(nil)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"err": err.Error(),
@@ -186,8 +176,11 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 		"message": "Create workflow success",
 	})
 
-	wf, _ := storage.DetailWorkflow(wid, userID.(string))
-
+	wf, err := storage.DetailWorkflow(wid, userID.(string))
+	if err != nil {
+		log.Err(err)
+		return
+	}
 	// wf.Vars.Range(func(key string, value *workflow.Var) error {
 	// 	fmt.Println(key, value)
 	// 	return nil
@@ -198,8 +191,17 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 	// 	fmt.Printf("%+v\n", value)
 	// 	return nil
 	// })
+	err = wf.Compile(nil)
+	if err != nil {
+		ctr.Log.Error(err)
+		return
+	}
 
-	wf.Compile(nil)
+	wf.Brokers.Range(func(_ string, b *workflow.Broker) error {
+		fmt.Printf("BROKER CCC %+v\n", b)
+		return nil
+	})
+
 	// fmt.Println("after comp")
 	// wf.Tasks.Range(func(key string, value *workflow.Task) error {
 	// 	fmt.Println(key)
@@ -214,7 +216,6 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 }
 
 func (ctr *Controller) DropWorkflow(c *gin.Context) {
-	userID, _ := c.Get("userID")
 	id, exist := c.Params.Get("id")
 
 	if !exist {
@@ -223,24 +224,25 @@ func (ctr *Controller) DropWorkflow(c *gin.Context) {
 		})
 		return
 	}
-
-	wid, err := storage.DropWorkflow(userID.(string), id)
+	wid, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
 		})
 		return
 	}
+
 	var wf workflow.Workflow
 	wf.ID = wid
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Droping workflow",
-	})
 	events.Get() <- &events.WfEvent{
 		Cmd:      events.WfCmdDelete,
 		Workflow: &wf,
 	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Droping workflow",
+	})
 }
 
 func (ctr *Controller) ListWorkflow(c *gin.Context) {
@@ -390,5 +392,56 @@ func (ctr *Controller) RequestSyncWorkflow(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"result": string(result.Data),
+	})
+}
+
+func (ctr *Controller) GetWfRecord(c *gin.Context) {
+	id, exist := c.Params.Get("id")
+
+	if !exist {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Empty id",
+		})
+		return
+	}
+	wid, _ := strconv.ParseInt(id, 10, 64)
+	records, err := storage.GetWorkflowRecords(wid, 100)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"records": records,
+	})
+}
+
+func (ctr *Controller) RecoverWorkflow(c *gin.Context) {
+	id, exist := c.Params.Get("id")
+
+	if !exist {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "Empty id",
+		})
+		return
+	}
+	wid, err := strconv.ParseInt(id, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	var wf workflow.Workflow
+	wf.ID = wid
+
+	events.Get() <- &events.WfEvent{
+		Cmd:      events.WfCmdRecover,
+		Workflow: &wf,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Recover workflow",
 	})
 }

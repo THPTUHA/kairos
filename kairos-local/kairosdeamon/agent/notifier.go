@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Notifier represents a new notification to be sent by any of the available notificators
 type notifier struct {
 	AgentConfig    *AgentConfig
 	Task           *Task

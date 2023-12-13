@@ -25,9 +25,28 @@ var (
 )
 
 type FuncCall struct {
-	call  map[string]goja.Callable
-	funcs *goja.Runtime
+	Call  map[string]goja.Callable `json:"-"`
+	Funcs *goja.Runtime            `json:"-"`
 }
+
+func (fc *FuncCall) GetFunction(name string) goja.Callable {
+	var f goja.Callable
+	f = fc.Call[name]
+	if f != nil {
+		return f
+	}
+	v := fc.Funcs.Get(name)
+	if v == nil {
+		return nil
+	}
+	err := fc.Funcs.ExportTo(v, &f)
+	if err != nil {
+		return nil
+	}
+
+	return f
+}
+
 type Template struct {
 	// Kiếm tra biến
 	ListenVars   map[string]bool
@@ -48,14 +67,14 @@ func includes[T comparable](source []T, e T) bool {
 	return false
 }
 
-func NewTemplate(funcs *goja.Runtime) *Template {
+func NewTemplate(Funcs *goja.Runtime) *Template {
 	return &Template{
 		ListenVars: make(map[string]bool),
 		IndexRun:   make(map[int]int),
 		Exps:       make([][]*Expression, 0),
 		FuncCalls: &FuncCall{
-			call:  make(map[string]goja.Callable),
-			funcs: funcs,
+			Call:  make(map[string]goja.Callable),
+			Funcs: Funcs,
 		},
 	}
 }
@@ -290,20 +309,15 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 				continue
 			} else if includes(FUNC_CAN_EMPTY_INPUT, c[0]) {
 
-			} else if t.FuncCalls.funcs != nil {
-				var funcC goja.Callable
-				f := t.FuncCalls.funcs.Get(c[0])
+			} else if t.FuncCalls.Funcs != nil {
+				f := t.FuncCalls.GetFunction(c[0])
 				if f == nil {
 					if restrict {
-						return nil, -1, fmt.Errorf("exp %s not define, can't find", c[0])
+						return nil, -1, fmt.Errorf("expression '%s' not define, can't find", c[0])
 					}
+					t.FuncNotFound = append(t.FuncNotFound, c[0])
+				}
 
-				}
-				err := t.FuncCalls.funcs.ExportTo(f, &funcC)
-				if err != nil {
-					return nil, -1, fmt.Errorf("exp %s can't export %+v", c[0], err)
-				}
-				t.FuncCalls.call[c[0]] = funcC
 				exps = append(exps, &Expression{
 					Func:   c[0],
 					Params: make([]string, 0),
@@ -324,7 +338,7 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 
 			if !includes(COMPARE_EXP, c[1]) && !includes(FUNC_BUILDIN, c[1]) {
 				var f goja.Callable
-				v := t.FuncCalls.funcs.Get(c[1])
+				v := t.FuncCalls.Funcs.Get(c[1])
 				if v == nil {
 					if restrict {
 						return nil, -1, fmt.Errorf("exp %s: not exist", c[1])
@@ -332,7 +346,7 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 					t.FuncNotFound = append(t.FuncNotFound, c[0])
 					return nil, 0, nil
 				}
-				err := t.FuncCalls.funcs.ExportTo(v, &f)
+				err := t.FuncCalls.Funcs.ExportTo(v, &f)
 				if err != nil {
 					return nil, -1, err
 				}
@@ -454,23 +468,26 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 		case PUSH_EXP:
 			open++
 		default:
-			if t.FuncCalls != nil && t.FuncCalls.funcs != nil {
+			if t.FuncCalls != nil && t.FuncCalls.Funcs != nil {
 				var f goja.Callable
-				v := t.FuncCalls.funcs.Get(c[0])
+				v := t.FuncCalls.Funcs.Get(c[0])
 				if v == nil {
 					if restrict {
-						return nil, -1, fmt.Errorf("exp %s: not exist", c[0])
+						return nil, -1, fmt.Errorf("expression '%s': not exist", c[0])
 					}
 					t.FuncNotFound = append(t.FuncNotFound, c[0])
 					return nil, 0, nil
 				}
-				err := t.FuncCalls.funcs.ExportTo(v, &f)
+				err := t.FuncCalls.Funcs.ExportTo(v, &f)
 				if err != nil {
 					return nil, -1, err
 				}
-				t.FuncCalls.call[c[0]] = f
+				t.FuncCalls.Call[c[0]] = f
 			} else {
-				return nil, -1, fmt.Errorf("exp %s is not define", c[0])
+				if restrict {
+					return nil, -1, fmt.Errorf("expression '%s' is not define", c[0])
+				}
+				t.FuncNotFound = append(t.FuncNotFound, c[0])
 			}
 		}
 		exps = append(exps, &Expression{
@@ -478,7 +495,6 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 			Params: c[1:],
 		})
 	}
-	fmt.Printf("open=%d chain=%+v\n", open, chain)
 	if open > 0 {
 		open = 1
 		varTemps.Append()
@@ -638,6 +654,10 @@ func (t *Template) Parse(str string, input []string, globalVar *Vars, restrict b
 				}
 			}
 		default:
+			if open-close != 2 && strings.TrimSpace(expStr) != "" {
+				fmt.Printf("open = %d close = %d exp=%s \n", open, close, expStr)
+				return errors.New(fmt.Sprintf("%s invalid { ", expStr))
+			}
 			expStr += string(c)
 		}
 	}
@@ -777,7 +797,6 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 			fmt.Println(e.Func, out, err)
 
 			if err != nil {
-				fmt.Println("ERR R-----", err)
 				exeOutput.Tracking.Logs = append(exeOutput.Tracking.Logs, &TrackLog{
 					Err: err.Error(),
 					Exp: fmt.Sprintf("expression number %+v: %s", idx+1, fmt.Sprintf("%s %s", e.Func, strings.Join(e.Params, " "))),
@@ -878,7 +897,6 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 				// fmt.Println("BEGIN.............")
 				// t.varTemp.String()
 				t.varTemp.Pop()
-				fmt.Println("END--------------------", idx)
 				// fmt.Println("END.............")
 				// t.varTemp.String()
 				if t.RangeValue != nil && t.RangeValue.EndIndex == idx {

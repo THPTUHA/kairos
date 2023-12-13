@@ -78,10 +78,6 @@ type Config struct {
 	// function for extracting channel_namespace label for transport_messages_sent and
 	// transport_messages_sent_size.
 	ChannelNamespaceLabelForTransportMessagesSent bool
-	// ChannelNamespaceLabelForTransportMessagesReceived enables using GetChannelNamespaceLabel
-	// function for extracting channel_namespace label for transport_messages_received and
-	// transport_messages_received_size.
-	ChannelNamespaceLabelForTransportMessagesReceived bool
 }
 
 // PingPongConfig allows configuring application level ping-pong behavior.

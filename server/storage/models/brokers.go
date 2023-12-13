@@ -13,4 +13,5 @@ type Broker struct {
 	WorkflowID int64  `json:"workflow_id"`
 	Status     int    `json:"status"`
 	Used       bool   `json:"used"`
+	Clients    string `json:"clients"`
 }

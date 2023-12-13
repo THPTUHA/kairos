@@ -21,6 +21,17 @@ CREATE TABLE IF NOT EXISTS workflows (
     CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS workflow_records (
+    id bigserial PRIMARY KEY,
+    workflow_id BIGINT NOT NULL,
+    record TEXT,
+    created_at BIGINT NOT NULL,
+    status INT NOT NULL,
+    deliver_err TEXT,
+    is_recovered BOOLEAN DEFAULT FALSE,
+    CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     id bigserial PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -62,6 +73,7 @@ CREATE TABLE IF NOT EXISTS brokers (
     flows  TEXT,
     workflow_id bigserial NOT NULL,
     status INT NOT NULL,
+    clients VARCHAR(255) DEFAULT '' NOT NULL,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 

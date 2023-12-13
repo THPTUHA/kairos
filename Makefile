@@ -14,13 +14,14 @@ compile-proto:
 	 
 
 plugin:
+	cd server/plugin/kairos-executor-script && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-sql && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	
+cc:
 	cd server/plugin/kairos-executor-http && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-nats && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-file && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
-	cd server/plugin/kairos-executor-script && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
-	cd server/plugin/kairos-executor-sql && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-simple && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
-
 
 agent:
 	@echo "==> Create agent <=="

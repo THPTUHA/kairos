@@ -20,8 +20,6 @@ type ClientInfo struct {
 
 type BrokerEventHandler interface {
 	HandlePublication(ch string, pub *Publication) error
-	HandleJoin(ch string, info *ClientInfo) error
-	HandleLeave(ch string, info *ClientInfo) error
 	HandleControl(data []byte) error
 }
 
@@ -35,8 +33,6 @@ type Broker interface {
 	Subscribe(ch string) error
 	Unsubscribe(ch string) error
 	Publish(ch string, data []byte, opts PublishOptions) error
-	PublishJoin(ch string, info *ClientInfo) error
-	PublishLeave(ch string, info *ClientInfo) error
 	PublishControl(data []byte, nodeID, shardKey string) error
 }
 
