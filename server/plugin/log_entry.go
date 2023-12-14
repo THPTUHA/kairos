@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package plugin
 
 import (
@@ -8,7 +5,6 @@ import (
 	"time"
 )
 
-// logEntry is the JSON payload that gets sent to Stderr from the plugin to the host
 type logEntry struct {
 	Message   string        `json:"@message"`
 	Level     string        `json:"@level"`
@@ -16,14 +12,11 @@ type logEntry struct {
 	KVPairs   []*logEntryKV `json:"kv_pairs"`
 }
 
-// logEntryKV is a key value pair within the Output payload
 type logEntryKV struct {
 	Key   string      `json:"key"`
 	Value interface{} `json:"value"`
 }
 
-// flattenKVPairs is used to flatten KVPair slice into []interface{}
-// for hclog consumption.
 func flattenKVPairs(kvs []*logEntryKV) []interface{} {
 	var result []interface{}
 	for _, kv := range kvs {
@@ -34,7 +27,6 @@ func flattenKVPairs(kvs []*logEntryKV) []interface{} {
 	return result
 }
 
-// parseJSON handles parsing JSON output
 func parseJSON(input []byte) (*logEntry, error) {
 	var raw map[string]interface{}
 	entry := &logEntry{}
@@ -44,7 +36,6 @@ func parseJSON(input []byte) (*logEntry, error) {
 		return nil, err
 	}
 
-	// Parse hclog-specific objects
 	if v, ok := raw["@message"]; ok {
 		entry.Message = v.(string)
 		delete(raw, "@message")
@@ -64,7 +55,6 @@ func parseJSON(input []byte) (*logEntry, error) {
 		delete(raw, "@timestamp")
 	}
 
-	// Parse dynamic KV args from the hclog payload.
 	for k, v := range raw {
 		entry.KVPairs = append(entry.KVPairs, &logEntryKV{
 			Key:   k,

@@ -14,17 +14,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/THPTUHA/kairos/server/plugin/internal/grpcmux"
 	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 )
 
-// HandshakeConfig is the configuration used by client and servers to
-// handshake before starting a plugin connection. This is embedded by
-// both ServeConfig and ClientConfig.
-//
-// In practice, the plugin host creates a HandshakeConfig that is exported
-// and plugins then can easily consume it.
 type HandshakeConfig struct {
 	// ProtocolVersion is the version that clients must match on to
 	// agree they can communicate. This should match the ProtocolVersion
@@ -111,7 +104,6 @@ func protocolVersion(opts *ServeConfig) (int, Protocol, PluginSet) {
 	protoVersion := int(opts.ProtocolVersion)
 	pluginSet := opts.Plugins
 	protoType := ProtocolGRPC
-	// Check if the client sent a list of acceptable versions
 	var clientVersions []int
 	if vs := os.Getenv("PLUGIN_PROTOCOL_VERSIONS"); vs != "" {
 		for _, s := range strings.Split(vs, ",") {
@@ -251,17 +243,9 @@ func Serve(opts *ServeConfig) {
 		os.Exit(1)
 	}
 
-	// Build the server type
 	var server ServerProtocol
 	switch protoType {
 	case ProtocolGRPC:
-		var muxer *grpcmux.GRPCServerMuxer
-		if multiplex, _ := strconv.ParseBool(os.Getenv(envMultiplexGRPC)); multiplex {
-			muxer = grpcmux.NewGRPCServerMuxer(logger, listener)
-			listener = muxer
-		}
-
-		// Create the gRPC server
 		server = &GRPCServer{
 			Plugins: pluginSet,
 			Server:  opts.GRPCServer,
@@ -269,7 +253,6 @@ func Serve(opts *ServeConfig) {
 			Stderr:  stderr_r,
 			DoneCh:  doneCh,
 			logger:  logger,
-			muxer:   muxer,
 		}
 
 	default:
@@ -295,17 +278,6 @@ func Serve(opts *ServeConfig) {
 		protoType,
 	)
 
-	// Old clients will error with new plugins if we blindly append the
-	// seventh segment for gRPC broker multiplexing support, because old
-	// client code uses strings.SplitN(line, "|", 6), which means a seventh
-	// segment will get appended to the sixth segment as "sixthpart|true".
-	//
-	// If the environment variable is set, we assume the client is new enough
-	// to handle a seventh segment, as it should now use
-	// strings.Split(line, "|") and always handle each segment individually.
-	if os.Getenv(envMultiplexGRPC) != "" {
-		protocolLine += fmt.Sprintf("|%v", grpcBrokerMultiplexingSupported)
-	}
 	fmt.Printf("%s\n", protocolLine)
 	os.Stdout.Sync()
 

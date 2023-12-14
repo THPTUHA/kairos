@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strconv"
 
-	kplugin "github.com/THPTUHA/kairos/server/plugin"
+	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
@@ -42,7 +42,7 @@ func NewDatabase(driverName, dataSourceName string) (*sql.DB, error) {
 	return db, nil
 }
 
-func (s *Sql) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*proto.ExecuteResponse, error) {
+func (s *Sql) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 	out, err := s.ExecuteImpl(args, cb)
 	resp := &proto.ExecuteResponse{Output: out}
 	if err != nil {
@@ -53,7 +53,6 @@ func (s *Sql) Execute(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (*pro
 
 func initDB(args *proto.ExecuteRequest) (*sql.DB, error) {
 	id++
-	fmt.Println("ID ", id)
 	if db != nil && args.Config["instance"] == "one" {
 		return db, nil
 	}
@@ -81,10 +80,10 @@ func initDB(args *proto.ExecuteRequest) (*sql.DB, error) {
 	return db, err
 }
 
-func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb kplugin.StatusHelper) ([]byte, error) {
+func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([]byte, error) {
 	instance := args.Config["instance"] == "one"
 
-	fmt.Println(" INSTART", instance)
+	fmt.Println(" INSTART ", instance)
 	db, err = initDB(args)
 	if err != nil {
 		return nil, err
@@ -156,8 +155,6 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb kplugin.StatusHelper) (
 	for {
 		select {
 		case input := <-sqlCh:
-			fmt.Printf("RUN HERE---- %+v\n", input)
-
 			if input.Error != nil {
 				if instance {
 					cb.Update([]byte(err.Error()), false)

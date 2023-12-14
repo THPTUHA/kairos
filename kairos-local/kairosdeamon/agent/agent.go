@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,7 +37,7 @@ var (
 )
 
 type Agent struct {
-	ExecutorPlugins  map[string]plugin.Executor
+	ExecutorPlugins  Plugins
 	HTTPTransport    Transport
 	Store            Storage
 	hub              *Hub
@@ -130,6 +131,12 @@ func (a *Agent) Start() error {
 	a.setupScripts()
 	a.initConnectServer()
 	return nil
+}
+
+func (a *Agent) addPlugin(pluginName, cmdName string, args []string) error {
+	fmt.Printf("name= %s, cmd=%s, args=%+v\n", pluginName, cmdName, args)
+	_, err := a.ExecutorPlugins.PluginFactory(exec.Command(cmdName, args...), pluginName, plugin.ExecutorPluginName)
+	return err
 }
 
 func (a *Agent) setupScripts() error {
@@ -242,7 +249,6 @@ func (a *Agent) handleTaskEvent() {
 
 			// tasks, err := a.Store.GetTasks(&TaskOptions{NoScheduler: true})
 			// if err != nil {
-			// 	fmt.Println("[AGENT GET TASK ERROR]", err)
 			// }
 
 			// for _, task := range tasks {
@@ -713,8 +719,11 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 	if jex == "" {
 		return errors.New("agent: No executor defined, nothing to do")
 	}
+	for k, _ := range agent.ExecutorPlugins.Executors {
+		fmt.Printf("EXECUTOR:  %s \n", k)
+	}
 
-	if executor, ok := agent.ExecutorPlugins[jex]; ok {
+	if executor, ok := agent.ExecutorPlugins.Executors[jex]; ok {
 		agent.logger.WithField("plugin", jex).Debug("agent: calling executor plugin")
 		id, _ := strconv.ParseInt(task.ID, 10, 64)
 		helper := &statusAgentHelper{
@@ -726,7 +735,7 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 				execution.FinishedAt = time.Now()
 				execution.Output = strings.TrimRight(string(b), "\u0000")
 				execution.Offset++
-				fmt.Println(" BUFFER OUT---", string(b))
+				fmt.Println("BUFFER OUT : ", string(b))
 				err := agent.SaveExecutorResult(execution)
 				if err != nil {
 					agent.logger.WithField("executor", "set").Error(err)
@@ -786,6 +795,44 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 	return nil
 }
 
+type PluginStatus struct {
+	Name   string `json:"name"`
+	Status int    `json:"status"`
+}
+
+func (a *Agent) ListPlugin() []*PluginStatus {
+	ps := make([]*PluginStatus, 0)
+
+	for n, c := range a.ExecutorPlugins.ClientProtocols {
+		err := (*c).Ping()
+		if err != nil {
+			a.logger.Error(err)
+			ps = append(ps, &PluginStatus{
+				Name:   n,
+				Status: 0,
+			})
+		} else {
+			ps = append(ps, &PluginStatus{
+				Name:   n,
+				Status: 1,
+			})
+		}
+	}
+	return ps
+}
+
+func (a *Agent) DeletePlugin(name string) error {
+	c := a.ExecutorPlugins.Clients[name]
+	if c != nil {
+		(*c).Kill()
+		delete(a.ExecutorPlugins.Clients, name)
+		delete(a.ExecutorPlugins.Executors, name)
+		delete(a.ExecutorPlugins.ClientProtocols, name)
+	}
+
+	return nil
+}
+
 func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTask) (*workflow.Result, error) {
 	agent.logger.WithFields(logrus.Fields{
 		"task": task.Name,
@@ -813,7 +860,7 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 	}
 	fmt.Printf("excutor %+v", agent.ExecutorPlugins)
 
-	if executor, ok := agent.ExecutorPlugins[jex]; ok {
+	if executor, ok := agent.ExecutorPlugins.Executors[jex]; ok {
 		agent.logger.WithField("plugin", jex).Debug("agent: calling executor plugin")
 		id, _ := strconv.ParseInt(task.ID, 10, 64)
 		helper := &statusAgentHelper{

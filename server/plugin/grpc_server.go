@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 
-	"github.com/THPTUHA/kairos/server/plugin/internal/grpcmux"
 	"github.com/THPTUHA/kairos/server/plugin/internal/plugin"
 	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
@@ -32,12 +31,8 @@ func DefaultGRPCServer(opts []grpc.ServerOption) *grpc.Server {
 // The GRPCServer outputs a custom configuration as a base64-encoded
 // JSON structure represented by the GRPCServerConfig config structure.
 type GRPCServer struct {
-	// Plugins are the list of plugins to serve.
 	Plugins map[string]Plugin
-
-	// Server is the actual server that will accept connections. This
-	// will be used for plugin registration as well.
-	Server func([]grpc.ServerOption) *grpc.Server
+	Server  func([]grpc.ServerOption) *grpc.Server
 
 	// DoneCh is the channel that is closed when this server has exited.
 	DoneCh chan struct{}
@@ -53,40 +48,31 @@ type GRPCServer struct {
 	stdioServer *grpcStdioServer
 
 	logger hclog.Logger
-
-	muxer *grpcmux.GRPCServerMuxer
 }
 
 // ServerProtocol impl.
 func (s *GRPCServer) Init() error {
-	// Create our server
 	var opts []grpc.ServerOption
 	s.server = s.Server(opts)
 
-	// Register the health service
 	healthCheck := health.NewServer()
 	healthCheck.SetServingStatus(
 		GRPCServiceName, grpc_health_v1.HealthCheckResponse_SERVING)
 	grpc_health_v1.RegisterHealthServer(s.server, healthCheck)
 
-	// Register the reflection service
 	reflection.Register(s.server)
 
-	// Register the broker service
 	brokerServer := newGRPCBrokerServer()
 	plugin.RegisterGRPCBrokerServer(s.server, brokerServer)
-	s.broker = newGRPCBroker(brokerServer, unixSocketConfigFromEnv(), nil, s.muxer)
+	s.broker = newGRPCBroker(brokerServer, unixSocketConfigFromEnv(), nil)
 	go s.broker.Run()
 
-	// Register the controller
 	controllerServer := &grpcControllerServer{server: s}
 	plugin.RegisterGRPCControllerServer(s.server, controllerServer)
 
-	// Register the stdio service
 	s.stdioServer = newGRPCStdioServer(s.logger, s.Stdout, s.Stderr)
 	plugin.RegisterGRPCStdioServer(s.server, s.stdioServer)
 
-	// Register all our plugins onto the gRPC server.
 	for k, raw := range s.Plugins {
 		p, ok := raw.(GRPCPlugin)
 		if !ok {

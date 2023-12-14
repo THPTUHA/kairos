@@ -32,11 +32,8 @@ func AgentStart(eventCh chan *events.Event, conf *config.Configs) error {
 
 	log.Info().Msg(fmt.Sprintf("Executor %+v:", p.Executors))
 
-	plugins := Plugins{
-		Executors: p.Executors,
-	}
 	hub := NewHub(eventCh, conf)
-	agentServer = NewAgent(config, WithPlugins(plugins), WithEventCh(eventCh))
+	agentServer = NewAgent(config, WithPlugins(p), WithEventCh(eventCh))
 	agentServer.AddHub(hub)
 	if err := agentServer.Start(); err != nil {
 		return err

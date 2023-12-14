@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package plugin
 
 import (
@@ -17,37 +14,26 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// grpcStdioBuffer is the buffer size we try to fill when sending a chunk of
-// stdio data. This is currently 1 KB for no reason other than that seems like
-// enough (stdio data isn't that common) and is fairly low.
 const grpcStdioBuffer = 1 * 1024
 
-// grpcStdioServer implements the Stdio service and streams stdiout/stderr.
 type grpcStdioServer struct {
 	stdoutCh <-chan []byte
 	stderrCh <-chan []byte
 }
 
-// newGRPCStdioServer creates a new grpcStdioServer and starts the stream
-// copying for the given out and err readers.
-//
-// This must only be called ONCE per srcOut, srcErr.
 func newGRPCStdioServer(log hclog.Logger, srcOut, srcErr io.Reader) *grpcStdioServer {
 	stdoutCh := make(chan []byte)
 	stderrCh := make(chan []byte)
 
-	// Begin copying the streams
 	go copyChan(log, stdoutCh, srcOut)
 	go copyChan(log, stderrCh, srcErr)
 
-	// Construct our server
 	return &grpcStdioServer{
 		stdoutCh: stdoutCh,
 		stderrCh: stderrCh,
 	}
 }
 
-// StreamStdio streams our stdout/err as the response.
 func (s *grpcStdioServer) StreamStdio(
 	_ *empty.Empty,
 	srv plugin.GRPCStdio_StreamStdioServer,
@@ -113,10 +99,7 @@ func newGRPCStdioClient(
 	}, nil
 }
 
-// Run starts the loop that receives stdio data and writes it to the given
-// writers. This blocks and should be run in a goroutine.
 func (c *grpcStdioClient) Run(stdout, stderr io.Writer) {
-	// This will be nil if stdio is not supported by the plugin
 	if c.stdioClient == nil {
 		c.log.Warn("stdio service unavailable, run will do nothing")
 		return
@@ -139,7 +122,6 @@ func (c *grpcStdioClient) Run(stdout, stderr io.Writer) {
 			return
 		}
 
-		// Determine our output writer based on channel
 		var w io.Writer
 		switch data.Channel {
 		case plugin.StdioData_STDOUT:
@@ -153,7 +135,6 @@ func (c *grpcStdioClient) Run(stdout, stderr io.Writer) {
 			continue
 		}
 
-		// Write! In the event of an error we just continue.
 		if c.log.IsTrace() {
 			c.log.Trace("received data", "channel", data.Channel.String(), "len", len(data.Data))
 		}

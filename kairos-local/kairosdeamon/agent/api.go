@@ -69,6 +69,10 @@ func (h *HTTPTransport) APIRoutes(r *gin.RouterGroup, middleware ...gin.HandlerF
 	v1.GET("/script/:name/show", h.showScript)
 	v1.GET("/script/list", h.listScript)
 	v1.DELETE("/script/:name/drop", h.dropScript)
+
+	v1.GET("/plugin/list", h.listPlugin)
+	v1.DELETE("/plugin/:name/delete", h.deletePlugin)
+	v1.POST("/plugin/add", h.addPlugin)
 }
 
 type Queue struct {
@@ -140,6 +144,34 @@ func (h *HTTPTransport) listScript(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, s)
+}
+
+func (h *HTTPTransport) listPlugin(c *gin.Context) {
+	p := h.agent.ListPlugin()
+	c.JSON(http.StatusOK, p)
+}
+
+type Plugin struct {
+	Name string   `json:"name"`
+	Cmd  string   `json:"cmd"`
+	Args []string `json:"args"`
+}
+
+func (h *HTTPTransport) addPlugin(c *gin.Context) {
+	var p Plugin
+	if err := c.BindJSON(&p); err != nil {
+		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to parse payload: %s.", err))
+		h.logger.Error(err)
+		return
+	}
+	e := h.agent.addPlugin(p.Name, p.Name, p.Args)
+	c.JSON(http.StatusOK, e)
+}
+
+func (h *HTTPTransport) deletePlugin(c *gin.Context) {
+	name := c.Param("name")
+	p := h.agent.DeletePlugin(name)
+	c.JSON(http.StatusOK, p)
 }
 
 func (h *HTTPTransport) dropScript(c *gin.Context) {

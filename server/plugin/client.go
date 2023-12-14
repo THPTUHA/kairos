@@ -18,25 +18,17 @@ import (
 	"time"
 
 	"github.com/THPTUHA/kairos/server/plugin/internal/cmdrunner"
-	"github.com/THPTUHA/kairos/server/plugin/internal/grpcmux"
 	"github.com/THPTUHA/kairos/server/plugin/runner"
 	hclog "github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 )
 
-// If this is 1, then we've called CleanupClients. This can be used
-// by plugin RPC implementations to change error behavior since you
-// can expected network connection errors at this point. This should be
-// read by using sync/atomic.
 var Killed uint32 = 0
 
 var managedClients = make([]*Client, 0, 5)
 var managedClientsLock sync.Mutex
 
-// Error types
 var (
-	// ErrProcessNotFound is returned when a client is instantiated to
-	// reattach to an existing process and it isn't found.
 	ErrProcessNotFound = cmdrunner.ErrProcessNotFound
 
 	// ErrChecksumsDoNotMatch is returned when binary's checksum doesn't match
@@ -66,17 +58,6 @@ var (
 // defaultPluginLogBufferSize is the default size of the buffer used to read from stderr for plugin log lines.
 const defaultPluginLogBufferSize = 64 * 1024
 
-// Client handles the lifecycle of a plugin application. It launches
-// plugins, connects to them, dispenses interface implementations, and handles
-// killing the process.
-//
-// Plugin hosts should use one Client for each plugin executable. To
-// dispense a plugin type, use the `Client.Client` function, and then
-// cal `Dispense`. This awkward API is mostly historical but is used to split
-// the client that deals with subprocess management and the client that
-// does RPC management.
-//
-// See NewClient and ClientConfig for using a Client.
 type Client struct {
 	config    *ClientConfig
 	exited    bool
@@ -102,9 +83,6 @@ type Client struct {
 	processKilled bool
 
 	unixSocketCfg UnixSocketConfig
-
-	grpcMuxerOnce sync.Once
-	grpcMuxer     *grpcmux.GRPCClientMuxer
 }
 
 // ID returns a unique ID for the running plugin. By default this is the process
@@ -120,9 +98,6 @@ func (c *Client) ID() string {
 	return ""
 }
 
-// ClientConfig is the configuration used to initialize a new
-// plugin client. After being used to initialize a plugin client,
-// that configuration must not be modified again.
 type ClientConfig struct {
 	// HandshakeConfig is the configuration that must match servers.
 	HandshakeConfig
@@ -237,15 +212,9 @@ type UnixSocketConfig struct {
 	// not set, defaults to the directory chosen by os.MkdirTemp.
 	TempDir string
 
-	// The directory to create Unix sockets in. Internally created and managed
-	// by go-plugin and deleted when the plugin is killed. Will be created
-	// inside TempDir if specified.
 	socketDir string
 }
 
-// ReattachConfig is used to configure a client to reattach to an
-// already-running plugin process. You can retrieve this information by
-// calling ReattachConfig on Client.
 type ReattachConfig struct {
 	Protocol        Protocol
 	ProtocolVersion int
@@ -253,17 +222,8 @@ type ReattachConfig struct {
 	Pid             int
 }
 
-// This makes sure all the managed subprocesses are killed and properly
-// logged. This should be called before the parent process running the
-// plugins exits.
-//
-// This must only be called _once_.
 func CleanupClients() {
-	// Set the killed to true so that we don't get unexpected panics
 	atomic.StoreUint32(&Killed, 1)
-
-	// Kill all the managed clients in parallel and use a WaitGroup
-	// to wait for them all to finish up.
 	var wg sync.WaitGroup
 	managedClientsLock.Lock()
 	for _, client := range managedClients {
@@ -279,13 +239,6 @@ func CleanupClients() {
 	wg.Wait()
 }
 
-// NewClient creates a new plugin client which manages the lifecycle of an external
-// plugin and gets the address for the RPC connection.
-//
-// The client must be cleaned up at some point by calling Kill(). If
-// the client is a managed client (created with ClientConfig.Managed) you
-// can just call CleanupClients at the end of your program and they will
-// be properly cleaned.
 func NewClient(config *ClientConfig) (c *Client) {
 	if config.MinPort == 0 && config.MaxPort == 0 {
 		config.MinPort = 10000
@@ -365,83 +318,53 @@ func (c *Client) Client() (ClientProtocol, error) {
 	return c.client, nil
 }
 
-// Tells whether or not the underlying process has exited.
 func (c *Client) Exited() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 	return c.exited
 }
 
-// killed is used in tests to check if a process failed to exit gracefully, and
-// needed to be killed.
 func (c *Client) killed() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 	return c.processKilled
 }
 
-// End the executing subprocess (if it is running) and perform any cleanup
-// tasks necessary such as capturing any remaining logs and so on.
-//
-// This method blocks until the process successfully exits.
-//
-// This method can safely be called multiple times.
 func (c *Client) Kill() {
-	// Grab a lock to read some private fields.
 	c.l.Lock()
 	runner := c.runner
 	addr := c.address
 	hostSocketDir := c.unixSocketCfg.socketDir
 	c.l.Unlock()
 
-	// If there is no runner or ID, there is nothing to kill.
 	if runner == nil || runner.ID() == "" {
 		return
 	}
 
 	defer func() {
-		// Wait for the all client goroutines to finish.
 		c.clientWaitGroup.Wait()
 
 		if hostSocketDir != "" {
 			os.RemoveAll(hostSocketDir)
 		}
-
-		// Make sure there is no reference to the old process after it has been
-		// killed.
 		c.l.Lock()
 		c.runner = nil
 		c.l.Unlock()
 	}()
 
-	// We need to check for address here. It is possible that the plugin
-	// started (process != nil) but has no address (addr == nil) if the
-	// plugin failed at startup. If we do have an address, we need to close
-	// the plugin net connections.
 	graceful := false
 	if addr != nil {
-		// Close the client to cleanly exit the process.
 		client, err := c.Client()
 		if err == nil {
 			err = client.Close()
-
-			// If there is no error, then we attempt to wait for a graceful
-			// exit. If there was an error, we assume that graceful cleanup
-			// won't happen and just force kill.
 			graceful = err == nil
 			if err != nil {
-				// If there was an error just log it. We're going to force
-				// kill in a moment anyways.
 				c.logger.Warn("error closing client during Kill", "err", err)
 			}
 		} else {
 			c.logger.Error("client", "error", err)
 		}
 	}
-
-	// If we're attempting a graceful exit, then we wait for a short period
-	// of time to allow that to happen. To wait for this we just wait on the
-	// doneCh which would be closed if the process exits.
 	if graceful {
 		select {
 		case <-c.doneCtx.Done():
@@ -451,7 +374,6 @@ func (c *Client) Kill() {
 		}
 	}
 
-	// If graceful exiting failed, just kill it
 	c.logger.Warn("plugin failed to exit gracefully")
 	if err := runner.Kill(context.Background()); err != nil {
 		c.logger.Debug("error killing plugin", "error", err)
@@ -462,12 +384,6 @@ func (c *Client) Kill() {
 	c.l.Unlock()
 }
 
-// Start the underlying subprocess, communicating with it to negotiate
-// a port for RPC connections, and returning the address to connect via RPC.
-//
-// This method is safe to call multiple times. Subsequent calls have no effect.
-// Once a client has been started once, it cannot be started again, even if
-// it was killed.
 func (c *Client) Start() (addr net.Addr, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -476,9 +392,6 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		return c.address, nil
 	}
 
-	// If one of cmd or reattach isn't set, then it is an error. We wrap
-	// this in a {} for scoping reasons, and hopeful that the escape
-	// analysis will pop the stack here.
 	{
 		var mutuallyExclusiveOptions int
 		if c.config.Cmd != nil {
@@ -507,12 +420,8 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		c.config.VersionedPlugins = make(map[int]PluginSet)
 	}
 
-	// handle all plugins as versioned, using the handshake config as the default.
 	version := int(c.config.ProtocolVersion)
 
-	// Make sure we're not overwriting a real version 0. If ProtocolVersion was
-	// non-zero, then we have to just assume the user made sure that
-	// VersionedPlugins doesn't conflict.
 	if _, ok := c.config.VersionedPlugins[version]; !ok && c.config.Plugins != nil {
 		c.config.VersionedPlugins[version] = c.config.Plugins
 	}
@@ -528,13 +437,9 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		fmt.Sprintf("PLUGIN_MAX_PORT=%d", c.config.MaxPort),
 		fmt.Sprintf("PLUGIN_PROTOCOL_VERSIONS=%s", strings.Join(versionStrings, ",")),
 	}
-	fmt.Printf("MULTIPLEX--- %+v\n", c.config)
 
 	cmd := c.config.Cmd
 	if cmd == nil {
-		// It's only possible to get here if RunnerFunc is non-nil, but we'll
-		// still use cmd as a spec to populate metadata for the external
-		// implementation to consume.
 		cmd = exec.Command("")
 	}
 	cmd.Env = append(cmd.Env, env...)
@@ -555,8 +460,6 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		if err != nil {
 			return nil, err
 		}
-		// os.MkdirTemp creates folders with 0o700, so if we have a group
-		// configured we need to make it group-writable.
 		if c.unixSocketCfg.Group != "" {
 			err = setGroupWritable(c.unixSocketCfg.socketDir, c.unixSocketCfg.Group, 0o770)
 			if err != nil {
@@ -636,8 +539,6 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		c.exited = true
 	}()
 
-	// Start a goroutine that is going to be reading the lines
-	// out of stdout
 	linesCh := make(chan string)
 	c.clientWaitGroup.Add(1)
 	go func() {
@@ -653,10 +554,6 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		}
 	}()
 
-	// Make sure after we exit we read the lines from stdout forever
-	// so they don't block since it is a pipe.
-	// The scanner goroutine above will close this, but track it with a wait
-	// group for completeness.
 	c.clientWaitGroup.Add(1)
 	defer func() {
 		go func() {
@@ -666,10 +563,8 @@ func (c *Client) Start() (addr net.Addr, err error) {
 		}()
 	}()
 
-	// Some channels for the next step
 	timeout := time.After(c.config.StartTimeout)
 
-	// Start looking for the address
 	c.logger.Debug("waiting for RPC address", "plugin", runner.Name())
 	select {
 	case <-timeout:
@@ -677,8 +572,7 @@ func (c *Client) Start() (addr net.Addr, err error) {
 	case <-c.doneCtx.Done():
 		err = errors.New("plugin exited before we could connect")
 	case line, ok := <-linesCh:
-		// Trim the line and split by "|" in order to get the parts of
-		// the output.
+		fmt.Println("LINE----", line)
 		line = strings.TrimSpace(line)
 		parts := strings.Split(line, "|")
 		if len(parts) < 4 {
@@ -686,15 +580,10 @@ func (c *Client) Start() (addr net.Addr, err error) {
 			if !ok {
 				errText += "\n" + "Failed to read any lines from plugin's stdout"
 			}
-			additionalNotes := runner.Diagnose(context.Background())
-			if additionalNotes != "" {
-				errText += "\n" + additionalNotes
-			}
 			err = errors.New(errText)
 			return
 		}
 
-		// Test the API version
 		version, pluginSet, err := c.checkProtoVersion(parts[0])
 		if err != nil {
 			return addr, err
@@ -877,41 +766,12 @@ func netAddrDialer(addr net.Addr) func(string, time.Duration) (net.Conn, error) 
 // dialer is compatible with grpc.WithDialer and creates the connection
 // to the plugin.
 func (c *Client) dialer(_ string, timeout time.Duration) (net.Conn, error) {
-	muxer, err := c.getGRPCMuxer(c.address)
+	conn, err := netAddrDialer(c.address)("", timeout)
 	if err != nil {
 		return nil, err
-	}
-
-	var conn net.Conn
-	if muxer.Enabled() {
-		conn, err = muxer.Dial()
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		conn, err = netAddrDialer(c.address)("", timeout)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return conn, nil
-}
-
-func (c *Client) getGRPCMuxer(addr net.Addr) (*grpcmux.GRPCClientMuxer, error) {
-	if c.protocol != ProtocolGRPC || !c.config.GRPCBrokerMultiplex {
-		return nil, nil
-	}
-
-	var err error
-	c.grpcMuxerOnce.Do(func() {
-		c.grpcMuxer, err = grpcmux.NewGRPCClientMuxer(c.logger, addr)
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return c.grpcMuxer, nil
 }
 
 func (c *Client) logStderr(name string, r io.Reader) {

@@ -17,13 +17,18 @@ import (
 )
 
 type Plugins struct {
-	Executors map[string]plugin.Executor
-	LogLevel  string
-	NodeName  string
+	Executors       map[string]plugin.Executor
+	Clients         map[string]*plugin.Client
+	ClientProtocols map[string]*plugin.ClientProtocol
+	LogLevel        string
+	NodeName        string
 }
 
 func (p *Plugins) DiscoverPlugins() error {
 	p.Executors = make(map[string]plugin.Executor)
+	p.Clients = make(map[string]*plugin.Client)
+	p.ClientProtocols = make(map[string]*plugin.ClientProtocol)
+	p.LogLevel = logrus.DebugLevel.String()
 	pluginDir := filepath.Join("~", "Code", "myproject", "kairos")
 
 	if viper.ConfigFileUsed() != "" {
@@ -58,13 +63,10 @@ func (p *Plugins) DiscoverPlugins() error {
 			continue
 		}
 
-		raw, err := p.pluginFactory(file, plugin.ExecutorPluginName)
-		if err != nil {
-			return err
-		}
-		p.Executors[pluginName] = raw.(plugin.Executor)
-	}
+		p.PluginFactory(exec.Command(file), pluginName, plugin.ExecutorPluginName)
 
+	}
+	// p.PluginFactory(exec.Command("node", "/Users/nghiabadao/Code/myproject/kairos/server/plugin/kairos-executor-node/index.js"), "node", plugin.ExecutorPluginName)
 	return nil
 }
 
@@ -76,12 +78,15 @@ func getPluginName(file string) (string, bool) {
 	}
 
 	name := strings.TrimSuffix(parts[2], ".exe")
+	name = strings.TrimSuffix(name, ".sh")
+	name = strings.TrimSuffix(name, ".ps1")
+	name = strings.TrimSuffix(name, ".bash")
 	return name, true
 }
 
-func (p *Plugins) pluginFactory(path string, pluginType string) (interface{}, error) {
+func (p *Plugins) PluginFactory(cmd *exec.Cmd, pluginName, pluginType string) (interface{}, error) {
 	var config plugin.ClientConfig
-	config.Cmd = exec.Command(path)
+	config.Cmd = cmd
 	config.HandshakeConfig = plugin.Handshake
 	config.Managed = true
 	config.Plugins = plugin.PluginMap
@@ -106,5 +111,8 @@ func (p *Plugins) pluginFactory(path string, pluginType string) (interface{}, er
 		return nil, err
 	}
 
+	p.Clients[pluginName] = client
+	p.ClientProtocols[pluginName] = &rpcClient
+	p.Executors[pluginName] = raw.(plugin.Executor)
 	return raw, nil
 }

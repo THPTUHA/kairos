@@ -192,11 +192,36 @@ Content-Type: application/json
 } 
 
 ###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "3",
+  "name": "node",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "node",
+  "executor_config": {
+    "test": "abc"
+  }
+} 
+###
+
+DELETE http://localhost:8080/v1/plugin/node/delete
+Content-Type: application/json
+
+
+###
 POST http://localhost:8080/v1/tasks/list
 Content-Type: application/json
 
 {
-  "workflow_id": 61
+ 
 }
 
 ###

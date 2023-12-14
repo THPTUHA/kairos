@@ -36,7 +36,6 @@ func InitLogger(logLevel string, node string) *logrus.Entry {
 	log := logrus.NewEntry(formattedLogger).WithField("node", node)
 	ginOnce.Do(func() {
 		if level == logrus.DebugLevel {
-
 			gin.DefaultWriter = log.Writer()
 			gin.SetMode(gin.DebugMode)
 		} else {

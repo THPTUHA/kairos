@@ -1,6 +1,3 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package cmdrunner
 
 import (
@@ -122,8 +119,4 @@ var peTypes = map[uint16]string{
 	0x6264: "loong64",
 	0x8664: "amd64",
 	0xaa64: "arm64",
-}
-
-func (c *CmdRunner) Diagnose(_ context.Context) string {
-	return fmt.Sprintf(unrecognizedRemotePluginMessage, additionalNotesAboutCommand(c.cmd.Path))
 }
