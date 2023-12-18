@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
+	"github.com/THPTUHA/kairos/server/httpserver/config"
 	"github.com/THPTUHA/kairos/server/httpserver/controllers"
 	"github.com/THPTUHA/kairos/server/httpserver/middlewares"
 	"github.com/THPTUHA/kairos/server/httpserver/pubsub"
@@ -17,6 +18,7 @@ type Route struct {
 	pubsub   chan *pubsub.PubSubPayload
 	wfRunner *runner.Runner
 	nats     *nats.Conn
+	Config   *config.Configs
 }
 
 func (r *Route) initialize() {
@@ -34,7 +36,7 @@ func (r *Route) initialize() {
 		Nats:         r.nats,
 	})
 
-	v1.Auth(routeGroup, ctr)
+	v1.Auth(routeGroup, ctr, r.Config)
 	routeGroup.Use(auth.GoogleAuth())
 	routeGroup.GET("/auth", ctr.Auth)
 
@@ -64,6 +66,7 @@ type RouteConfig struct {
 	Pubsub   chan *pubsub.PubSubPayload
 	WfRunner *runner.Runner
 	Nats     *nats.Conn
+	Config   *config.Configs
 }
 
 func New(conf *RouteConfig) *Route {
@@ -76,5 +79,6 @@ func New(conf *RouteConfig) *Route {
 		pubsub:   conf.Pubsub,
 		wfRunner: conf.WfRunner,
 		nats:     conf.Nats,
+		Config:   conf.Config,
 	}
 }

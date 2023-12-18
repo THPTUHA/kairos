@@ -3,12 +3,10 @@ package auth
 import (
 	"context"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 
+	"github.com/THPTUHA/kairos/server/httpserver/config"
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
@@ -32,7 +30,6 @@ var (
 const (
 	StateKey  = "state"
 	sessionID = "ginoauth_google_session"
-	credFile  = "./cerd.json"
 )
 
 func init() {
@@ -43,22 +40,12 @@ func Session(name string) gin.HandlerFunc {
 	return sessions.Sessions(name, store)
 }
 
-func Setup(redirectURL string, scopes []string, secret []byte) {
+func Setup(redirectURL string, scopes []string, secret []byte, cfg *config.Configs) {
 	store = cookie.NewStore(secret)
 
-	var c Credentials
-	path, _ := os.Getwd()
-	file, err := os.ReadFile(filepath.Join(path, credFile))
-	if err != nil {
-		glog.Fatalf("[Gin-OAuth] File error: %v", err)
-	}
-	if err := json.Unmarshal(file, &c); err != nil {
-		glog.Fatalf("[Gin-OAuth] Failed to unmarshal client credentials: %v", err)
-	}
-
 	conf = &oauth2.Config{
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
+		ClientID:     cfg.Auth.ClientID,
+		ClientSecret: cfg.Auth.ClientSecret,
 		RedirectURL:  redirectURL,
 		Scopes:       scopes,
 		Endpoint:     google.Endpoint,

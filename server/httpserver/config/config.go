@@ -11,8 +11,10 @@ var (
 
 type Configs struct {
 	Auth struct {
-		HmacSecret string `yaml:"hmacsecret"`
-		HmrfSecret string `yaml:"hmrfsecret"`
+		HmacSecret   string `yaml:"hmacsecret"`
+		HmrfSecret   string `yaml:"hmrfsecret"`
+		ClientID     string `yaml:"clientid"`
+		ClientSecret string `yaml:"client_secret"`
 	}
 	HTTPServer struct {
 		Port                  int `yaml:"port"`

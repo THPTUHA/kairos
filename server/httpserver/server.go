@@ -50,6 +50,7 @@ func (server *HttpServer) start() {
 		Pubsub:   server.PubsubChan,
 		WfRunner: worklowRunner,
 		Nats:     server.NatConn,
+		Config:   server.Config,
 	})
 
 	srv := &http.Server{
@@ -88,7 +89,7 @@ func NewHTTPServer(file string) (*HttpServer, error) {
 	}
 	events.Init()
 
-	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	err = storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.DB.Postgres.URI,
 		config.DB.Postgres.Port,
 		config.DB.Postgres.Username,
@@ -96,6 +97,9 @@ func NewHTTPServer(file string) (*HttpServer, error) {
 		config.DB.Postgres.DatabaseName,
 	))
 
+	if err != nil {
+		return nil, err
+	}
 	auth.Init(config.Auth.HmacSecret, config.Auth.HmrfSecret)
 	if err != nil {
 		log.Error().Msg(err.Error())
@@ -133,6 +137,7 @@ func (server *HttpServer) Start() error {
 		Pubsub:   server.PubsubChan,
 		WfRunner: worklowRunner,
 		Nats:     server.NatConn,
+		Config:   server.Config,
 	})
 
 	srv := &http.Server{

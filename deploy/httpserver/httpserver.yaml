@@ -13,7 +13,7 @@ db:
   postgres:
     username: kairos
     password: kairos
-    uri: 127.0.0.1
+    uri: postgres.default.svc.cluster.local
     port: 5432
     databaseName: kairos
     protocol: tcp

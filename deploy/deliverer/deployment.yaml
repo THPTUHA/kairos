@@ -17,10 +17,23 @@ spec:
         - name: deliverer
           image: nexta2020/kairos
           ports:
-            - containerPort: 8001
-            - containerPort: 8002
+            - containerPort: 8003
           command:
             - "kairos"
-            - "httpserver"
+            - "deliverer"
             - "--file"
-            - "httpserver.yaml"
+            - "deliverer.yaml"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: kairos
+  name: deliverer
+spec:
+  selector:
+    app: deliverer
+  ports:
+    - port: 8003
+      targetPort: 8003
+      protocol: TCP
+
