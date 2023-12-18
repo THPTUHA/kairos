@@ -63,21 +63,18 @@ func (h *Hub) shutdown(ctx context.Context) error {
 	return shutdownErr
 }
 
-// Add connection into clientHub connections registry.
 func (h *Hub) add(c *Client) error {
 	h.sessionsMu.Lock()
 	h.sessionsMu.Unlock()
 	return h.connShards[index(c.UserID(), numHubShards)].add(c)
 }
 
-// Remove connection from clientHub connections registry.
 func (h *Hub) remove(c *Client) error {
 	h.sessionsMu.Lock()
 	h.sessionsMu.Unlock()
 	return h.connShards[index(c.UserID(), numHubShards)].remove(c)
 }
 
-// Connections returns all user connections to the current Node.
 func (h *Hub) Connections() map[string]*Client {
 	conns := make(map[string]*Client)
 	for _, shard := range h.connShards {
@@ -192,8 +189,6 @@ const (
 func (h *connShard) shutdown(ctx context.Context, sem chan struct{}) error {
 	advice := DisconnectShutdown
 	h.mu.RLock()
-	// At this moment node won't accept new client connections, so we can
-	// safely copy existing clients and release lock.
 	clients := make([]*Client, 0, len(h.conns))
 	for _, client := range h.conns {
 		clients = append(clients, client)

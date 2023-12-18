@@ -14,11 +14,8 @@ import (
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/pubsub"
 )
 
-// In real life clients should never know secret key. This is only for example
-// purposes to quickly generate JWT for connection.
 const exampleTokenHmacSecret = "secret"
 
-// ChatMessage is chat example specific message struct.
 type ChatMessage struct {
 	Input string `json:"input"`
 }
@@ -67,12 +64,6 @@ func main() {
 	client.OnPublication(func(e pubsub.ServerPublicationEvent) {
 		log.Printf("Publication from server-side channel %s: %s", e.Channel, e.Data)
 	})
-	client.OnJoin(func(e pubsub.ServerJoinEvent) {
-		log.Printf("Join to server-side channel %s: %s (%s)", e.Channel, e.User, e.Client)
-	})
-	client.OnLeave(func(e pubsub.ServerLeaveEvent) {
-		log.Printf("Leave from server-side channel %s: %s (%s)", e.Channel, e.User, e.Client)
-	})
 
 	err := client.Connect()
 	if err != nil {
@@ -105,12 +96,6 @@ func main() {
 			return
 		}
 		log.Printf("Someone says via channel %s: %s", sub.Channel, chatMessage.Input)
-	})
-	sub.OnJoin(func(e pubsub.JoinEvent) {
-		log.Printf("Someone joined %s: user id %s, client id %s", sub.Channel, e.User, e.Client)
-	})
-	sub.OnLeave(func(e pubsub.LeaveEvent) {
-		log.Printf("Someone left %s: user id %s, client id %s", sub.Channel, e.User, e.Client)
 	})
 
 	err = sub.Subscribe()

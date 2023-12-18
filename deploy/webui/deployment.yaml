@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webui
+  namespace: kairos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kairos
+  template:
+    metadata:
+      labels:
+        app: kairos
+    spec:
+      containers:
+        - name: webui
+          image: nexta2020/webui
+          ports:
+            - containerPort: 3500
+          env:
+            - name: PORT
+              value: "3500"
+            - name: REACT_APP_HTTPSERVER
+              value: "http://kairos.badaosuotdoi.com"
+            - name: REACT_APP_BASE_URL
+              value: "http://kairos.badaosuotdoi.com"

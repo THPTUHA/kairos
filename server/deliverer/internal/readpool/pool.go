@@ -8,7 +8,6 @@ import (
 
 var stringReaderPool sync.Pool
 
-// GetStringReader from pool.
 func GetStringReader(data string) *strings.Reader {
 	r := bytesReaderPool.Get()
 	if r == nil {
@@ -19,7 +18,6 @@ func GetStringReader(data string) *strings.Reader {
 	return reader
 }
 
-// PutStringReader to pool.
 func PutStringReader(reader *strings.Reader) {
 	reader.Reset("")
 	stringReaderPool.Put(reader)
@@ -27,7 +25,6 @@ func PutStringReader(reader *strings.Reader) {
 
 var bytesReaderPool sync.Pool
 
-// GetBytesReader from pool.
 func GetBytesReader(data []byte) *bytes.Reader {
 	r := bytesReaderPool.Get()
 	if r == nil {
@@ -38,7 +35,6 @@ func GetBytesReader(data []byte) *bytes.Reader {
 	return reader
 }
 
-// PutBytesReader to pool.
 func PutBytesReader(reader *bytes.Reader) {
 	reader.Reset(nil)
 	bytesReaderPool.Put(reader)

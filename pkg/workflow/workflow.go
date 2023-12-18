@@ -1,10 +1,12 @@
 package workflow
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"text/template"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/THPTUHA/kairos/pkg/orderedmap"
@@ -154,7 +156,6 @@ func (b *Broker) Compile(userVars *Vars, clients []*Client, channels []*Channel,
 				return errors.New(fmt.Sprintf("broker %s: var %s not exist!", b.Name, e))
 			}
 		}
-		// TODO check validate condition
 	}
 	return nil
 }
@@ -312,7 +313,7 @@ func (v *Var) Compile() error {
 	return nil
 }
 
-func (t *Task) Compile(userVars map[string]string) error {
+func (t *Task) Compile(userVars map[string]string, assign bool) error {
 	if t.Payload != "" {
 		localVar, err := extractVariableNames(t.Payload)
 		if err != nil {
@@ -333,16 +334,30 @@ func (t *Task) Compile(userVars map[string]string) error {
 				}
 			}
 		}
+		tmpl, err := template.New("compile").Parse(t.Payload)
+		if err != nil {
+			return err
+		}
+
+		var buf bytes.Buffer
+		if err = tmpl.Execute(&buf, userVars); err != nil {
+			return err
+		}
+
+		if assign {
+			t.Payload = buf.String()
+		}
+
 		var payload interface{}
-		err = json.Unmarshal([]byte(t.Payload), &payload)
+		err = json.Unmarshal([]byte(buf.String()), &payload)
 		if err != nil {
 			return fmt.Errorf("task %s complie payload err: %s", t.Name, err)
 		}
 		if t.Executor == PubSubTask {
 			arrs := make([]map[string]interface{}, 0)
 			maps := make(map[string]interface{})
-			if err := json.Unmarshal([]byte(t.Payload), &arrs); err != nil {
-				err = json.Unmarshal([]byte(t.Payload), &maps)
+			if err := json.Unmarshal([]byte(buf.String()), &arrs); err != nil {
+				err = json.Unmarshal([]byte(buf.String()), &maps)
 				if err != nil {
 					return err
 				}
@@ -410,9 +425,7 @@ func (v *Var) UnmarshalYAML(node *yaml.Node) error {
 }
 
 func (v *Var) UnmarshalJSON(data []byte) error {
-	if err := json.Unmarshal(data, &v.Value); err != nil {
-		return err
-	}
+	v.Value = string(data)
 	return nil
 }
 
@@ -682,6 +695,7 @@ type CmdReplyTask struct {
 	Content    *Content           `json:"content,omitempty"`
 	Result     *Result            `json:"result,omitempty"`
 	SendAt     int64              `json:"send_at"`
+	RunCount   int64              `json:"run_coun,omitemptyt"`
 }
 
 type CmdTask struct {

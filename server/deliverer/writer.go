@@ -15,7 +15,6 @@ type writerConfig struct {
 	MaxQueueSize int
 }
 
-// writer helps to manage per-connection message byte queue.
 type writer struct {
 	mu       sync.Mutex
 	config   writerConfig
@@ -40,8 +39,6 @@ func newWriter(config writerConfig, queueInitialCap int) *writer {
 	return w
 }
 
-// run supposed to be run in goroutine, this goroutine will be closed as
-// soon as queue is closed.
 func (w *writer) run(writeDelay time.Duration, maxMessagesInFrame int) {
 	if maxMessagesInFrame == 0 {
 		maxMessagesInFrame = defaultMaxMessagesInFrame
@@ -65,7 +62,6 @@ func (w *writer) enqueue(item queue.Item) *Disconnect {
 }
 
 func (w *writer) waitSendMessage(maxMessagesInFrame int, writeDelay time.Duration) bool {
-	// Wait for message from the queue.
 	ok := w.messages.Wait()
 	log.Info().Msg("wait send message")
 	if !ok {
@@ -97,11 +93,6 @@ func (w *writer) waitSendMessage(maxMessagesInFrame int, writeDelay time.Duratio
 
 	messageCount := w.messages.Len()
 	if (maxMessagesInFrame == -1 || maxMessagesInFrame > 1) && messageCount > 0 {
-		// There are several more messages left in queue, try to send them in single frame,
-		// but no more than maxMessagesInFrame.
-
-		// Limit message count to get from queue with (maxMessagesInFrame - 1)
-		// (as we already have one message received from queue above).
 		messagesCap := messageCount + 1
 		if messagesCap > maxMessagesInFrame && maxMessagesInFrame > -1 {
 			messagesCap = maxMessagesInFrame

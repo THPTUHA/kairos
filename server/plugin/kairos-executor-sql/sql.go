@@ -76,23 +76,15 @@ func initDB(args *proto.ExecuteRequest) (*sql.DB, error) {
 			dbname,
 			otherCofig,
 		))
+	default:
+		return nil, fmt.Errorf("driver invalid")
 	}
 	return db, err
 }
 
 func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([]byte, error) {
 	instance := args.Config["instance"] == "one"
-
-	fmt.Println(" INSTART ", instance)
-	db, err = initDB(args)
-	if err != nil {
-		return nil, err
-	}
-
-	if !instance {
-		defer db.Close()
-	}
-
+	fmt.Printf("AGRS %+v\n", args.Config)
 	sqlCh := make(chan *Input)
 
 	go func() {
@@ -106,13 +98,6 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([
 				}
 				sqlCh <- &input
 			} else {
-				// if !instance {
-
-				// } else {
-				// 	b := cb.Input()
-				// 	fmt.Println("GET INPUT HERE", string(b))
-				// 	json.Unmarshal(b, &input)
-				// }
 				if args.Config["deliver_id"] != "" {
 					did, err := strconv.ParseInt(args.Config["deliver_id"], 10, 64)
 					if err != nil {
@@ -163,6 +148,11 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([
 			}
 
 			_, err := initDB(args)
+			if !instance {
+				defer db.Close()
+			}
+
+			fmt.Printf("ERRROR %+v \n", err)
 			if err != nil {
 				if instance {
 					cb.Update([]byte(err.Error()), false)
@@ -170,7 +160,10 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([
 				return nil, err
 			}
 
-			fmt.Printf("PARAMS %+v\n", input.Params)
+			fmt.Printf("SQL=%s PARAMS=%+v\n", input.Sql, input.Params)
+			if db == nil {
+				return nil, fmt.Errorf("can't init db")
+			}
 			rows, err := db.Query(input.Sql, input.Params...)
 			if err != nil {
 				fmt.Println("ERROR 1")
@@ -227,12 +220,11 @@ func (s *Sql) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([
 			if err != nil {
 				return nil, err
 			}
-			cb.Update(str, true)
 
 			if instance {
-				cb.Update(nil, true)
+				cb.Update(str, true)
 			} else {
-				return nil, nil
+				return str, nil
 			}
 			// return nil, nil
 		}

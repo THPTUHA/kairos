@@ -1,5 +1,9 @@
-function throwError() {
-    undefinedVariable;
-  }
+// function throwError() {
+//     undefinedVariable;
+//   }
   
-  throwError();
+//   throwError();
+
+function hello(){
+  return "hello"
+}

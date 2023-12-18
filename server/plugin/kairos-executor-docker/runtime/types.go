@@ -552,19 +552,14 @@ type PullImageResponse struct {
 // RemoveImageRequest is the request to remove the image from the container
 // registry
 type RemoveImageRequest struct {
-	// Spec of the image to remove.
 	Image *ImageSpec `json:"image,omitempty"`
 }
 
 var (
-	// RuntimeReady means the runtime is up and ready to accept basic containers.
 	RuntimeReady = "RuntimeReady"
-	// NetworkReady means the runtime network is up and ready to accept containers which require network.
 	NetworkReady = "NetworkReady"
 )
 
-// ImageNotFoundError is the error returned by InspectImage when image not found.
-// Expose this to inject error in dockershim for testing.
 type ImageNotFoundError struct {
 	ID string
 }

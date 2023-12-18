@@ -88,7 +88,7 @@ func (h *HTTPTransport) queueTest(c *gin.Context) {
 		h.logger.Error(err)
 		return
 	}
-	err := h.agent.Store.SetQueue(q.TaskID, q.K, q.V)
+	err := h.agent.Store.SetQueue(q.K, q.V)
 	if err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Queue contains invalid value: %s.", err))
@@ -185,9 +185,8 @@ func (h *HTTPTransport) dropScript(c *gin.Context) {
 }
 
 func (h *HTTPTransport) queueGetTest(c *gin.Context) {
-	taskID := c.Param("task")
-	m := make(map[string]string)
-	err := h.agent.Store.GetQueue(taskID, &m)
+	task := c.Param("task")
+	m, err := h.agent.Store.GetQueue(task)
 	if err != nil {
 		c.AbortWithStatus(http.StatusBadRequest)
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Queue contains invalid value: %s.", err))
@@ -326,7 +325,7 @@ func (h *HTTPTransport) tasksHandler(c *gin.Context) {
 		return
 	}
 
-	tasks, err := h.agent.Store.GetTasks(&to)
+	tasks, err := h.agent.GetTasks(&to)
 	if err != nil {
 		_, _ = c.Writer.WriteString(fmt.Sprintf("Unable to get tasks: %s.", err))
 		return

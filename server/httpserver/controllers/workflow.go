@@ -103,7 +103,7 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
+		c.JSON(http.StatusOK, gin.H{
 			"err": err.Error(),
 		})
 		return
@@ -388,6 +388,14 @@ func (ctr *Controller) RequestSyncWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
 		})
+		return
+	}
+
+	if result == nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

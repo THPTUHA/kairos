@@ -308,10 +308,6 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
       req.data = this._data;
     }
 
-    if (this._positioned) {
-      req.positioned = true;
-    }
-
     if (this._recoverable) {
       req.recoverable = true;
     }
@@ -361,7 +357,7 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
       return;
     }
     if (error.code === errorCodes.timeout) {
-      // @ts-ignore – we are hiding some symbols from public API autocompletion.
+      // @ts-ignore 
       this._kairos._disconnect(connectingCodes.subscribeTimeout, 'subscribe timeout', true);
       return;
     }
@@ -381,14 +377,14 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     }
     if (this._isSubscribed()) {
       if (sendUnsubscribe) {
-        // @ts-ignore – we are hiding some methods from public API autocompletion.
+        // @ts-ignore 
         this._kairos._unsubscribe(this);
       }
       this._clearSubscribedState();
     }
     if (this._isSubscribing()) {
       if (this._inflight && sendUnsubscribe) {
-        // @ts-ignore – we are hiding some methods from public API autocompletion.
+        // @ts-ignore 
         this._kairos._unsubscribe(this);
       }
       this._clearSubscribingState();
@@ -400,7 +396,7 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
   }
 
   private _handlePublication(pub: any) {
-    // @ts-ignore – we are hiding some methods from public API autocompletion.
+    // @ts-ignore 
     const ctx = this._kairos._getPublicationContext(this.channel, pub);
     this.emit('publication', ctx);
     if (pub.offset) {
@@ -409,13 +405,13 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
   }
 
   protected _handleJoin(join: any) {
-    // @ts-ignore – we are hiding some methods from public API autocompletion.
+    // @ts-ignore 
     const info = this._kairos._getJoinLeaveContext(join.info)
     this.emit('join', { channel: this.channel, info: info });
   }
 
   protected _handleLeave(leave: any) {
-    // @ts-ignore – we are hiding some methods from public API autocompletion.
+    // @ts-ignore
     const info = this._kairos._getJoinLeaveContext(leave.info)
     this.emit('leave', { channel: this.channel, info: info });
   }
@@ -461,7 +457,8 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
       return;
     }
     if (err.code < 100 || err.code === 109 || err.temporary === true) {
-      if (err.code === 109) { // Token expired error.
+      // Token expired error.
+      if (err.code === 109) {
         this._token = '';
       }
       const errContext = {
@@ -488,11 +485,6 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     if (!options) {
       return;
     }
-    if (options.since) {
-      this._offset = options.since.offset;
-      this._epoch = options.since.epoch;
-      this._recover = true;
-    }
     if (options.data) {
       this._data = options.data;
     }
@@ -510,15 +502,6 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     }
     if (options.getToken) {
       this._getToken = options.getToken;
-    }
-    if (options.positioned === true) {
-      this._positioned = true;
-    }
-    if (options.recoverable === true) {
-      this._recoverable = true;
-    }
-    if (options.joinLeave === true) {
-      this._joinLeave = true;
     }
   }
 
@@ -590,14 +573,14 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
       const msg = {
         'sub_refresh': req
       };
-      // @ts-ignore – we are hiding some symbols from public API autocompletion.
+      // @ts-ignore 
       self._kairos._call(msg).then(resolveCtx => {
-        // @ts-ignore - improve later.
+        // @ts-ignore
         const result = resolveCtx.reply.sub_refresh;
         self._refreshResponse(result);
-        // @ts-ignore - improve later.
+        // @ts-ignore 
         if (resolveCtx.next) {
-          // @ts-ignore - improve later.
+          // @ts-ignore
           resolveCtx.next();
         }
       }, rejectCtx => {

@@ -76,7 +76,6 @@ Content-Type: application/json
 {
   "id": "2",
   "name": "task2",
-  "schedule": "@every 30s",
   "timezone": "Europe/Berlin",
   "tags": {
     "server": "true:1"
@@ -86,7 +85,8 @@ Content-Type: application/json
   },
   "executor": "file",
   "executor_config": {
-    "path": "./main.go"
+    "path": "./main.go",
+    "method": "read"
   }
 } 
 
@@ -106,7 +106,27 @@ Content-Type: application/json
   },
   "executor": "script",
   "executor_config": {
-    "command": "./test.sh"
+    "command": "/bin/sh",
+    "commandArgs": "[\"-c \", \" kubectl rollout restart deployment backend-service-cms\"]"
+  }
+} 
+
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "executor": "k8sdeploy",
+  "executor_config": {
+    "service": "backend-service-cms",
+    "cmd": "log"
   }
 } 
 
@@ -163,7 +183,6 @@ Content-Type: application/json
   }
 } 
 ###
-
 ###
 POST http://localhost:8080/v1/tasks
 Content-Type: application/json
@@ -225,14 +244,14 @@ Content-Type: application/json
 }
 
 ###
-GET http://localhost:8080/v1/workflow/46/detail
+GET http://localhost:8080/v1/workflow/68/detail
 Content-Type: application/json
 
 ###
-DELETE http://localhost:8080/v1/task/36/delete
+DELETE http://localhost:8080/v1/task/327/delete
 Content-Type: application/json
 ###
-DELETE http://localhost:8080/v1/broker/57/delete
+DELETE http://localhost:8080/v1/broker/81/delete
 Content-Type: application/json
 
 ###
@@ -275,13 +294,12 @@ POST http://localhost:8080/v1/queue
 Content-Type: application/json
 
 {
-  "task_id": "1",
-  "k":"xyz4",
-  "v": "abc4"
+  "k":"100",
+  "v": "xyz4"
 }
 
 ###
-GET http://localhost:8082/v1/110/queue
+GET http://localhost:8080/v1/user_sql-119/queue
 Content-Type: application/json
 
 ###
@@ -368,15 +386,15 @@ api-key: 6e679f0a-7ce1-4d9f-a00a-c8ecc086ba57
 ###
 POST http://localhost:8001/apis/v1/service/workflow/request/sync
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
-api-key: 6e679f0a-7ce1-4d9f-a00a-c8ecc086ba57
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIzIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.bNVPBs5VyXjqaR_khv_HleDa2zAOB_BCduDLuxhjwmI
+api-key: 5f996c81-5677-4d25-b30e-650724f14499
 
 {
   "cmd": 4,
-  "run_on": "a_channel",
+  "run_on": "listen_channel",
   "content":{
     "msg":{
-      "user_id": 98
+      "sql": "select * from users limit 1"
     }
   }
 }

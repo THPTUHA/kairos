@@ -151,6 +151,7 @@ func (om *OrderedMap[K, V]) MarshalJSON() ([]byte, error) {
 
 func (om *OrderedMap[K, V]) UnmarshalJSON(data []byte) error {
 	var value map[K]V
+
 	if err := json.Unmarshal(data, &value); err != nil {
 		return err
 	}

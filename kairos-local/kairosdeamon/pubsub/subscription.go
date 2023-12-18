@@ -231,7 +231,6 @@ func (s *Subscription) presenceStats(ctx context.Context, fn func(PresenceStatsR
 	})
 }
 
-// Unsubscribe allows unsubscribing from channel.
 func (s *Subscription) Unsubscribe() error {
 	if s.client.isClosed() {
 		return ErrClientClosed
@@ -252,7 +251,6 @@ func (s *Subscription) unsubscribe(code uint32, reason string, sendUnsubscribe b
 	}
 }
 
-// Subscribe allows initiating subscription process.
 func (s *Subscription) Subscribe() error {
 	if s.client.isClosed() {
 		return ErrClientClosed
@@ -552,7 +550,6 @@ func (s *Subscription) getSubscriptionToken(channel string) (string, error) {
 	return "", errors.New("GetToken must be set to get subscription token")
 }
 
-// Lock must be held outside.
 func (s *Subscription) scheduleSubRefresh(ttl uint32) {
 	if s.state != SubStateSubscribed {
 		return

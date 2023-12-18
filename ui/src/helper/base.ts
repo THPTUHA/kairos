@@ -1,10 +1,10 @@
 
 function serverUrl(): string{
-    return "http://localhost:8001/";
+    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER : "";
 }
 
 function baseUrl(): string{
-    return "http://localhost:3000/";
+    return process.env.REACT_APP_BASE_URL ? process.env.REACT_APP_BASE_URL : "";
 }
 
 export function uiUrl(uiPath: string): string {

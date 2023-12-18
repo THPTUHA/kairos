@@ -20,11 +20,8 @@ type HCLogAdapter struct {
 func (*HCLogAdapter) Log(level hclog.Level, msg string, args ...interface{}) {
 }
 
-// Trace HCLog has one more level than we do. As such, we will never
-// set trace level.
 func (*HCLogAdapter) Trace(_ string, _ ...interface{}) {}
 
-// Debug logging level message
 func (a *HCLogAdapter) Debug(msg string, args ...interface{}) {
 	a.CreateEntry(args).Debug(msg)
 }

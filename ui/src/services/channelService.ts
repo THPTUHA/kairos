@@ -17,4 +17,10 @@ export const ChannelService = {
                 return item
             }));
     },
+    delete(channel:  string){
+        return requests
+            .post(`apis/v1/service/channel/${channel}/delete`)
+            .send()
+            .then(res => (res.body as any));
+    }
 }

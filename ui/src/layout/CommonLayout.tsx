@@ -111,7 +111,7 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                         ? <>{children}</>
                         : <Layout style={{ minHeight: '100vh' }}>
                             <Sider collapsed={true} >
-                                <div className="demo-logo-vertical" >KAIROS</div>
+                                {/* <div className="demo-logo-vertical" >KAIROS</div> */}
                                 <Menu
                                     theme="dark"
                                     defaultSelectedKeys={[location.pathname]}

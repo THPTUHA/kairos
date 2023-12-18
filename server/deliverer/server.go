@@ -28,7 +28,6 @@ type DelivererServer struct {
 	node   *Node
 	sub    *natsSub
 	config *ServerConfig
-	// redis  *redis.Client
 	logger *logrus.Entry
 }
 
@@ -77,7 +76,6 @@ func (d *DelivererServer) createNode() error {
 	if err != nil {
 		return err
 	}
-
 	node.OnConnecting(func(ctx context.Context, e ConnectEvent) (ConnectReply, error) {
 		user, err := auth.ExtractAccessStr(e.Token)
 		if err != nil {
@@ -101,30 +99,30 @@ func (d *DelivererServer) createNode() error {
 				Role: models.ReadWriteRole,
 			})
 		case models.ChannelUser:
+			id = fmt.Sprintf("kairoschannel-%s", user.ClientID)
 			certID, _ := strconv.ParseInt(user.ClientID, 10, 64)
 			req := proto.ChannelPermitRequest{
 				CertID: certID,
 			}
 			data, err := json.Marshal(&req)
 			if err != nil {
-				fmt.Println("Errr 01", err)
+				d.logger.Error(err)
 				return ConnectReply{}, err
 			}
 
 			reply, err := d.sub.Con.Request(fmt.Sprintf("%s.%d", messaging.INFOMATION, proto.Command_ChannelPermitRequest), data, 5*time.Second)
 			if err != nil {
-				fmt.Println("Errr 02", err)
+				d.logger.Error(err)
 				return ConnectReply{}, err
 			}
 			var res proto.ChannelPermitReply
 			err = json.Unmarshal(reply.Data, &res)
 			if err != nil {
-				fmt.Println("Errr 03", err)
+				d.logger.Error(err)
 				return ConnectReply{}, err
 			}
 
 			fmt.Printf("Reply %+v\n", res.ChannelPermits)
-			// TODO change role here
 			for _, cp := range res.ChannelPermits {
 				channels = append(channels, &ChannelRole{
 					Name: fmt.Sprintf("%s-%d", cp.ChannelName, cp.ChannelID),
@@ -195,6 +193,7 @@ func (d *DelivererServer) createNode() error {
 		client.OnDisconnect(func(e DisconnectEvent) {
 			fmt.Printf("client %s type disconnected", client.UserID())
 		})
+
 	})
 
 	if err := node.Run(); err != nil {
@@ -263,6 +262,7 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 		s.node.Publish(fmt.Sprintf("kairosuser-%d", cmd.UserID), msg.Data)
 		fmt.Printf("[ DELIVER MONITOR] %+v \n", cmd)
 	}
+
 	s.sub.Con.Subscribe(messaging.CLIENT_STATUS, func(msg *nats.Msg) {
 		var userIDs []string
 		err := json.Unmarshal(msg.Data, &userIDs)
@@ -273,6 +273,22 @@ func (s *DelivererServer) startSub(signals chan os.Signal) {
 		userInfos := s.node.InfoUsers(userIDs)
 		data, _ := json.Marshal(userInfos)
 		msg.Respond(data)
+	})
+
+	s.sub.Con.Subscribe(messaging.REMOVE_CHANNEL, func(msg *nats.Msg) {
+		var ch models.Channel
+		err := json.Unmarshal(msg.Data, &ch)
+		if err != nil {
+			s.logger.WithField("deliver", "remove channel").Error(err)
+			return
+		}
+
+		err = s.node.Unsubscribe(fmt.Sprint(ch.UserID), ch.Name)
+		if err != nil {
+			s.logger.WithField("deliver", "remove channel").Error(err)
+			return
+		}
+		msg.Respond([]byte("success"))
 	})
 
 	s.sub.Subscribes(subList, signals)

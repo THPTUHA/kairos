@@ -110,7 +110,10 @@ func (ctr *Controller) PermisCert(c *gin.Context) {
 
 	cp, err := storage.GetChannelInfoByCertID(cid)
 	if err != nil {
-		fmt.Println("err", err)
+		ctr.Log.Error(err)
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
 		return
 	}
 

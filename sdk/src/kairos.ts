@@ -41,9 +41,6 @@ const defaults: Options = {
 }
 
 interface serverSubscription {
-  offset: number;
-  epoch: string;
-  recoverable: boolean;
 }
 
 export class UnauthorizedError extends Error {
@@ -137,14 +134,10 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     return sub;
   }
 
-  /** getSubscription returns Subscription if it's registered in the internal 
-   * registry or null. */
   getSubscription(channel: string): Subscription | null {
     return this._getSub(channel);
   }
 
-  /** removeSubscription allows removing Subcription from the internal registry. Subscrption 
-   * must be in unsubscribed state. */
   removeSubscription(sub: Subscription | null) {
     if (!sub) {
       return;
@@ -200,8 +193,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     this._secret_key = secret_key;
   }
 
-  /** send asynchronous data to a server (without any response from a server 
-   * expected, see rpc method if you need response). */
   send(data: any): Promise<void> {
     const cmd = {
       send: {
@@ -212,7 +203,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     const self = this;
 
     return this._methodCall().then(function () {
-      const sent = self._transportSendCommands([cmd]); // can send message to server without id set
+      const sent = self._transportSendCommands([cmd]);
       if (!sent) {
         return Promise.reject(self._createErrorObject(errorCodes.transportWriteError, 'transport write error'));
       }
@@ -297,7 +288,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     });
   }
 
-  /** presence stats for a channel. */
   presenceStats(channel: string): Promise<PresenceStatsResult> {
     const cmd = {
       'presence_stats': {
@@ -397,11 +387,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
           return;
         }
         if (this._deviceWentOffline && !this._transportClosed) {
-          // This is a workaround for mobile Safari where close callback may be
-          // not issued upon device going to the flight mode. We know for sure
-          // that transport close was called, so we start reconnecting. In this
-          // case if the close callback will be issued for some reason after some
-          // time – it will be ignored due to transport ID mismatch.
           this._deviceWentOffline = false;
           this._transportClosed = true;
         }
@@ -419,7 +404,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
   }
 
   private _clearOutgoingRequests() {
-    // fire errbacks of registered outgoing calls.
     for (const id in this._callbacks) {
       if (this._callbacks.hasOwnProperty(id)) {
         const callbacks = this._callbacks[id];
@@ -439,19 +423,17 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     this._clearServerPingTimeout();
     this._clearRefreshTimeout();
 
-    // fire events for client-side subscriptions.
     for (const channel in this._subs) {
       if (!this._subs.hasOwnProperty(channel)) {
         continue;
       }
       const sub = this._subs[channel];
       if (sub.state === SubscriptionState.Subscribed) {
-        // @ts-ignore – we are hiding some symbols from public API autocompletion.
+        // @ts-ignore
         sub._setSubscribing(subscribingCodes.transportClosed, 'transport closed');
       }
     }
 
-    // fire events for server-side subscriptions.
     for (const channel in this._serverSubs) {
       if (this._serverSubs.hasOwnProperty(channel)) {
         this.emit('subscribing', { channel: channel });
@@ -500,7 +482,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     }
 
     if (startsWith(this._endpoint, 'http')) {
-      throw new Error('Provide explicit transport endpoints configuration in case of using HTTP (i.e. using array of TransportEndpoint instead of a single string), or use ws(s):// scheme in an endpoint if you aimed using WebSocket transport');
+      throw new Error('Provide explicit transport endpoints configuration in case of using HTTP ');
     } else {
       this._transport = new WebsocketTransport(this._endpoint as string, {
         websocket: websocket
@@ -542,7 +524,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
         }
       },
       onError: function (e: any) {
-        console.log("Web socket err:", e)
         if (self._transportId != transportId) {
           console.log("error callback from non-actual transport", e)
           return;
@@ -616,7 +597,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       "Authorization": `Bearer ${this._secret_key}`,
       "api-key": this._api_key
     };
-    console.log("HEADER", headers)
     try {
       const response = await fetch(this._apiUrl, {
         method: "GET",
@@ -628,7 +608,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       }
 
       const data = await response.json();
-      console.log("Certificate data:", data);
       return data.permissions;
     } catch (error) {
       console.error("Error fetching certificate:", error);
@@ -640,12 +619,12 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     const connectCommand = this._constructConnectCommand();
     const self = this;
     this._call(connectCommand, skipSending).then(resolveCtx => {
-      // @ts-ignore = improve later.
+      // @ts-ignore
       const result = resolveCtx.reply.connect;
       self._connectResponse(result);
-      // @ts-ignore - improve later.
+      // @ts-ignore 
       if (resolveCtx.next) {
-        // @ts-ignore - improve later.
+        // @ts-ignore
         resolveCtx.next();
       }
     }, rejectCtx => {
@@ -744,8 +723,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     if (this.state !== State.Connecting) {
       return;
     }
-    if (err.code === 109) { // secret_key expired.
-      // next connect attempt will try to refresh secret_key.
+    if (err.code === 109) { 
       this._refreshRequired = true;
     }
     if (err.code < 100 || err.temporary === true || err.code === 109) {
@@ -770,7 +748,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     }, delay);
   }
 
-  // khởi tạo connect command
   private _constructConnectCommand(): any {
     const req: any = {};
 
@@ -782,21 +759,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     }
     const subs = {};
     let hasSubs = false;
-    for (const channel in this._serverSubs) {
-      if (this._serverSubs.hasOwnProperty(channel) && this._serverSubs[channel].recoverable) {
-        hasSubs = true;
-        const sub = {
-          'recover': true
-        };
-        if (this._serverSubs[channel].offset) {
-          sub['offset'] = this._serverSubs[channel].offset;
-        }
-        if (this._serverSubs[channel].epoch) {
-          sub['epoch'] = this._serverSubs[channel].epoch;
-        }
-        subs[channel] = sub;
-      }
-    }
     if (hasSubs) {
       req.subs = subs;
     }
@@ -806,7 +768,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
   }
 
   private _methodCall(): any {
-    console.log("Connectting")
     if (this._isConnected()) {
       return Promise.resolve();
     }
@@ -846,10 +807,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       this._waitServerPing();
     }
     const replies = this._codec.decodeReplies(data);
-    // We have to guarantee order of events in replies processing - i.e. start processing
-    // next reply only when we finished processing of current one. Without syncing things in
-    // this way we could get wrong publication events order as reply promises resolve
-    // on next loop tick so for loop continues before we finished emitting all reply events.
     this._dispatchPromise = this._dispatchPromise.then(() => {
       let finishDispatch;
       this._dispatchPromise = new Promise(resolve => {
@@ -921,9 +878,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     if (this._isDisconnected()) {
       return;
     }
-
     const previousState = this.state;
-
     const ctx = {
       code: code,
       reason: reason
@@ -958,7 +913,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     if (this._transport) {
       const transport = this._transport;
       this._transport = null;
-      transport.close(); // Close only after setting this._transport to null to avoid recursion when calling transport close().
+      transport.close(); 
       this._transportClosed = true;
       this._nextTransportId();
     }
@@ -1005,12 +960,12 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       };
 
       self._call(cmd, false).then(resolveCtx => {
-        // @ts-ignore - improve later.
+        // @ts-ignore 
         const result = resolveCtx.reply.refresh;
         self._refreshResponse(result);
-        // @ts-ignore - improve later.
+        // @ts-ignore 
         if (resolveCtx.next) {
-          // @ts-ignore - improve later.
+          // @ts-ignore 
           resolveCtx.next();
         }
       }, rejectCtx => {
@@ -1084,9 +1039,9 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     const self = this;
 
     this._call(cmd, false).then(resolveCtx => {
-      // @ts-ignore - improve later.
+      // @ts-ignore 
       if (resolveCtx.next) {
-        // @ts-ignore - improve later.
+        // @ts-ignore 
         resolveCtx.next();
       }
     }, rejectCtx => {
@@ -1116,12 +1071,12 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
         continue;
       }
       const sub = this._subs[channel];
-      // @ts-ignore – we are hiding some symbols from public API autocompletion.
+      // @ts-ignore
       if (sub._inflight === true) {
         continue;
       }
       if (sub.state === SubscriptionState.Subscribing) {
-        // @ts-ignore – we are hiding some symbols from public API autocompletion.
+        // @ts-ignore
         const cmd = sub._subscribe(optimistic, skipSending);
         if (cmd) {
           commands.push(cmd);
@@ -1256,37 +1211,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
   private _getSubscribeContext(channel: string, result: any): SubscribedContext {
     const ctx: any = {
       channel: channel,
-      positioned: false,
-      recoverable: false,
-      wasRecovering: false,
-      recovered: false
     };
-    if (result.recovered) {
-      ctx.recovered = true;
-    }
-    if (result.positioned) {
-      ctx.positioned = true;
-    }
-    if (result.recoverable) {
-      ctx.recoverable = true;
-    }
-    if (result.was_recovering) {
-      ctx.wasRecovering = true;
-    }
-    let epoch = '';
-    if ('epoch' in result) {
-      epoch = result.epoch;
-    }
-    let offset = 0;
-    if ('offset' in result) {
-      offset = result.offset;
-    }
-    if (ctx.positioned || ctx.recoverable) {
-      ctx.streamPosition = {
-        'offset': offset,
-        'epoch': epoch
-      };
-    }
     if (result.data) {
       ctx.data = result.data;
     }
@@ -1329,7 +1254,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       }
       return;
     }
-    // @ts-ignore – we are hiding some symbols from public API autocompletion.
+    // @ts-ignore 
     sub._handleJoin(join);
   }
 
@@ -1342,7 +1267,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       }
       return;
     }
-    // @ts-ignore – we are hiding some symbols from public API autocompletion.
+    // @ts-ignore
     sub._handleLeave(leave);
   }
 
@@ -1356,19 +1281,16 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       return;
     }
     if (unsubscribe.code < 2500) {
-      // @ts-ignore – we are hiding some symbols from public API autocompletion.
+      // @ts-ignore 
       sub._setUnsubscribed(unsubscribe.code, unsubscribe.reason, false);
     } else {
-      // @ts-ignore – we are hiding some symbols from public API autocompletion.
+      // @ts-ignore
       sub._setSubscribing(unsubscribe.code, unsubscribe.reason);
     }
   }
 
   private _handleSubscribe(channel: string, sub: any) {
     this._serverSubs[channel] = {
-      'offset': sub.offset,
-      'epoch': sub.epoch,
-      'recoverable': sub.recoverable || false
     };
     this.emit('subscribed', this._getSubscribeContext(channel, sub));
   }
@@ -1396,9 +1318,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     if (pub.info) {
       ctx.info = this._getJoinLeaveContext(pub.info);
     }
-
-    console.log(" CTX___", ctx)
-    
     return ctx;
   }
 

@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/agent/broker"
@@ -29,11 +28,24 @@ import (
 )
 
 const (
-	maxBufSize = 1000
+	maxBufSize = 256000
 )
 
 var (
 	runningExecutions sync.Map
+)
+
+type TaskActive struct {
+	ExecutionID string
+	Status      string
+	StartAt     int64
+}
+
+const (
+	Running  = "running"
+	Schedule = "schedule"
+	Finish   = "finish"
+	Wait     = "wait"
 )
 
 type Agent struct {
@@ -49,12 +61,13 @@ type Agent struct {
 	listener         net.Listener
 	taskCh           chan *workflow.CmdTask
 	EventCh          chan *events.Event
-	RunCount         int64
 	Broker           *broker.Broker
 	Script           *workflow.FuncCall
 	ClientName       string
 	BrokerWfs        map[int64]*broker.Subscriber
+	TaskActives      map[string]map[string]*TaskActive
 
+	rmu    sync.RWMutex
 	mu     sync.RWMutex
 	logger *logrus.Entry
 }
@@ -73,6 +86,7 @@ func NewAgent(config *AgentConfig, options ...AgentOption) *Agent {
 			Call:  make(map[string]goja.Callable),
 			Funcs: vm,
 		},
+		TaskActives: make(map[string]map[string]*TaskActive),
 	}
 
 	for _, option := range options {
@@ -100,7 +114,6 @@ func (a *Agent) setupBrokers() error {
 		return err
 	}
 	for _, b := range brokers {
-		fmt.Printf("Brokersss %+v \n", b)
 		b.Template.FuncCalls = a.Script
 		a.setupBroker(b)
 	}
@@ -221,6 +234,7 @@ func (a *Agent) handleTaskEvent() {
 				re.Status = workflow.SuccessSetTask
 				go a.hub.Publish(&re)
 			}
+
 		case workflow.TriggerStartTaskCmd:
 			fmt.Printf("[AGENT HANLE Trigger Start TaskCmd ] cmd=%d taskid=%d\n", te.Cmd, te.Task.ID)
 			re.Cmd = workflow.ReplyStartTaskCmd
@@ -243,19 +257,6 @@ func (a *Agent) handleTaskEvent() {
 			re.Cmd = workflow.ReplyInputTaskCmd
 			re.Status = workflow.SuccessReceiveInputTaskCmd
 			go a.hub.Publish(&re)
-
-			// a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, te.Task.Input)
-			// a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), workflow.GetTaskName(te.Task.Name), te.Task.Input)
-
-			// tasks, err := a.Store.GetTasks(&TaskOptions{NoScheduler: true})
-			// if err != nil {
-			// }
-
-			// for _, task := range tasks {
-			// 	fmt.Printf("AGENT RUN TASK NO SCHEDULE %+v\n", task)
-			// 	task.Agent = a
-			// 	go task.Run()
-			// }
 			task, err := a.Store.GetTask(fmt.Sprint(te.Task.ID), nil)
 			if err != nil {
 				fmt.Println("[AGENT GET TASK ERROR]", err)
@@ -268,10 +269,11 @@ func (a *Agent) handleTaskEvent() {
 			task.logger = a.logger
 			go task.RunTrigger(te)
 			fmt.Printf("[AGENT SET QUEUE] taskname = %s, input=%s, from=%s\n", te.Task.Name, te.Task.Input, te.From)
+
 		case workflow.RequestTaskRunSyncCmd:
 			re.Cmd = workflow.ReplyRequestTaskSyncCmd
 			fmt.Printf("[AGENT Request Task run sync ] %+v\n", te)
-			a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, te.Task.Input)
+			// a.Store.SetQueue(fmt.Sprint(te.Task.WorkflowID), te.From, te.Task.Input)
 			task, err := a.GetTask(fmt.Sprint(te.Task.ID))
 			if err != nil {
 				re.Result = &workflow.Result{
@@ -306,35 +308,47 @@ func (a *Agent) handleTaskEvent() {
 					re.Status = workflow.FaultSetBroker
 					re.Message = err.Error()
 				} else {
-					te.Broker.Template.FuncCalls = a.Script
-					Funcs := te.Broker.Template.FuncNotFound
-					fmt.Printf("BROKER TEMp---- %+v\n", Funcs)
+					valid := true
+					if te.Broker.Template == nil {
+						re.Status = workflow.FaultSetBroker
+						re.Message = fmt.Sprintf("template empty")
+						a.hub.Publish(&re)
+						valid = false
+					} else {
+						te.Broker.Template.FuncCalls = a.Script
+						Funcs := te.Broker.Template.FuncNotFound
+						fmt.Printf("BROKER TEMp---- %+v\n", Funcs)
 
-					if len(Funcs) > 0 {
-						for _, f := range Funcs {
-							e := a.Script.Call[f]
-							if e == nil {
-								var m goja.Callable
-								fc := a.Script.Funcs.Get(f)
-								if fc == nil {
-									re.Status = workflow.FaultSetBroker
-									re.Message = fmt.Sprintf("function %s not found in broker %s on client %s", f, te.Broker.Name, a.ClientName)
-									a.hub.Publish(&re)
-									return
+						if len(Funcs) > 0 {
+							for _, f := range Funcs {
+								e := a.Script.Call[f]
+								if e == nil {
+									var m goja.Callable
+									fc := a.Script.Funcs.Get(f)
+									if fc == nil {
+										re.Status = workflow.FaultSetBroker
+										re.Message = fmt.Sprintf("function %s not found in broker %s on client %s", f, te.Broker.Name, a.ClientName)
+										a.hub.Publish(&re)
+										valid = false
+										break
+									}
+									err = a.Script.Funcs.ExportTo(fc, &m)
+									if err != nil {
+										re.Status = workflow.FaultSetBroker
+										re.Message = fmt.Sprintf("function %s not found in broker %s on client %s", f, te.Broker.Name, a.ClientName)
+										a.hub.Publish(&re)
+										valid = false
+										break
+									}
+									a.Script.Call[f] = m
 								}
-								err = a.Script.Funcs.ExportTo(fc, &m)
-								if err != nil {
-									re.Status = workflow.FaultSetBroker
-									re.Message = fmt.Sprintf("function %s not found in broker %s on client %s", f, te.Broker.Name, a.ClientName)
-									a.hub.Publish(&re)
-									return
-								}
-								a.Script.Call[f] = m
 							}
 						}
 					}
-					te.Broker.Template.FuncCalls = a.Script
-					go a.setupBroker(te.Broker)
+					if valid {
+						te.Broker.Template.FuncCalls = a.Script
+						go a.setupBroker(te.Broker)
+					}
 				}
 				a.hub.Publish(&re)
 			}
@@ -343,6 +357,7 @@ func (a *Agent) handleTaskEvent() {
 			re.Status = workflow.SuccessDestroyWorkflow
 			err := a.DeleteWorkflow(te.WorkflowID)
 			if err != nil {
+				a.logger.Error(err)
 				re.Status = workflow.FaultDestroyWorkflow
 				re.Message = err.Error()
 			}
@@ -418,6 +433,7 @@ func (a *Agent) setupBroker(b *workflow.Broker) error {
 				tr := b.Template.NewRutime(output)
 				exo := tr.Execute()
 				for _, d := range exo.DeliverFlows {
+					fmt.Printf("DELIVERFLOWS %+v\n", d)
 					// reciever is task
 					tasks, err := a.Store.GetTasks(&TaskOptions{
 						Name:       workflow.GetRawName(d.Reciever),
@@ -636,15 +652,15 @@ type statusAgentHelper struct {
 }
 
 func (s *statusAgentHelper) Update(b []byte, c bool) (int64, error) {
+	fmt.Println("UDPATE DATA", string(b))
 	var err error
+	s.execution.Success = c
 	if s.buffer != nil {
-		fmt.Println("DATA UPDATE", string(b))
 		_, err = s.buffer.Write(b)
 
 	} else if s.circbuf != nil {
 		_, err = s.circbuf.Write(b)
 	}
-	s.execution.Success = c
 	// time.Sleep(3 * time.Second)
 	return 0, err
 }
@@ -675,38 +691,106 @@ func (a *Agent) Broadcast(t *workflow.CmdReplyTask) {
 	go a.Broker.Broadcast(replies, k)
 }
 
+func (a *Agent) GetTasks(to *TaskOptions) ([]*Task, error) {
+	tasks, err := a.Store.GetTasks(to)
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range tasks {
+		if a.TaskActives[t.ID] != nil && len(a.TaskActives[t.ID]) > 0 {
+			t.Status = Running
+		} else {
+			t.Status = Wait
+		}
+	}
+
+	return tasks, nil
+}
+
+func (a *Agent) UpdateTaskRecord(taskID string, ta *TaskActive) {
+	a.rmu.RLock()
+	defer a.rmu.RUnlock()
+	fmt.Printf("Task id = %s, status = %s", taskID, ta.Status)
+	if a.TaskActives[taskID] == nil {
+		if ta.Status == Running || ta.Status == Schedule {
+			a.TaskActives[taskID] = map[string]*TaskActive{ta.ExecutionID: ta}
+		}
+	} else {
+		if ta.Status == Finish {
+			delete(a.TaskActives[taskID], ta.ExecutionID)
+		}
+	}
+}
+
 func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) error {
 	agent.logger.WithFields(logrus.Fields{
 		"task": task.Name,
 	}).Info("agent: Starting task")
+	agent.UpdateTaskRecord(task.ID, &TaskActive{
+		Status:      Running,
+		ExecutionID: execution.Id,
+		StartAt:     helper.GetTimeNow(),
+	})
 
-	execution.RunCount = atomic.AddInt64(&agent.RunCount, 1)
+	defer agent.UpdateTaskRecord(task.ID, &TaskActive{
+		Status:      Finish,
+		ExecutionID: execution.Id,
+		StartAt:     helper.GetTimeNow(),
+	})
 
 	jex := task.Executor
-	exc := task.ExecutorConfig
+	exc := make(map[string]string)
 
+	for k, v := range task.ExecutorConfig {
+		exc[k] = v
+	}
+	var input string
 	if re != nil && exc != nil {
-		input := re.Task.Input
-		if input != "" {
-			var mp map[string]interface{}
-			err := json.Unmarshal([]byte(input), &mp)
+		if task.Schedule != "" {
+			s, err := json.Marshal(re)
 			if err != nil {
 				return err
 			}
-			for k, v := range mp {
-				if v, ok := v.(string); ok {
-					exc[k] = v
-				} else {
-					str, err := json.Marshal(v)
-					if err != nil {
-						return err
-					}
-					exc[k] = string(str)
+			fmt.Println("SET QUEUE ", fmt.Sprintf("%s-%d", task.Name, task.WorkflowID))
+			return agent.Store.SetQueue(fmt.Sprintf("%s-%d", task.Name, task.WorkflowID), string(s))
+		}
+		input = re.Task.Input
+		// exc["deliver_id"] = fmt.Sprint(re.DeliverID)
+		exc["worklow_id"] = fmt.Sprint(re.WorkflowID)
+	} else if exc != nil {
+		var ct workflow.CmdTask
+		e, err := agent.Store.GetQueue(fmt.Sprintf("%s-%d", task.Name, task.WorkflowID))
+		if err != nil {
+			return err
+		}
+		if e != "" {
+			err = json.Unmarshal([]byte(e), &ct)
+			if err != nil {
+				return err
+			}
+			input = ct.Task.Input
+			fmt.Println("Get queue from ", fmt.Sprintf("%s-%d", task.Name, task.WorkflowID))
+		}
+	}
+
+	if input != "" {
+		fmt.Printf("INPUT TASK CCC %+v \n", input)
+		var mp map[string]interface{}
+		err := json.Unmarshal([]byte(input), &mp)
+		if err != nil {
+			return err
+		}
+		for k, v := range mp {
+			if v, ok := v.(string); ok {
+				exc[k] = v
+			} else {
+				str, err := json.Marshal(v)
+				if err != nil {
+					return err
 				}
+				exc[k] = string(str)
 			}
 		}
-		exc["deliver_id"] = fmt.Sprint(re.DeliverID)
-		exc["worklow_id"] = fmt.Sprint(re.WorkflowID)
 	}
 
 	execution.StartedAt = time.Now()
@@ -745,6 +829,10 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 				t := task.ToCmdReplyTask()
 				t.Cmd = workflow.ReplyOutputTaskCmd
 				t.Result = execution.GetResult()
+				if re != nil {
+					t.RunCount = re.RunCount
+				}
+				time.Sleep(time.Second)
 				go agent.Broadcast(t)
 
 				fmt.Printf("[ OUTPUT TASK ] %+v  RESULT = %+v\n", t, t.Result)
@@ -789,6 +877,9 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		t := task.ToCmdReplyTask()
 		t.Cmd = workflow.ReplyOutputTaskCmd
 		t.Result = execution.GetResult()
+		if re != nil {
+			t.RunCount = re.RunCount
+		}
 		go agent.Broadcast(t)
 	}
 
@@ -838,7 +929,6 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 		"task": task.Name,
 	}).Info("agent: Starting task")
 
-	execution.RunCount = atomic.AddInt64(&agent.RunCount, 1)
 	jex := task.Executor
 	exc := task.ExecutorConfig
 

@@ -16,347 +16,157 @@ type ConnectEvent struct {
 	Channels  []string
 }
 
-// ConnectReply contains reaction to ConnectEvent.
 type ConnectReply struct {
-	// Context allows returning a modified context.
-	Context context.Context
-	// Credentials should be set if app wants to authenticate connection.
-	// This field is optional since auth Credentials could be set through
-	// HTTP middleware.
-	Credentials *Credentials
-	// Data allows setting custom data in connect reply.
-	Data []byte
-	// Subscriptions map contains channels to subscribe connection to on server-side.
-	Subscriptions map[string]SubscribeOptions
-	// ClientSideRefresh tells library to use client-side refresh logic:
-	// i.e. send refresh commands with new connection token. If not set
-	// then server-side refresh mechanism will be used.
-	ClientSideRefresh bool
-	// Storage can be used to fill initial connection storage during connecting.
-	// This data may be then accessed/modified/replaced later during Client's lifetime
-	// over Client.AcquireStorage() call. This API is EXPERIMENTAL.
-	Storage map[string]any
-
-	// MaxMessagesInFrame is the maximum number of messages (replies and pushes) which
-	// Centrifuge Client message writer will collect from the client's queue before sending
-	// to the connection. By default, it's 16. Use -1 to disable the limit.
+	Context            context.Context
+	Credentials        *Credentials
+	Data               []byte
+	Subscriptions      map[string]SubscribeOptions
+	ClientSideRefresh  bool
+	Storage            map[string]any
 	MaxMessagesInFrame int
-	// WriteDelay is a time Centrifuge will try to collect messages inside message writer loop
-	// before sending them towards this connection. Enabling WriteDelay may reduce CPU usage of
-	// both server and client in case of high message rate inside individual connections. The
-	// reduction happens due to the lesser number of system calls to execute. Enabling WriteDelay
-	// limits the maximum throughput of messages towards the connection which may be achieved.
-	// For example, if WriteDelay is 100ms then the max throughput per second will be
-	// (1000 / 100) * MaxMessagesInFrame (16 by default), i.e. 160 messages per second. This
-	// should be more than enough for target Centrifuge use cases (frontend apps) though.
-	WriteDelay time.Duration
-	// ReplyWithoutQueue when enabled will force Centrifuge to avoid using Client write
-	// queue for sending replies to commands for this connection. Replies sent directly to
-	// the Client's transport thus avoiding possible delays caused by writer loop, but replies
-	// lose a chance to be batched.
-	ReplyWithoutQueue bool
-	// QueueInitialCap set an initial capacity for client's message queue, the size of queue
-	// can grow further, but won't be reduced below QueueInitialCap. By default, it's 2.
-	QueueInitialCap int
-	// PingPongConfig if set, will override Transport's PingPongConfig to enable setting ping/pong interval
-	// for individual client.
-	PingPongConfig *PingPongConfig
+	WriteDelay         time.Duration
+	ReplyWithoutQueue  bool
+	QueueInitialCap    int
+	PingPongConfig     *PingPongConfig
 }
 
-// ConnectingHandler called when new client authenticates on server.
 type ConnectingHandler func(context.Context, ConnectEvent) (ConnectReply, error)
 
-// ConnectHandler called when client connected to server and ready to communicate.
 type ConnectHandler func(*Client)
 
-// RefreshEvent contains fields related to refresh event.
 type RefreshEvent struct {
-	// ClientSideRefresh is true for refresh initiated by client-side refresh workflow.
 	ClientSideRefresh bool
-	// Token will only be set in case of using client-side refresh mechanism.
-	Token string
+	Token             string
 }
 
-// RefreshReply contains fields determining the reaction on refresh event.
 type RefreshReply struct {
-	// Expired tells Centrifuge that connection expired. In this case connection will be
-	// closed with DisconnectExpired.
-	Expired bool
-	// ExpireAt defines time in future when connection should expire,
-	// zero value means no expiration.
+	Expired  bool
 	ExpireAt int64
-	// Info allows modifying connection information,
-	// zero value means no modification of current connection Info.
-	Info []byte
+	Info     []byte
 }
 
-// RefreshCallback should be called as soon as handler decides what to do
-// with connection refresh event.
 type RefreshCallback func(RefreshReply, error)
-
-// RefreshHandler called when it's time to validate client connection and
-// update its expiration time if it's still actual.
-//
-// Centrifuge library supports two ways of refreshing connection: client-side
-// and server-side.
-//
-// The default mechanism is server-side, this means that as soon refresh handler
-// set and connection expiration time happens (by timer) – refresh handler will
-// be called.
-//
-// If ClientSideRefresh in ConnectReply inside ConnectingHandler set to true then
-// library uses client-side refresh mechanism. In this case library relies on
-// Refresh commands sent from client periodically to refresh connection. Refresh
-// command contains updated connection token.
 type RefreshHandler func(RefreshEvent, RefreshCallback)
 
-// AliveHandler called periodically while connection alive. This is a helper
-// to do periodic things which can tolerate some approximation in time. This
-// callback will run every ClientPresenceUpdateInterval and can save you a timer.
 type AliveHandler func()
 
-// UnsubscribeEvent contains fields related to unsubscribe event.
 type UnsubscribeEvent struct {
-	// Channel client unsubscribed from.
-	Channel string
-	// ServerSide set to true for server-side subscription unsubscribe events.
+	Channel    string
 	ServerSide bool
-	// Unsubscribe identifies the source of unsubscribe (i.e. why unsubscribed event happened).
 	Unsubscribe
-	// Disconnect can be additionally set to identify the reason of disconnect when Unsubscribe.Code
-	// is UnsubscribeCodeDisconnect - i.e. when unsubscribe caused by a client disconnection process.
-	// Otherwise, it's nil.
 	Disconnect *Disconnect
 }
 
-// UnsubscribeHandler called when client unsubscribed from channel.
 type UnsubscribeHandler func(UnsubscribeEvent)
 
-// DisconnectEvent contains fields related to disconnect event.
 type DisconnectEvent struct {
-	// Disconnect contains a Disconnect object which identifies the code and reason
-	// of disconnect process. When disconnect was not initiated by a server this
-	// is always DisconnectConnectionClosed.
 	Disconnect
 }
 
-// DisconnectHandler called when client disconnects from server. The important
-// thing to remember is that you should not rely entirely on this handler to
-// clean up non-expiring resources (in your database for example). Why? Because
-// in case of any non-graceful node shutdown (kill -9, process crash, machine lost)
-// disconnect handler will never be called (obviously) so you can have stale data.
 type DisconnectHandler func(DisconnectEvent)
-
-// SubscribeEvent contains fields related to subscribe event.
 type SubscribeEvent struct {
 	Channel string
-	// Token will only be set for token channels. This is a task of application
-	// to check that subscription to a channel has valid token.
-	Token string
-	// Data received from client as part of Subscribe Command.
-	Data []byte
-	// JoinLeave is true when Client wants to receive join/leave messages.
-	JoinLeave bool
+	Token   string
+	Data    []byte
 }
 
-// SubscribeCallback should be called as soon as handler decides what to do
-// with connection subscribe event.
 type SubscribeCallback func(SubscribeReply, error)
 
-// SubscribeReply contains fields determining the reaction on subscribe event.
 type SubscribeReply struct {
-	// Options to control subscription.
-	Options SubscribeOptions
-
-	// ClientSideRefresh tells library to use client-side refresh logic: i.e. send
-	// SubRefresh commands with new Subscription Token. If not set then server-side
-	// SubRefresh handler will be used.
+	Options           SubscribeOptions
 	ClientSideRefresh bool
-
-	// SubscriptionReady channel if provided will be closed as soon as Centrifuge
-	// written subscribe reply to the connection, so it's possible to start writing
-	// publications into a channel using experimental Client.WritePublication method.
-	// In usual flow you don't need to provide this channel at all.
-	// This is EXPERIMENTAL and may be removed in the future.
 	SubscriptionReady chan struct{}
 }
 
-// SubscribeHandler called when client wants to subscribe on channel.
 type SubscribeHandler func(SubscribeEvent, SubscribeCallback)
 
-// PublishEvent contains fields related to publish event. Note that this event
-// called before actual publish to Broker so handler has an option to reject this
-// publication returning an error.
 type PublishEvent struct {
-	// Channel client wants to publish data to.
-	Channel string
-	// Data client wants to publish.
-	Data []byte
-	// ClientInfo about client connection.
+	Channel    string
+	Data       []byte
 	ClientInfo *ClientInfo
 }
 
-// PublishReply contains fields determining the result on publish.
 type PublishReply struct {
-	// Options to control publication.
 	Options PublishOptions
-
-	// Result if set will tell Centrifuge that message already published to
-	// channel by handler code. In this case Centrifuge won't try to publish
-	// into channel again after handler returned PublishReply. This can be
-	// useful if you need to know new Publication offset in your code, or you
-	// want to make sure message successfully published to Broker on server
-	// side (otherwise only client will get an error).
-	Result *PublishResult
+	Result  *PublishResult
 }
 
-// PublishCallback should be called with PublishReply or error.
 type PublishCallback func(PublishReply, error)
 
-// PublishHandler called when client publishes into channel.
 type PublishHandler func(PublishEvent, PublishCallback)
 
-// SubRefreshEvent contains fields related to subscription refresh event.
 type SubRefreshEvent struct {
-	// ClientSideRefresh is true for refresh initiated by client-side subscription
-	// refresh workflow.
 	ClientSideRefresh bool
-	// Channel to which SubRefreshEvent belongs to.
-	Channel string
-	// Token will only be set in case of using client-side subscription refresh mechanism.
-	Token string
+	Channel           string
+	Token             string
 }
 
-// SubRefreshReply contains fields determining the reaction on
-// subscription refresh event.
 type SubRefreshReply struct {
-	// Expired tells Centrifuge that subscription expired. In this case connection will be
-	// closed with DisconnectExpired.
-	Expired bool
-	// ExpireAt is a new Unix time of expiration. Zero value means no expiration.
+	Expired  bool
 	ExpireAt int64
-	// Info is a new channel-scope info. Zero value means do not change previous one.
-	Info []byte
+	Info     []byte
 }
 
-// SubRefreshCallback should be called as soon as handler decides what to do
-// with connection SubRefreshEvent.
 type SubRefreshCallback func(SubRefreshReply, error)
-
-// SubRefreshHandler called when it's time to validate client subscription to channel and
-// update it's state if needed.
-//
-// If ClientSideRefresh in SubscribeReply inside SubscribeHandler set to true then
-// library uses client-side subscription refresh mechanism. In this case library relies on
-// SubRefresh commands sent from client periodically to refresh subscription. SubRefresh
-// command contains updated subscription token.
 type SubRefreshHandler func(SubRefreshEvent, SubRefreshCallback)
 
-// MessageEvent contains fields related to message request.
 type MessageEvent struct {
-	// Data contains message untouched payload.
 	Data []byte
 }
 
-// MessageHandler must handle incoming async message from client. So Centrifuge
-// feels similar to pure WebSocket API. Though in general, we recommend using RPC
-// where possible to send data to a server  from a client as it provides a better
-// flow control.
 type MessageHandler func(MessageEvent)
 
-// PresenceEvent has channel operation called for.
 type PresenceEvent struct {
 	Channel string
 }
 
-// PresenceReply contains fields determining the reaction on presence request.
 type PresenceReply struct {
 	Result *PresenceResult
 }
 
-// PresenceCallback should be called with PresenceReply or error.
 type PresenceCallback func(PresenceReply, error)
 
-// PresenceHandler called when presence request received from client.
 type PresenceHandler func(PresenceEvent, PresenceCallback)
 
-// PresenceStatsEvent has channel operation called for.
 type PresenceStatsEvent struct {
 	Channel string
 }
 
-// PresenceStatsReply contains fields determining the reaction on presence request.
 type PresenceStatsReply struct {
 	Result *PresenceStatsResult
 }
 
-// PresenceStatsCallback should be called with PresenceStatsReply or error.
 type PresenceStatsCallback func(PresenceStatsReply, error)
 
-// PresenceStatsHandler must handle incoming command from client.
 type PresenceStatsHandler func(PresenceStatsEvent, PresenceStatsCallback)
 
-// StateSnapshotHandler must return a copy of current client's
-// internal state. Returning a copy is important to avoid data races.
 type StateSnapshotHandler func() (any, error)
 
-// NotificationEvent with Op and Data.
 type NotificationEvent struct {
 	FromNodeID string
 	Op         string
 	Data       []byte
 }
 
-// NotificationHandler allows handling notifications.
 type NotificationHandler func(NotificationEvent)
 
-// NodeInfoSendReply can modify sending Node control frame in some ways.
 type NodeInfoSendReply struct {
-	// Data allows setting an arbitrary data to the control node frame which is
-	// published by each Node periodically, so it will be available in the
-	// result of Node.Info call for the current Node description. Keep this
-	// data reasonably small.
 	Data []byte
 }
 
-// NodeInfoSendHandler called every time the control node frame is published
-// and allows modifying Node control frame sending. Currently, attaching an
-// arbitrary data to it. See NodeInfoSendReply.
 type NodeInfoSendHandler func() NodeInfoSendReply
 
-// TransportWriteEvent called just before sending data into the client connection. The
-// event is triggered from inside each client's message queue consumer – so it should
-// not directly affect Hub broadcast latencies.
 type TransportWriteEvent struct {
-	// Data represents single Centrifuge deliverprotocol message which is going to be sent
-	// into the connection. For unidirectional transports this is an encoded deliverprotocol.Push
-	// type, for bidirectional transports this is an encoded deliverprotocol.Reply type.
-	Data []byte
-	// Channel will be set if TransportWriteEvent relates to some channel.
-	Channel string
-	// FrameType tells what is being sent inside Data.
+	Data      []byte
+	Channel   string
 	FrameType deliverprotocol.FrameType
 }
 
-// TransportWriteHandler called just before writing data to the Transport.
-// At this moment application can skip sending data to a client returning
-// false from a handler. The main purpose of this handler is not a message
-// filtering based on data content but rather tracing stuff.
 type TransportWriteHandler func(*Client, TransportWriteEvent) bool
 
-// CommandReadEvent contains deliverprotocol.Command processed by Client. Command
-// type and its fields in the event MAY BE POOLED by Centrifuge, so code
-// which wants to use Command AFTER CommandReadHandler handler returns MUST
-// MAKE A COPY.
 type CommandReadEvent struct {
-	// Command which was read from the connection. May be pooled - see comment of CommandReadEvent.
-	Command *deliverprotocol.Command
-	// CommandSize is a size of command in bytes in its deliverprotocol representation.
+	Command     *deliverprotocol.Command
 	CommandSize int
 }
 
-// CommandReadHandler allows setting a callback which will be called before
-// Client processed a deliverprotocol.Command read from the connection. Return an error
-// if you want to prevent command execution.
-// Also, carefully read docs for CommandReadEvent to avoid possible bugs.
 type CommandReadHandler func(*Client, CommandReadEvent) error

@@ -13,8 +13,8 @@ type Storage interface {
 	GetTask(id string, options *TaskOptions) (*Task, error)
 	GetExecutions(taskID string, opts *ExecutionOptions) ([]*Execution, error)
 	Shutdown() error
-	SetQueue(workflowID, k, v string) error
-	GetQueue(workflowID string, value *map[string]string) error
+	SetQueue(k, v string) error
+	GetQueue(k string) (string, error)
 	SetBroker(broker *workflow.Broker) error
 	GetBrokers() ([]*workflow.Broker, error)
 	DeleteBroker(id string) error

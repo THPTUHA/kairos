@@ -12,9 +12,6 @@ type Item struct {
 	FrameType deliverprotocol.FrameType
 }
 
-// Queue is an unbounded queue of Item.
-// The queue is goroutine safe.
-// Inspired by http://blog.dubbelboer.com/2015/04/25/go-faster-queue.html (MIT)
 type Queue struct {
 	mu      sync.RWMutex
 	cond    *sync.Cond
@@ -27,7 +24,6 @@ type Queue struct {
 	initCap int
 }
 
-// WriteMany mutex must be held when calling
 func (q *Queue) resize(n int) {
 	nodes := make([]Item, n)
 	if q.head < q.tail {
@@ -42,7 +38,6 @@ func (q *Queue) resize(n int) {
 	q.nodes = nodes
 }
 
-// New Queue returns a new Item queue with initial capacity.
 func New(initialCapacity int) *Queue {
 	sq := &Queue{
 		initCap: initialCapacity,
@@ -52,10 +47,6 @@ func New(initialCapacity int) *Queue {
 	return sq
 }
 
-// Wait for a message to be added.
-// If there are items on the queue will return immediately.
-// Will return false if the queue is closed.
-// Otherwise, returns true.
 func (q *Queue) Wait() bool {
 	q.mu.Lock()
 	if q.closed {
@@ -71,9 +62,6 @@ func (q *Queue) Wait() bool {
 	return true
 }
 
-// Remove will remove an Item from the queue.
-// If false is returned, it either means 1) there were no items on the queue
-// or 2) the queue is closed.
 func (q *Queue) Remove() (Item, bool) {
 	q.mu.Lock()
 	if q.cnt == 0 {
@@ -93,9 +81,6 @@ func (q *Queue) Remove() (Item, bool) {
 	return i, true
 }
 
-// Closed returns true if the queue has been closed
-// The call cannot guarantee that the queue hasn't been
-// closed while the function returns, so only "true" has a definite meaning.
 func (q *Queue) Closed() bool {
 	q.mu.RLock()
 	c := q.closed
@@ -103,7 +88,6 @@ func (q *Queue) Closed() bool {
 	return c
 }
 
-// Len returns the current length of the queue.
 func (q *Queue) Len() int {
 	q.mu.RLock()
 	l := q.cnt
@@ -118,8 +102,6 @@ func (q *Queue) Add(i Item) bool {
 		return false
 	}
 	if q.cnt == len(q.nodes) {
-		// Also tested a growth rate of 1.5, see: http://stackoverflow.com/questions/2269063/buffer-growth-strategy
-		// In Go this resulted in a higher memory usage.
 		q.resize(q.cnt * 2)
 	}
 	q.nodes[q.tail] = i
@@ -131,7 +113,6 @@ func (q *Queue) Add(i Item) bool {
 	return true
 }
 
-// Size returns the current size of the queue.
 func (q *Queue) Size() int {
 	q.mu.RLock()
 	s := q.size

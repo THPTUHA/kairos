@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/THPTUHA/kairos/pkg/filepipe"
 	"github.com/THPTUHA/kairos/pkg/glob"
@@ -39,7 +40,9 @@ func (s *File) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) (
 	path := args.Config["path"]
 	method := args.Config["method"]
 	input := args.Config["input"]
-
+	fmt.Println("Wating....")
+	time.Sleep(10 * time.Second)
+	fmt.Println("Finish...")
 	if input != "" {
 		var mp map[string]interface{}
 		err := json.Unmarshal([]byte(input), &mp)
@@ -70,11 +73,11 @@ func (s *File) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) (
 			return nil, err
 		}
 		defer file.Close()
-		bufferSize := 1000
-		buffer := make([]byte, bufferSize)
+		buffer := make([]byte, maxBufSize)
 
 		for {
-			_, err := file.Read(buffer)
+			n, err := file.Read(buffer)
+			buffer = buffer[:n]
 			if err == io.EOF {
 				break
 			}
@@ -158,8 +161,6 @@ func Src(ctx context.Context, globs ...string) filepipe.Pipe {
 	return pipe
 }
 
-// Dest writes the files from the input channel to the dst folder and closes the files.
-// It never returns Files.
 func Dest(dst string) filepipe.Stage {
 	return func(ctx context.Context, files <-chan filepipe.File, out chan<- filepipe.File) error {
 

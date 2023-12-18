@@ -14,22 +14,11 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// websocketConfig configures Websocket transport.
 type websocketConfig struct {
-	// NetDialContext specifies the dial function for creating TCP connections. If
-	// NetDialContext is nil, net.DialContext is used.
-	NetDialContext func(ctx context.Context, network, addr string) (net.Conn, error)
-
-	// HandshakeTimeout specifies the duration for the handshake to complete.
-	HandshakeTimeout time.Duration
-
-	// EnableCompression specifies if the client should attempt to negotiate
-	// per message compression (RFC 7692). Setting this value to true does not
-	// guarantee that compression will be supported. Currently only "no context
-	// takeover" modes are supported.
+	NetDialContext    func(ctx context.Context, network, addr string) (net.Conn, error)
+	HandshakeTimeout  time.Duration
 	EnableCompression bool
-	// Header specifies custom HTTP Header to send.
-	Header http.Header
+	Header            http.Header
 }
 
 type websocketTransport struct {
@@ -90,9 +79,6 @@ func extractDisconnectWebsocket(err error) *disconnect {
 					case websocket.CloseMessageTooBig:
 						code = disconnectMessageSizeLimit
 					default:
-						// We expose codes defined by Centrifuge deliverprotocol, hiding
-						// details about transport-specific error codes. We may have extra
-						// optional transportCode field in the future.
 						code = connectingTransportClosed
 					}
 				}
@@ -131,7 +117,7 @@ func (t *websocketTransport) reader() {
 					t.disconnect = &disconnect{Code: disconnectBadProtocol, Reason: "decode error", Reconnect: false}
 					return
 				}
-				fmt.Printf("[RELY RECIVER FROM WEBSOCKEt] %s\n", reply.String())
+				fmt.Printf("[RELY RECIVER FROM WEBSOCKET] %s\n", reply.String())
 				select {
 				case <-t.closeCh:
 					fmt.Println("Close websocket")

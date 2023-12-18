@@ -1,30 +1,93 @@
 version: '1'
-name: read_one
-namespace: demo
+name: debug2
+vars:
 tasks:
-  request_data: 
-    executor: http
-    clients:
-      - client1
-      - client2
-    wait: true
+  build_image:
+    executor: script
+    clients: [client1]
     payload: |
       {
-        "method": "GET",
-        "url": "http://locallhost:3000/data",
-        "headers": "[]",
-        "body": "",
-        "timeout": "30",
-        "expectCode": "200",
-        "expectBody": ""
+        "command": "/bin/sh",
+        "commandArgs": "[\"-c\", \" docker build -t next2020/backend-cms /Users/nghiabadao/Code/project/backend_cms \"]"
+      }
+  push_image:
+    executor: script
+    clients: [client1]
+    wait: input
+    payload: |
+      {
+        "command": "/bin/sh",
+        "commandArgs": "[\"-c\", \"docker push next2020/backend-cms \"]"
+      }
+  deploy:
+    executor: k8sdeploy
+    clients: [client2]
+    wait: input
+    payload: |
+      {
+        "service": "backend-service-cms",
+        "cmd": "deploy"
+      }
+  logs:
+    executor: k8sdeploy
+    clients: [client2]
+    wait: input
+    payload: |
+      {
       }
 
 brokers:
-  send:
-    listens: [request_channel]
-    flows: | 
-      {{sendu .request_channel .request_data_task}}
-  
-  reciver:
-    listens: [client1_client,client2_client]
-    flows: [request_channel]
+  build_image:
+    listens: [build_image_task]
+    flows: |
+      {{get .build_image_task ("result") | .result }}
+        {{get .result ("success") | .success}}
+          {{if .success }}
+            {{get .result ("output") | .output}}
+              {{if eq .output ("finish")}}
+                {{define .mp map | send .push_image_task}}
+              {{end}}
+            {{end}}
+          {{end}}
+        {{end}}
+      {{end}}
+  push_image:
+    listens: [push_image_task]
+    flows: |
+      {{get .push_image_task ("result") | .result }}
+        {{get .result ("success") | .success}}
+          {{if .success }}
+            {{get .result ("output") | .output}}
+              {{if eq .output ("finish")}}
+                {{define .mp map | send .deploy_task}}
+              {{end}}
+            {{end}}
+          {{end}}
+        {{end}}
+      {{end}}
+  deploy:
+    listens: [deploy_task]
+    flows: |
+      {{get .deploy_task ("result") | .result }}
+        {{get .result ("success") | .success}}
+          {{if .success }}
+            {{get .result ("output") | .output}}
+              {{if eq .output ("finish")}}
+                {{define .mp map | put ("deploy") ("success") | send .listen_channel}}{{end}}
+              {{end}}
+            {{end}}
+          {{end}}
+        {{end}}
+      {{end}}
+  log:
+    listens: [listen_channel]
+    flows: |
+      {{get .listen_channel ("content") | get ("msg") | .msg }}
+        {{send .msg .logs_task}}
+      {{end}}
+  show:
+    listens:  [logs_task]
+    flows: |
+      {{get .logs_task ("result") | .result}}
+        {{send .result .listen_channel}}
+      {{end}}

@@ -114,19 +114,12 @@ const (
 	statusClosed     status = 3
 )
 
-// ConnectRequest can be used in a unidirectional connection case to
-// pass initial connection information from a client-side.
 type ConnectRequest struct {
-	// Token is an optional token from a client.
-	Token string
-	// Data is an optional custom data from a client.
-	Data []byte
-	// Name of a client.
-	Name string
-	// Version of a client.
+	Token   string
+	Data    []byte
+	Name    string
 	Version string
-	// Subs is a map with channel subscription state (for recovery on connect).
-	Subs map[string]SubscribeRequest
+	Subs    map[string]SubscribeRequest
 }
 
 // SubscribeRequest contains state of subscription to a channel.
@@ -1032,9 +1025,7 @@ func (c *Client) Refresh(opts ...RefreshOption) error {
 	}
 
 	if expireAt > 0 {
-		// connection check enabled
 		if ttl > 0 {
-			// connection refreshed, update client timestamp and set new expiration timeout
 			c.mu.Lock()
 			c.exp = expireAt
 			if len(info) > 0 {
@@ -1179,10 +1170,9 @@ func (c *Client) handleSubscribe(req *deliverprotocol.SubscribeRequest, cmd *del
 	}
 
 	event := SubscribeEvent{
-		Channel:   req.Channel,
-		Token:     req.Token,
-		Data:      req.Data,
-		JoinLeave: req.JoinLeave,
+		Channel: req.Channel,
+		Token:   req.Token,
+		Data:    req.Data,
 	}
 
 	cb := func(reply SubscribeReply, err error) {
@@ -1934,7 +1924,7 @@ func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply Subsc
 			}
 		}
 	}
-	fmt.Println("CCCC----", channel)
+
 	err := c.node.addSubscription(channel, c)
 	if err != nil {
 		c.node.logger.log(newLogEntry(LogLevelError, "error adding subscription", map[string]any{"channel": channel, "user": c.user, "client": c.uid, "error": err.Error()}))
@@ -2027,14 +2017,6 @@ func (c *Client) releaseSubscribeCommandReply(reply *deliverprotocol.Reply) {
 
 func (c *Client) getSubscribeCommandReply(res *deliverprotocol.SubscribeResult) (*deliverprotocol.Reply, error) {
 	return deliverprotocol.ReplyPool.AcquireSubscribeReply(res), nil
-}
-
-func (c *Client) handleInsufficientState(ch string, serverSide bool) {
-	if c.isAsyncUnsubscribe(serverSide) {
-		c.handleAsyncUnsubscribe(ch, unsubscribeInsufficientState)
-	} else {
-		c.handleInsufficientStateDisconnect()
-	}
 }
 
 func (c *Client) isAsyncUnsubscribe(serverSide bool) bool {

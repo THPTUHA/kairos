@@ -134,7 +134,6 @@ func (t *Task) RequestRun(re *workflow.CmdTask) {
 	}
 }
 
-// Impletation corn
 func (t *Task) Run() {
 	t.logger.WithFields(logrus.Fields{
 		"task": t.Name,

@@ -164,12 +164,3 @@ CREATE TABLE IF NOT EXISTS channel_permissions (
     CONSTRAINT fk_cert FOREIGN KEY(cert_id) REFERENCES certificates(id) ON DELETE CASCADE,
     CONSTRAINT fk_channel FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS functions (
-    id bigserial PRIMARY KEY,
-    user_id BIGINT NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    content TEXT,
-    created_at BIGINT NOT NULL,
-    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-)

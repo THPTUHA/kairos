@@ -36,22 +36,10 @@ message Subscribe {
     string user = 1;
     string channel = 2;
     bool emit_presence = 3;
-    bool emit_join_leave = 4;
     int64 expire_at = 5;
-    bool position = 6;
-    bool recover = 7;
     bytes channel_info = 8;
     string client = 9;
     bytes data = 10;
-    StreamPosition recover_since = 11;
-    string session = 12;
-    bool push_join_leave = 13;
-    uint32 source = 14;
-}
-
-message StreamPosition {
-    uint64 offset = 1;
-    string epoch = 2;
 }
 
 message Unsubscribe {
@@ -85,5 +73,4 @@ message Refresh {
     bool expired = 3;
     int64 expire_at = 4;
     bytes info = 5;
-    string session = 6;
 }

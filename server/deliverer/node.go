@@ -43,11 +43,7 @@ const (
 	numSubDissolverWorkers = 64
 )
 
-// New creates Node with provided Config.
 func NewNode(c Config) (*Node, error) {
-	if c.NodeInfoMetricsAggregateInterval == 0 {
-		c.NodeInfoMetricsAggregateInterval = 60 * time.Second
-	}
 	if c.ClientPresenceUpdateInterval == 0 {
 		c.ClientPresenceUpdateInterval = 27 * time.Second
 	}
@@ -127,7 +123,6 @@ func NewNode(c Config) (*Node, error) {
 	return n, nil
 }
 
-// index chooses bucket number in range [0, numBuckets).
 func index(s string, numBuckets int) int {
 	if numBuckets == 1 {
 		return 0
@@ -137,12 +132,10 @@ func index(s string, numBuckets int) int {
 	return int(hash.Sum64() % uint64(numBuckets))
 }
 
-// Config returns Node's Config.
 func (n *Node) Config() Config {
 	return n.config
 }
 
-// ID returns unique Node identifier. This is a UUID v4 value.
 func (n *Node) ID() string {
 	return n.uid
 }
@@ -151,23 +144,18 @@ func (n *Node) subLock(ch string) *sync.Mutex {
 	return n.subLocks[index(ch, numSubLocks)]
 }
 
-// SetBroker allows setting Broker implementation to use.
 func (n *Node) SetBroker(b Broker) {
 	n.broker = b
 }
 
-// SetPresenceManager allows setting PresenceManager to use.
 func (n *Node) SetPresenceManager(m PresenceManager) {
 	n.presenceManager = m
 }
 
-// Hub returns node's Hub.
 func (n *Node) Hub() *Hub {
 	return n.hub
 }
 
-// Run performs node startup actions. At moment must be called once on start
-// after Broker set to Node.
 func (n *Node) Run() error {
 	if err := n.broker.Run(&brokerEventHandler{n}); err != nil {
 		return err
@@ -183,18 +171,14 @@ func (n *Node) Run() error {
 	return n.subDissolver.Run()
 }
 
-// Log allows logging a LogEntry.
 func (n *Node) Log(entry LogEntry) {
 	n.logger.log(entry)
 }
 
-// LogEnabled allows check whether a LogLevel enabled or not.
 func (n *Node) LogEnabled(level LogLevel) bool {
 	return n.logger.enabled(level)
 }
 
-// Shutdown sets shutdown flag to Node so handlers could stop accepting
-// new requests and disconnects clients with shutdown reason.
 func (n *Node) Shutdown(ctx context.Context) error {
 	n.mu.Lock()
 	if n.shutdown {
@@ -231,7 +215,6 @@ func (n *Node) Shutdown(ctx context.Context) error {
 	return ctx.Err()
 }
 
-// NotifyShutdown returns a channel which will be closed on node shutdown.
 func (n *Node) NotifyShutdown() chan struct{} {
 	return n.shutdownCh
 }
@@ -261,12 +244,10 @@ func (n *Node) cleanNodeInfo() {
 	}
 }
 
-// Info contains information about all known server nodes.
 type Info struct {
 	Nodes []NodeInfo
 }
 
-// NodeInfo contains information about node.
 type NodeInfo struct {
 	UID         string
 	Name        string
@@ -279,7 +260,6 @@ type NodeInfo struct {
 	Data        []byte
 }
 
-// Info returns aggregated stats from all nodes.
 func (n *Node) Info() (Info, error) {
 	nodes := n.nodes.list()
 	nodeResults := make([]NodeInfo, len(nodes))
@@ -311,13 +291,11 @@ func (n *Node) handleControl(data []byte) error {
 	}
 
 	if cmd.Uid == n.uid {
-		// Sent by this node.
 		return nil
 	}
 
 	uid := cmd.Uid
 
-	// control proto v2.
 	if cmd.Node != nil {
 		return n.nodeCmd(cmd.Node)
 	} else if cmd.Shutdown != nil {
@@ -356,7 +334,6 @@ func (n *Node) publish(ch string, data []byte, opts ...PublishOption) (PublishRe
 	return PublishResult{}, err
 }
 
-// PublishResult returned from Publish operation.
 type PublishResult struct {
 }
 
@@ -366,8 +343,6 @@ func (n *Node) Publish(channel string, data []byte, opts ...PublishOption) (Publ
 
 var errNotificationHandlerNotRegistered = errors.New("notification handler not registered")
 
-// publishControl publishes message into control channel so all running
-// nodes will receive and handle it.
 func (n *Node) publishControl(cmd *controlpb.Command, nodeID string) error {
 	data, err := n.controlEncoder.EncodeCommand(cmd)
 	if err != nil {
@@ -376,8 +351,6 @@ func (n *Node) publishControl(cmd *controlpb.Command, nodeID string) error {
 	return n.broker.PublishControl(data, nodeID, "")
 }
 
-// pubNode sends control message to all nodes - this message
-// contains information about current node.
 func (n *Node) pubNode(nodeID string) error {
 	var data []byte
 	n.mu.RLock()
@@ -444,8 +417,6 @@ func (n *Node) pubRefresh(user string, opts RefreshOptions) error {
 	return n.publishControl(cmd, "")
 }
 
-// pubUnsubscribe publishes unsubscribe control message to all nodes – so all
-// nodes could unsubscribe user from channel.
 func (n *Node) pubUnsubscribe(user string, ch string, unsubscribe Unsubscribe, clientID, sessionID string) error {
 	unsub := &controlpb.Unsubscribe{
 		User:    user,
@@ -462,8 +433,6 @@ func (n *Node) pubUnsubscribe(user string, ch string, unsubscribe Unsubscribe, c
 	return n.publishControl(cmd, "")
 }
 
-// pubDisconnect publishes disconnect control message to all nodes – so all
-// nodes could disconnect user from server.
 func (n *Node) pubDisconnect(user string, disconnect Disconnect, clientID string, whitelist []string) error {
 	protoDisconnect := &controlpb.Disconnect{
 		User:      user,
@@ -495,8 +464,6 @@ func (n *Node) InfoUsers(userIDs []string) []*UserInfo {
 	return uids
 }
 
-// addSubscription registers subscription of connection on channel in both
-// Hub and Broker.
 func (n *Node) addSubscription(ch string, c *Client) error {
 	mu := n.subLock(ch)
 	mu.Lock()
@@ -515,8 +482,6 @@ func (n *Node) addSubscription(ch string, c *Client) error {
 	return nil
 }
 
-// removeSubscription removes subscription of connection on channel
-// from Hub and Broker.
 func (n *Node) removeSubscription(ch string, c *Client) error {
 	mu := n.subLock(ch)
 	mu.Lock()
@@ -539,7 +504,6 @@ func (n *Node) removeSubscription(ch string, c *Client) error {
 			if empty {
 				err := n.broker.Unsubscribe(ch)
 				if err != nil {
-					// Cool down a bit since broker is not ready to process unsubscription.
 					time.Sleep(500 * time.Millisecond)
 				}
 				return err
@@ -550,43 +514,32 @@ func (n *Node) removeSubscription(ch string, c *Client) error {
 	return nil
 }
 
-// nodeCmd handles node control command i.e. updates information about known nodes.
 func (n *Node) nodeCmd(node *controlpb.Node) error {
 	isNewNode := n.nodes.add(node)
 	if isNewNode && node.Uid != n.uid {
-		// New Node in cluster
 		_ = n.pubNode(node.Uid)
 	}
 	return nil
 }
 
-// shutdownCmd handles shutdown control command sent when node leaves cluster.
 func (n *Node) shutdownCmd(nodeID string) error {
 	n.nodes.remove(nodeID)
 	return nil
 }
 
-// Subscribe subscribes user to a channel.
-// Note, that OnSubscribe event won't be called in this case
-// since this is a server-side subscription. If user have been already
-// subscribed to a channel then its subscription will be updated and
-// subscribe notification will be sent to a client-side.
 func (n *Node) Subscribe(userID string, channel string, opts ...SubscribeOption) error {
 	subscribeOpts := &SubscribeOptions{}
 	for _, opt := range opts {
 		opt(subscribeOpts)
 	}
-	// Subscribe on this node.
+
 	err := n.hub.subscribe(userID, channel, subscribeOpts.clientID, opts...)
 	if err != nil {
 		return err
 	}
-	// Send subscribe control message to other nodes.
 	return n.pubSubscribe(userID, channel, *subscribeOpts)
 }
 
-// Unsubscribe unsubscribes user from a channel.
-// If a channel is empty string then user will be unsubscribed from all channels.
 func (n *Node) Unsubscribe(userID string, channel string, opts ...UnsubscribeOption) error {
 	unsubscribeOpts := &UnsubscribeOptions{}
 	for _, opt := range opts {
@@ -597,22 +550,18 @@ func (n *Node) Unsubscribe(userID string, channel string, opts ...UnsubscribeOpt
 		customUnsubscribe = *unsubscribeOpts.unsubscribe
 	}
 
-	// Unsubscribe on this node.
 	err := n.hub.unsubscribe(userID, channel, customUnsubscribe, unsubscribeOpts.clientID)
 	if err != nil {
 		return err
 	}
-	// Send unsubscribe control message to other nodes.
 	return n.pubUnsubscribe(userID, channel, customUnsubscribe, unsubscribeOpts.clientID, unsubscribeOpts.sessionID)
 }
 
-// Disconnect allows closing all user connections on all nodes.
 func (n *Node) Disconnect(userID string, opts ...DisconnectOption) error {
 	disconnectOpts := &DisconnectOptions{}
 	for _, opt := range opts {
 		opt(disconnectOpts)
 	}
-	// Disconnect user from this node
 	customDisconnect := DisconnectForceNoReconnect
 	if disconnectOpts.Disconnect != nil {
 		customDisconnect = *disconnectOpts.Disconnect
@@ -621,29 +570,21 @@ func (n *Node) Disconnect(userID string, opts ...DisconnectOption) error {
 	if err != nil {
 		return err
 	}
-	// Send disconnect control message to other nodes
 	return n.pubDisconnect(userID, customDisconnect, disconnectOpts.clientID, disconnectOpts.ClientWhitelist)
 }
 
-// Refresh user connection.
-// Without any options will make user connections non-expiring.
-// Note, that OnRefresh event won't be called in this case
-// since this is a server-side refresh.
 func (n *Node) Refresh(userID string, opts ...RefreshOption) error {
 	refreshOpts := &RefreshOptions{}
 	for _, opt := range opts {
 		opt(refreshOpts)
 	}
-	// Refresh on this node.
 	err := n.hub.refresh(userID, refreshOpts.clientID, opts...)
 	if err != nil {
 		return err
 	}
-	// Send refresh control message to other nodes.
 	return n.pubRefresh(userID, *refreshOpts)
 }
 
-// addPresence proxies presence adding to PresenceManager.
 func (n *Node) addPresence(ch string, uid string, info *ClientInfo) error {
 	if n.presenceManager == nil {
 		return nil
@@ -651,7 +592,6 @@ func (n *Node) addPresence(ch string, uid string, info *ClientInfo) error {
 	return n.presenceManager.AddPresence(ch, uid, info)
 }
 
-// removePresence proxies presence removing to PresenceManager.
 func (n *Node) removePresence(ch string, uid string) error {
 	if n.presenceManager == nil {
 		return nil
@@ -664,7 +604,6 @@ var (
 	presenceStatsGroup singleflight.Group
 )
 
-// PresenceResult wraps presence.
 type PresenceResult struct {
 	Presence map[string]*ClientInfo
 }
@@ -677,7 +616,6 @@ func (n *Node) presence(ch string) (PresenceResult, error) {
 	return PresenceResult{Presence: presence}, nil
 }
 
-// Presence returns a map with information about active clients in channel.
 func (n *Node) Presence(ch string) (PresenceResult, error) {
 	if n.presenceManager == nil {
 		return PresenceResult{}, ErrorNotAvailable
@@ -747,7 +685,6 @@ func pubFromProto(pub *deliverprotocol.Publication) *Publication {
 	}
 }
 
-// PresenceStatsResult wraps presence stats.
 type PresenceStatsResult struct {
 	PresenceStats
 }
@@ -760,7 +697,6 @@ func (n *Node) presenceStats(ch string) (PresenceStatsResult, error) {
 	return PresenceStatsResult{PresenceStats: presenceStats}, nil
 }
 
-// PresenceStats returns presence stats from PresenceManager.
 func (n *Node) PresenceStats(ch string) (PresenceStatsResult, error) {
 	if n.presenceManager == nil {
 		return PresenceStatsResult{}, ErrorNotAvailable
@@ -775,14 +711,10 @@ func (n *Node) PresenceStats(ch string) (PresenceStatsResult, error) {
 }
 
 type nodeRegistry struct {
-	// mu allows synchronizing access to node registry.
-	mu sync.RWMutex
-	// currentUID keeps uid of current node
+	mu         sync.RWMutex
 	currentUID string
-	// nodes is a map with information about known nodes.
-	nodes map[string]*controlpb.Node
-	// updates track time we last received ping from node. Used to clean up nodes map.
-	updates map[string]int64
+	nodes      map[string]*controlpb.Node
+	updates    map[string]int64
 }
 
 func newNodeRegistry(currentUID string) *nodeRegistry {
@@ -859,17 +791,14 @@ func (r *nodeRegistry) clean(delay time.Duration) {
 	r.mu.Lock()
 	for uid := range r.nodes {
 		if uid == r.currentUID {
-			// No need to clean info for current node.
 			continue
 		}
 		updated, ok := r.updates[uid]
 		if !ok {
-			// As we do all operations with nodes under lock this should never happen.
 			delete(r.nodes, uid)
 			continue
 		}
 		if time.Now().Unix()-updated > int64(delay.Seconds()) {
-			// Too many seconds since this node have been last seen - remove it from map.
 			delete(r.nodes, uid)
 			delete(r.updates, uid)
 		}
@@ -877,9 +806,6 @@ func (r *nodeRegistry) clean(delay time.Duration) {
 	r.mu.Unlock()
 }
 
-// eventHub allows binding client event handlers.
-// All eventHub methods are not goroutine-safe and supposed
-// to be called once before Node Run called.
 type eventHub struct {
 	connectingHandler     ConnectingHandler
 	connectHandler        ConnectHandler
@@ -887,9 +813,6 @@ type eventHub struct {
 	commandReadHandler    CommandReadHandler
 }
 
-// OnConnecting allows setting ConnectingHandler.
-// ConnectingHandler will be called when client sends Connect command to server.
-// In this handler server can reject connection or provide Credentials for it.
 func (n *Node) OnConnecting(handler ConnectingHandler) {
 	n.clientEvents.connectingHandler = handler
 }
@@ -898,12 +821,10 @@ func (n *Node) OnConnect(handler ConnectHandler) {
 	n.clientEvents.connectHandler = handler
 }
 
-// OnTransportWrite allows setting TransportWriteHandler. This should be done before Node.Run called.
 func (n *Node) OnTransportWrite(handler TransportWriteHandler) {
 	n.clientEvents.transportWriteHandler = handler
 }
 
-// OnCommandRead allows setting CommandReadHandler. This should be done before Node.Run called.
 func (n *Node) OnCommandRead(handler CommandReadHandler) {
 	n.clientEvents.commandReadHandler = handler
 }
@@ -919,7 +840,6 @@ func (h *brokerEventHandler) HandlePublication(ch string, pub *Publication) erro
 	return h.node.handlePublication(ch, pub)
 }
 
-// HandleControl coming from Broker.
 func (h *brokerEventHandler) HandleControl(data []byte) error {
 	return h.node.handleControl(data)
 }

@@ -19,7 +19,6 @@ type Execution struct {
 	Group      int64     `json:"group,omitempty"`
 	Attempt    uint      `json:"attempt,omitempty"`
 	Offset     int       `json:"offset,omitempty"`
-	RunCount   int64     `json:"runcount,omitempty"`
 }
 
 func NewExecution(taskID string) *Execution {
@@ -46,7 +45,6 @@ func (e *Execution) GetResult() *workflow.Result {
 	r.StartedAt = e.StartedAt.Unix()
 	r.FinishedAt = e.FinishedAt.Unix()
 	r.Offset = e.Offset
-	r.RunCount = e.RunCount
 
 	if e.FinishedAt.Unix() < 0 {
 		r.FinishedAt = 0

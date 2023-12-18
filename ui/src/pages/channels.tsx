@@ -7,8 +7,9 @@ import { useEffect, useState } from "react";
 import { Toast } from "../components/Toast";
 import { IoIosAdd } from "react-icons/io";
 import Modal from "react-responsive-modal";
-import { Input } from "antd";
+import { Input, Popconfirm, Tooltip } from "antd";
 import { RiWechatChannelsLine } from "react-icons/ri";
+import { MdDelete } from "react-icons/md";
 
 const locale = {
     emptyText: <span>Empty channel</span>,
@@ -31,6 +32,31 @@ const ChannelPage = () => {
             dataIndex: 'created_at',
             render: (value: number) => {
                 return <>{formatDate(value)}</>
+            }
+        },
+        {
+            title: 'Action',
+            dataIndex: 'action',
+            render: (_: any, record: Channel) => {
+                return (
+                    <div className="flex">
+                        <Popconfirm
+                            title={"delete channel"}
+                            onConfirm={() => {
+                                services.channels
+                                .delete(record.name)
+                                .then(() => { setReload(reload + 1) })
+                                .catch(setError)
+                            }}
+                            okText={"yes"}
+                            cancelText={"no"}
+                        >
+                            <Tooltip title={"delete"}>
+                                <MdDelete className="w-6 h-6 cursor-pointer"/>
+                            </Tooltip>
+                        </Popconfirm>
+                    </div>
+                )
             }
         },
     ];

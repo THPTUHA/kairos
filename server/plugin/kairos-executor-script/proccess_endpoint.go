@@ -8,16 +8,20 @@ import (
 	"time"
 )
 
+type Output struct {
+	data []byte
+	err  error
+}
 type ProcessEndpoint struct {
 	process   *LaunchedProcess
 	closetime time.Duration
-	output    chan []byte
+	output    chan *Output
 }
 
 func NewProcessEndpoint(process *LaunchedProcess) *ProcessEndpoint {
 	return &ProcessEndpoint{
 		process: process,
-		output:  make(chan []byte),
+		output:  make(chan *Output),
 	}
 }
 
@@ -73,7 +77,7 @@ func (pe *ProcessEndpoint) Terminate() {
 	fmt.Printf("process: SIGKILL did not terminate %v!", pe.process.cmd.Process.Pid)
 }
 
-func (pe *ProcessEndpoint) Output() chan []byte {
+func (pe *ProcessEndpoint) Output() chan *Output {
 	return pe.output
 }
 
@@ -84,7 +88,7 @@ func (pe *ProcessEndpoint) Send(msg []byte) bool {
 
 func (pe *ProcessEndpoint) StartReading() {
 	go pe.log_stderr()
-	go pe.process_txtout()
+	go pe.process_binout()
 }
 
 func (pe *ProcessEndpoint) process_txtout() {
@@ -97,11 +101,17 @@ func (pe *ProcessEndpoint) process_txtout() {
 			} else {
 				fmt.Printf("process: Process STDOUT closed")
 			}
+			pe.output <- &Output{
+				data: trimEOL(buf),
+				err:  nil,
+			}
 			break
 		}
-		pe.output <- trimEOL(buf)
+		pe.output <- &Output{
+			data: trimEOL(buf),
+			err:  nil,
+		}
 	}
-	close(pe.output)
 }
 
 func (pe *ProcessEndpoint) process_binout() {
@@ -114,11 +124,17 @@ func (pe *ProcessEndpoint) process_binout() {
 			} else {
 				fmt.Printf("process: Process STDOUT closed")
 			}
+			pe.output <- &Output{
+				data: trimEOL(buf),
+				err:  nil,
+			}
 			break
 		}
-		pe.output <- append(make([]byte, 0, n), buf[:n]...) // cloned buffer
+		pe.output <- &Output{
+			data: append(make([]byte, 0, n), buf[:n]...),
+			err:  nil,
+		}
 	}
-	close(pe.output)
 }
 
 func (pe *ProcessEndpoint) log_stderr() {
@@ -133,8 +149,13 @@ func (pe *ProcessEndpoint) log_stderr() {
 			}
 			break
 		}
-		fmt.Printf("stderr: %s", string(trimEOL(buf)))
+		pe.output <- &Output{
+			data: nil,
+			err:  fmt.Errorf(string(trimEOL(buf))),
+		}
+		// fmt.Printf("stderr: %s", string(trimEOL(buf)))
 	}
+
 }
 
 func trimEOL(b []byte) []byte {

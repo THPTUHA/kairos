@@ -2,26 +2,16 @@ package pubsub
 
 import "github.com/THPTUHA/kairos/pkg/protocol/deliverprotocol"
 
-// ClientInfo contains information about client connection.
 type ClientInfo struct {
-	// Client is a client unique id.
-	Client string
-	// User is an ID of authenticated user. Zero value means anonymous user.
-	User string
-	// ConnInfo is additional information about connection.
+	Client   string
+	User     string
 	ConnInfo []byte
-	// ChanInfo is additional information about connection in context of
-	// channel subscription.
 	ChanInfo []byte
 }
 
-// Publication is a data sent to channel.
 type Publication struct {
 	Data []byte
-	// Info is optional information about client connection published
-	// this data to channel.
 	Info *ClientInfo
-	// Tags contain custom key-value pairs attached to Publication.
 	Tags map[string]string
 }
 

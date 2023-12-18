@@ -359,7 +359,7 @@ const GraphPage = () => {
 
     return (
         <div className="relative">
-            <div className="w-1/3 bg-red-500 absolute">
+            <div className="w-1/3  absolute">
                 <div>Workflow</div>
                 {
                     wfs.loading ? <div>Loading</div> :

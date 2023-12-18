@@ -5,9 +5,7 @@ const (
 )
 
 var Handshake = HandshakeConfig{
-	ProtocolVersion:  1,
-	MagicCookieKey:   "KAIROS_PLUGIN_MAGIC_COOKIE",
-	MagicCookieValue: "badaosuotdoi",
+	ProtocolVersion: 1,
 }
 
 type ServeOpts struct {

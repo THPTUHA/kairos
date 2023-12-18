@@ -28,6 +28,7 @@ func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper)
 	commandArgs := make([]string, 0)
 	inputs := make([]string, 0)
 
+	fmt.Println("SCRIPT---", command, agrsStr, inputStr)
 	if agrsStr != "" {
 		err := json.Unmarshal([]byte(agrsStr), &commandArgs)
 		if err != nil {
@@ -75,16 +76,21 @@ func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper)
 	for {
 		select {
 		case msgOne, ok := <-process.Output():
-			fmt.Println(" msgOne-----", msgOne, ok)
-			if !ok {
-				// cb.Update(msgOne, false)
-				return nil, nil
+			if !ok || len(msgOne.data) == 0 {
+				return []byte("finish"), nil
+			}
+			if msgOne.err != nil {
+				_, err := cb.Update([]byte(msgOne.err.Error()), false)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				_, err := cb.Update(msgOne.data, true)
+				if err != nil {
+					return nil, err
+				}
 			}
 
-			_, err := cb.Update(msgOne, true)
-			if err != nil {
-				return nil, err
-			}
 		case msgTwo, ok := <-inputCh:
 			if !ok || !process.Send(msgTwo) {
 				return nil, nil

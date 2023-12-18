@@ -1,6 +1,8 @@
 version: '1'
 name: debug2
 vars:
+  driver: mysql
+  dbname: workflow
 tasks:
   user_sql:
     executor: sql
@@ -8,14 +10,15 @@ tasks:
     wait: "input"
     payload: |
       {
-        "driver": "mysql",
+        "driver": {{.driver}},
         "host": "127.0.0.1",
         "port": "3306",
         "user": "nghia",
         "password": "root",
-        "dbname": "workflow"
+        "dbname": {{.dbname}}
       }
   user_file:
+    schedule: "@every 3s"
     executor: file
     clients: [client1]
     payload: |
@@ -25,12 +28,24 @@ tasks:
       }
 brokers:
   brok:
-    clients: [client1]
-    listens: [user_sql_task, user_file_task]
+    clients: [client1] 
+    listens: [user_file_task]
     flows: |
-      {{get .user_file_task ("result") | .result | get ("output") | .output}}
-        {{hello | script | .sql }}
-        {{define .mp map | put ("sql") .output | put ("sql") .sql  | .result}}
-          {{send .result .user_sql_task}}
+      {{get .user_file_task ("result") | .result}}
+        {{get .result ("success") | .success}}
+          {{get .result ("output") | .output}}
+             {{if .success}}
+              {{define .mp map | put ("sql") .output | .result}}
+                {{send .result .user_sql_task}}
+              {{end}}
+            {{end}} 
+          {{end}}
         {{end}}
+      {{end}}
+  send:
+    clients: [client1] 
+    listens: [user_sql_task]
+    flows: |
+      {{get .user_sql_task ("result") | .result}}
+        {{send .result .listen_channel}}
       {{end}}

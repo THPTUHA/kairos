@@ -2,9 +2,10 @@ version: '1'
 name: debug
 vars:
 tasks:
-  user_sql:
+  sql:
     executor: sql
     clients: [client1]
+    wait: input
     payload: |
       {
         "driver": "mysql",
@@ -17,12 +18,11 @@ tasks:
 
 brokers:
   brok:
-    listens: [a_channel]
+    listens: [listen_channel]
     flows: |
-      {{get .a_channel ("content") | get ("msg")  
-          | .data | parse | get ("user_id") | .user_id }}{{end}}
-      {{printf ("select *  from users where id = %v") .user_id 
-          | .sql_user }}
-      {{define .req map | put ("sql") .sql_user | .req }}{{end}}
-      {{sendsync .req  .user_sql_task | .result }}
-      {{get .result ("result") |  get ("output") | getp (0) | return }}{{end}}
+      {{get .listen_channel ("content") | get ("msg") | .msg }}
+          {{define .req map | put ("sql") .msg | .req }}
+              {{sendsync .req  .sql_task | .result }}
+              {{send .result .listen_channel}}
+          {{end}}
+      {{end}}

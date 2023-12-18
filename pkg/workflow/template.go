@@ -336,7 +336,7 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 				return nil, -1, fmt.Errorf("exp: %s empty", c[0])
 			}
 
-			if !includes(COMPARE_EXP, c[1]) && !includes(FUNC_BUILDIN, c[1]) {
+			if !includes(COMPARE_EXP, c[1]) && !includes(FUNC_BUILDIN, c[1]) && t.FuncCalls.Funcs != nil {
 				var f goja.Callable
 				v := t.FuncCalls.Funcs.Get(c[1])
 				if v == nil {
@@ -450,9 +450,10 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 				if !(strings.HasSuffix(e, SubTask) &&
 					strings.HasSuffix(e, SubClient)) {
 					if strings.HasSuffix(e, SubChannel) {
-						if strings.HasSuffix(strings.Split(e, ":")[0], SubTask) {
-							return nil, -1, fmt.Errorf("exp: %s invalid param %s", c[0], e)
-						}
+
+						// if strings.HasSuffix(strings.Split(e, ":")[0], SubTask) {
+						// 	return nil, -1, fmt.Errorf("exp: %s invalid param %s", c[0], e)
+						// }
 					}
 				}
 			}
@@ -595,7 +596,7 @@ func (vt *varTemp) GetValue(key string) *kv {
 	return nil
 }
 
-func (t *Template) complieExp(exp string, input []string, varTemps *varTemp, restrict bool) ([]*Expression, int, error) {
+func (t *Template) compileExp(exp string, input []string, varTemps *varTemp, restrict bool) ([]*Expression, int, error) {
 	exp = strings.Trim(exp, " ")
 	if exp == "" {
 		return nil, -1, errors.New(fmt.Sprintf("empty expression "))
@@ -642,7 +643,7 @@ func (t *Template) Parse(str string, input []string, globalVar *Vars, restrict b
 				return errors.New(fmt.Sprintf("missing sign { "))
 			}
 			if open == close {
-				exp, ope, err := t.complieExp(expStr, input, &varTemps, restrict)
+				exp, ope, err := t.compileExp(expStr, input, &varTemps, restrict)
 				if err != nil {
 					return err
 				}
@@ -781,6 +782,13 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 	}
 
 	for idx := rowIdx; idx < len(t.exps); idx++ {
+		if rowIdx > 0 {
+			fmt.Println("INDEX", len(t.exps), idx)
+			for _, e := range t.exps[idx] {
+				fmt.Printf("EXP %+v\n", e)
+
+			}
+		}
 		exp := t.exps[idx]
 		for _, e := range exp {
 			if includes(OPEN_EXP, e.Func) {
@@ -961,7 +969,13 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 				break
 			}
 
-			if (len(out) == 1 && (out[0] == "" || out[0] == false) || err != nil) &&
+			if e.Func == IF_EXP && len(out) == 1 && out[0] == false {
+				fmt.Println("IF FALSE")
+				idx = t.indexRun[idx]
+				break
+			}
+
+			if (len(out) == 1 && (out[0] == "") || err != nil) &&
 				t.indexRun[idx] > 0 {
 				fmt.Println("RUN FORWARD ERR", err)
 				fmt.Printf("EXP ERR %+v\n", e)
@@ -976,6 +990,7 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 				return &exeOutput
 			}
 		}
+		expIdx = 0
 
 		t.ExpInput = []interface{}{}
 	}

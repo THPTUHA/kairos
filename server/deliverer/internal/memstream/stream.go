@@ -7,9 +7,6 @@ import (
 	"github.com/THPTUHA/kairos/server/deliverer/internal/saferand"
 )
 
-// Stream is a non-thread safe in-memory data structure that
-// maintains a stream of values limited by size and provides
-// methods to access a range of values from provided position.
 type Stream struct {
 	top   uint64
 	list  *list.List
@@ -17,13 +14,11 @@ type Stream struct {
 	epoch string
 }
 
-// Item to be kept inside stream.
 type Item struct {
 	Offset uint64
 	Value  any
 }
 
-// New creates new Stream.
 func New() *Stream {
 	return &Stream{
 		list:  list.New(),
@@ -47,18 +42,14 @@ func genEpoch() string {
 	return randString(4)
 }
 
-// Epoch returns epoch of stream.
 func (s *Stream) Epoch() string {
 	return s.epoch
 }
 
-// Top returns top of stream.
 func (s *Stream) Top() uint64 {
 	return s.top
 }
 
-// Get items since provided position.
-// If seq is zero then elements since current first element in stream will be returned.
 func (s *Stream) Get(offset uint64, useOffset bool, limit int, reverse bool) ([]Item, uint64, error) {
 	if useOffset && offset >= s.top+1 {
 		return nil, s.top, nil
@@ -127,7 +118,6 @@ func (s *Stream) Get(offset uint64, useOffset bool, limit int, reverse bool) ([]
 	return result, s.top, nil
 }
 
-// Add item to stream.
 func (s *Stream) Add(v any, size int) (uint64, error) {
 	s.top++
 	item := Item{
@@ -145,7 +135,6 @@ func (s *Stream) Add(v any, size int) (uint64, error) {
 	return s.top, nil
 }
 
-// Clear stream data.
 func (s *Stream) Clear() {
 	s.list = list.New()
 	s.index = make(map[uint64]*list.Element)

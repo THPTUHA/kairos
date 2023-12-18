@@ -9,4 +9,5 @@ func Channel(ginApp *gin.RouterGroup, ctr *controllers.Controller) {
 	routeGroup := ginApp.Group("/channel")
 	routeGroup.GET("/list", ctr.GetChannels)
 	routeGroup.POST("/create", ctr.AddChannel)
+	routeGroup.POST("/:channel/delete", ctr.DeleteChannel)
 }

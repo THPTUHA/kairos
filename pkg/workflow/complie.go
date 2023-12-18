@@ -86,7 +86,7 @@ func (w *WorkflowFile) Compile(funcs *goja.Runtime) error {
 	vars := GetKeyValueVars(w.Vars)
 	err = w.Tasks.Range(func(k string, t *Task) error {
 		t.Name = k
-		err := t.Compile(vars)
+		err := t.Compile(vars, false)
 		return err
 	})
 	return err
@@ -112,7 +112,7 @@ func (w *Workflow) Compile(funcs *goja.Runtime) error {
 	}
 	vars := GetKeyValueVars(w.Vars)
 	err = w.Tasks.Range(func(_ string, t *Task) error {
-		err := t.Compile(vars)
+		err := t.Compile(vars, true)
 		return err
 	})
 

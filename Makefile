@@ -16,11 +16,12 @@ compile-proto:
 plugin:
 	cd server/plugin/kairos-executor-script && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-sql && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-file && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-k8sdeploy && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	
 cc:
 	cd server/plugin/kairos-executor-http && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-nats && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
-	cd server/plugin/kairos-executor-file && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-simple && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 
 agent:
@@ -71,3 +72,9 @@ deploy:start_nats
 	docker compose -f server/storage/docker-compose.yaml up -d
 	docker compose -f server/httpserver/docker-compose.yml up -d
 	docker compose -f server/deliverer/server/docker-compose.yml up -d
+
+clean-cache:
+	dscacheutil -flushcache
+
+webui:
+	cd ./ui && docker buildx build  --platform linux/amd64 -t nexta2020/webui .

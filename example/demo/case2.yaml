@@ -1,30 +1,32 @@
 version: '1'
-name: read_one
-namespace: demo
+name: debug2
+vars:
+  driver: mysql
+  dbname: workflow
 tasks:
-  request_data: 
-    executor: http
-    clients:
-      - client1
-      - client2
-    wait: true
+  user_sql:
+    executor: sql
+    clients: [client1, client2]
+    wait: "input"
     payload: |
       {
-        "method": "GET",
-        "url": "http://locallhost:3000/data",
-        "headers": "[]",
-        "body": "",
-        "timeout": "30",
-        "expectCode": "200",
-        "expectBody": ""
+        "driver": {{.driver}},
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": {{.dbname}}
       }
-
 brokers:
   send:
-    listens: [request_channel]
-    flows: | 
-      {{sendu .request_channel .request_data_task}}
-  
+    listens: [listen_channel]
+    flows: |
+      {{get .listen_channel ("content") | get ("msg") | .msg}}
+        {{sendu .msg .user_sql_task}}
+      {{end}}
   reciver:
-    listens: [client1_client,client2_client]
-    flows: [request_channel]
+    listens: [user_sql_task]
+    flows: |
+      {{get .user_sql_task ("result") | .result}}
+        {{sendu .result .listen_channel}}
+      {{end}}

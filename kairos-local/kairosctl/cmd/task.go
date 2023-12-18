@@ -1,14 +1,17 @@
 package cmd
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"text/tabwriter"
 
+	"github.com/THPTUHA/kairos/kairos-local/kairosdeamon/agent"
 	"github.com/spf13/cobra"
 )
 
@@ -20,6 +23,7 @@ type TaskConfig struct {
 	Name     *string
 	Input    *string
 	Body     string
+	Delete   *string
 }
 
 var taskConfig TaskConfig
@@ -41,12 +45,7 @@ func init() {
 	taskCmd.PersistentFlags().StringVar(&taskConfig.Endpoint, "endpoint", "http://localhost:8080", "Endpoint")
 	taskConfig.Name = taskCmd.PersistentFlags().StringP("name", "n", "", "Name task")
 	taskConfig.Input = taskCmd.PersistentFlags().StringP("input", "i", "", "input task")
-}
-
-type TaskInfo struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	taskConfig.Delete = taskCmd.PersistentFlags().StringP("delete", "d", "", "delete task")
 }
 
 func taskRun() error {
@@ -70,7 +69,7 @@ func taskRun() error {
 		if err != nil {
 			return err
 		}
-		var taskInfos []TaskInfo
+		var taskInfos []*agent.Task
 		err = json.Unmarshal(respBody, &taskInfos)
 		if err != nil {
 			return err
@@ -117,6 +116,60 @@ func taskRun() error {
 			return err
 		}
 		fmt.Println(string(respBody))
+	}
+
+	if *taskConfig.Delete != "" {
+		req, err := http.NewRequest("GET", fmt.Sprintf("%s/v1/%s/task", pluginConfig.Endpoint, *taskConfig.Delete), nil)
+		if err != nil {
+			return err
+		}
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		var task agent.Task
+		err = json.Unmarshal(respBody, &task)
+		if err != nil {
+			return err
+		}
+		if task.WorkflowID != 0 {
+			fmt.Printf("Are you sure you want to task id = %s, exist in worlflow id= %d? (yes/no): ", task.ID, task.WorkflowID)
+			reader := bufio.NewReader(os.Stdin)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("Error reading input:", err)
+				return err
+			}
+			response = strings.ToLower(strings.TrimSpace(response))
+			if response == "yes" || response == "y" {
+				req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/v1/task/%s/delete", pluginConfig.Endpoint, task.ID), bytes.NewBuffer([]byte(taskConfig.Body)))
+				if err != nil {
+					return err
+				}
+				client := &http.Client{}
+				resp, err := client.Do(req)
+				if err != nil {
+					return err
+				}
+				defer resp.Body.Close()
+
+				_, err = io.ReadAll(resp.Body)
+				if err != nil {
+					return err
+				}
+				fmt.Println("Deleted")
+			} else {
+				fmt.Println("Cancel")
+			}
+			return nil
+		}
+		fmt.Println("OK DONE")
 	}
 	return nil
 }

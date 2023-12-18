@@ -544,7 +544,6 @@ func (c *Client) handle(reply *deliverprotocol.Reply) {
 		c.removeRequest(reply.Id)
 	} else {
 		if reply.Push == nil {
-			// Ping from server, send pong if needed.
 			select {
 			case c.delayPing <- struct{}{}:
 			}
@@ -594,21 +593,8 @@ func (c *Client) handlePush(push *deliverprotocol.Push) {
 			return
 		}
 		sub.handlePublication(push.Pub)
-	case push.Join != nil:
-		if !ok {
-			c.handleServerJoin(channel, push.Join)
-			return
-		}
-		sub.handleJoin(push.Join.Info)
-	case push.Leave != nil:
-		if !ok {
-			c.handleServerLeave(channel, push.Leave)
-			return
-		}
-		sub.handleLeave(push.Leave.Info)
 	case push.Subscribe != nil:
 		if ok {
-			// Client-side subscription exists.
 			return
 		}
 		c.handleServerSub(channel, push.Subscribe)
@@ -633,46 +619,6 @@ func (c *Client) handleServerPublication(channel string, pub *deliverprotocol.Pu
 	if handler != nil {
 		c.runHandlerSync(func() {
 			handler(ServerPublicationEvent{Channel: channel, Publication: pubFromProto(pub)})
-		})
-	}
-}
-
-func (c *Client) handleServerJoin(channel string, join *deliverprotocol.Join) {
-	c.mu.Lock()
-	_, ok := c.serverSubs[channel]
-	if !ok {
-		c.mu.Unlock()
-		return
-	}
-	c.mu.Unlock()
-
-	var handler ServerJoinHandler
-	if c.events != nil && c.events.onServerJoin != nil {
-		handler = c.events.onServerJoin
-	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			handler(ServerJoinEvent{Channel: channel, ClientInfo: infoFromProto(join.Info)})
-		})
-	}
-}
-
-func (c *Client) handleServerLeave(channel string, leave *deliverprotocol.Leave) {
-	c.mu.Lock()
-	_, ok := c.serverSubs[channel]
-	if !ok {
-		c.mu.Unlock()
-		return
-	}
-	c.mu.Unlock()
-
-	var handler ServerLeaveHandler
-	if c.events != nil && c.events.onServerLeave != nil {
-		handler = c.events.onServerLeave
-	}
-	if handler != nil {
-		c.runHandlerSync(func() {
-			handler(ServerLeaveEvent{Channel: channel, ClientInfo: infoFromProto(leave.Info)})
 		})
 	}
 }
@@ -767,7 +713,6 @@ func (c *Client) startReconnecting() error {
 	}
 
 	if refreshRequired || (token == "" && getTokenFunc != nil) {
-		// Try to refresh token.
 		newToken, err := c.refreshToken()
 		if err != nil {
 			if errors.Is(err, ErrUnauthorized) {
@@ -936,7 +881,6 @@ func (c *Client) startReconnecting() error {
 
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		// Successfully connected – can reset reconnect attempts.
 		c.reconnectAttempts = 0
 
 		if c.state != StateConnected {
@@ -1174,7 +1118,6 @@ func newConnectFuture(fn func(error)) connectFuture {
 	return connectFuture{fn: fn, closeCh: make(chan struct{})}
 }
 
-// lock must be held outside.
 func (c *Client) resolveConnectFutures(err error) {
 	for _, fut := range c.connectFutures {
 		fut.fn(err)
@@ -1227,7 +1170,7 @@ func (c *Client) Publish(channel string, data []byte) (PublishResult, error) {
 	})
 	select {
 	case res := <-resCh:
-		fmt.Println("------------PublishResult-----", res)
+		fmt.Println("---------PublishResult-----", res)
 		return res, <-errCh
 	}
 }
@@ -1268,12 +1211,10 @@ func (c *Client) sendPublish(channel string, data []byte, fn func(PublishResult,
 	}
 }
 
-// PresenceResult contains the result of presence op.
 type PresenceResult struct {
 	Clients map[string]ClientInfo
 }
 
-// Presence for a channel without being subscribed.
 func (c *Client) Presence(ctx context.Context, channel string) (PresenceResult, error) {
 	if c.isClosed() {
 		return PresenceResult{}, ErrClientClosed
@@ -1340,18 +1281,15 @@ func (c *Client) sendPresence(channel string, fn func(PresenceResult, error)) {
 	}
 }
 
-// PresenceStats represents short presence information.
 type PresenceStats struct {
 	NumClients int
 	NumUsers   int
 }
 
-// PresenceStatsResult wraps presence stats.
 type PresenceStatsResult struct {
 	PresenceStats
 }
 
-// PresenceStats for a channel without being subscribed.
 func (c *Client) PresenceStats(ctx context.Context, channel string) (PresenceStatsResult, error) {
 	if c.isClosed() {
 		return PresenceStatsResult{}, ErrClientClosed

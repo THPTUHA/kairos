@@ -13,15 +13,12 @@ type PubSubSync struct {
 }
 
 type subscribeState struct {
-	// The following fields help us to synchronize PUB/SUB and history messages
-	// during publication recovery process in channel.
 	inSubscribe     uint32
 	pubBufferMu     sync.Mutex
 	pubBufferLocked bool
 	pubBuffer       []*deliverprotocol.Publication
 }
 
-// NewPubSubSync creates new PubSubSyncer.
 func NewPubSubSync() *PubSubSync {
 	return &PubSubSync{
 		subSync: make(map[string]*subscribeState),
@@ -42,7 +39,6 @@ func (c *PubSubSync) StopBuffering(channel string) {
 	delete(c.subSync, channel)
 }
 
-// StartBuffering ...
 func (c *PubSubSync) StartBuffering(channel string) {
 	c.subSyncMu.Lock()
 	defer c.subSyncMu.Unlock()
@@ -60,14 +56,13 @@ func (c *PubSubSync) LockBufferAndReadBuffered(channel string) []*deliverprotoco
 	}
 	s.pubBufferLocked = true
 	c.subSyncMu.Unlock()
-	s.pubBufferMu.Lock() // Since this point and until StopBuffering pubBufferMu will be locked so that SyncPublication waits till pubBufferMu unlocking.
+	s.pubBufferMu.Lock()
 	pubs := make([]*deliverprotocol.Publication, len(s.pubBuffer))
 	copy(pubs, s.pubBuffer)
 	s.pubBuffer = nil
 	return pubs
 }
 
-// SyncPublication ...
 func (c *PubSubSync) SyncPublication(channel string, pub *deliverprotocol.Publication, syncedFn func()) {
 	c.subSyncMu.Lock()
 	s, ok := c.subSync[channel]
@@ -79,17 +74,12 @@ func (c *PubSubSync) SyncPublication(channel string, pub *deliverprotocol.Public
 	c.subSyncMu.Unlock()
 
 	if atomic.LoadUint32(&s.inSubscribe) == 1 {
-		// client currently in process of subscribing to the channel. In this case we keep
-		// publications in a slice buffer. Publications from this temporary buffer will be sent in
-		// subscribe reply.
 		s.pubBufferMu.Lock()
 		if atomic.LoadUint32(&s.inSubscribe) == 1 {
-			// Sync point not reached yet - put Publication to tmp slice.
 			s.pubBuffer = append(s.pubBuffer, pub)
 			s.pubBufferMu.Unlock()
 			return
 		}
-		// Sync point already passed - send Publication into connection.
 		s.pubBufferMu.Unlock()
 	}
 	syncedFn()

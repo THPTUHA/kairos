@@ -121,21 +121,13 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 	}
 	switch exp.Func {
 	case IF_EXP, ELSEIF_EXP:
-		fmt.Println("DEBUG TEMP VAR")
-		for idx, e := range tempvarTemp.items {
-			fmt.Println("r1", idx)
-			for _, c := range e {
-				fmt.Println(c.key, c.value)
-			}
-		}
-		fmt.Println("DEBUG TEMP VAR--")
-		if len(exp.Params) == 2 {
+		if len(exp.Params) == 3 {
 			vm.params = exp.Params[1:]
 			mp, e := setValue(&vm)
 			if e != nil {
 				return nil, e
 			}
-
+			fmt.Println("FUCK IF", mp[exp.Params[1]], mp[exp.Params[2]])
 			r, err := CompareStringsAndNumbers(mp[exp.Params[1]], mp[exp.Params[2]], EQ_EXP)
 			if err != nil {
 				return nil, err
@@ -147,11 +139,13 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 				return []interface{}{false}, nil
 			}
 		} else if len(exp.Params) == 1 {
+			vm.params = exp.Params
 			mp, e := setValue(&vm)
 			if e != nil {
 				return nil, e
 			}
-			if mp[exp.Params[0]] != "" {
+			fmt.Println("OUPUT IF", mp[exp.Params[0]])
+			if mp[exp.Params[0]] != "" && mp[exp.Params[0]] != false && mp[exp.Params[0]] != "false" {
 				return []interface{}{true}, nil
 			} else {
 				return []interface{}{false}, nil
@@ -166,7 +160,9 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 	case GET_EXP:
 		var source ReplyData
 		vm.params = exp.Params
+		vm.tempvarTemp.String()
 		mp, err := setValue(&vm)
+
 		get := exp.Params[0]
 		if err != nil {
 			return nil, err
@@ -190,10 +186,9 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		} else {
 			input, ok := mp[exp.Params[0]].(ReplyData)
 			if !ok {
-				v, err := convertInterfaceToReply(exp.Input[0])
-				fmt.Printf("source %+v\n", source)
+				v, err := convertInterfaceToReply(mp[exp.Params[0]])
 				if err != nil {
-					return nil, fmt.Errorf("input exp %s is not map", exp.Func)
+					return nil, fmt.Errorf("expression %s param invalid type", exp.Func)
 				}
 				input = *v
 			}
@@ -272,17 +267,24 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 
 			return []interface{}{mp[exp.Params[1]]}, nil
 		}
-	case SEND:
-		vm.params = exp.Params[:1]
-		mp, err := setValue(&vm)
-		if err != nil {
-			return nil, err
+	case SEND, SENDU:
+		var v interface{}
+		if len(exp.Params) == 1 {
+			if len(exp.Input) == 0 {
+				return nil, fmt.Errorf("expression %s has no value to send", exp.Func)
+			}
+			v = exp.Input[0]
+		} else {
+			vm.params = exp.Params[:1]
+			mp, err := setValue(&vm)
+			if err != nil {
+				return nil, err
+			}
+			v = mp[exp.Params[0]]
 		}
 
-		fmt.Printf("PARAMS %+v MP %+v", exp.Params, mp)
-		v := mp[exp.Params[0]]
 		if v == nil {
-			return nil, fmt.Errorf("exp %s: can't send nil value, var %s", exp.Func, exp.Params[0])
+			return nil, fmt.Errorf("expression %s: can't send nil value, var %s", exp.Func, exp.Params[0])
 		}
 		ac, err := convertInterfaceToReply(v)
 		if err != nil {
@@ -538,7 +540,6 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		return result, nil
 	default:
 		if funcCall != nil && funcCall.Funcs != nil {
-			fmt.Println("RUN HERE EXP")
 			vm.params = exp.Params
 			f := funcCall.GetFunction(exp.Func)
 			if f == nil {
@@ -550,13 +551,16 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			}
 			tempvarTemp.String()
 			items := make([]goja.Value, 0)
+			params := make([]interface{}, 0)
 			for _, e := range exp.Input {
+				params = append(params, e)
 				items = append(items, funcCall.Funcs.ToValue(e))
 			}
 			for _, e := range exp.Params {
+				params = append(params, mp[e])
 				items = append(items, funcCall.Funcs.ToValue(mp[e]))
 			}
-
+			fmt.Printf("RUN HERE EXP %+v \n", params)
 			result, err := f(goja.Undefined(), items...)
 			fmt.Printf("RESULT --- %+v\n", result)
 			if err != nil {
@@ -707,7 +711,6 @@ func pushExp(exp *Expression, vm *ValueMap) ([]interface{}, error) {
 
 		if !ok {
 			v, err := convertInterfaceToArray(exp.Input[0])
-			fmt.Printf("array %+v\n", v)
 			if err != nil {
 				return nil, fmt.Errorf("input exp %s is not array", exp.Func)
 			}
@@ -718,7 +721,6 @@ func pushExp(exp *Expression, vm *ValueMap) ([]interface{}, error) {
 		input, ok := mp[exp.Params[0]].([]interface{})
 		if !ok {
 			v, err := convertInterfaceToArray(exp.Params[0])
-			fmt.Printf("array %+v\n", source)
 			if err != nil {
 				return nil, fmt.Errorf("input exp %s is not array", exp.Func)
 			}
@@ -738,7 +740,6 @@ func merge(input []interface{}) (interface{}, error) {
 	}
 
 	firstElementType := reflect.TypeOf(input[0])
-	fmt.Printf(" MERE %+v  %+v\n", input, firstElementType.Kind())
 
 	switch firstElementType.Kind() {
 	case reflect.Float64:
@@ -760,7 +761,6 @@ func merge(input []interface{}) (interface{}, error) {
 			}
 			sum += reflect.ValueOf(v).Convert(reflect.TypeOf(sum)).Int()
 		}
-		fmt.Println("SUM--", sum)
 		return sum, nil
 	case reflect.String:
 		concatenated := ""

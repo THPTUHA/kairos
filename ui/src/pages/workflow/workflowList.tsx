@@ -112,7 +112,7 @@ const WorkflowListPage = () => {
         },
         {
             title: 'Action',
-            dataIndex: 'created_at',
+            dataIndex: 'action',
             render: (_: any, record: Workflow) => {
                 return (
                     <div className="flex">

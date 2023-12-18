@@ -1,5 +1,7 @@
 package bufcb
 
+import "math"
+
 type Buffer struct {
 	data    []byte
 	size    int
@@ -17,24 +19,20 @@ func NewBuffer(size int, cb func([]byte) error) *Buffer {
 }
 
 func (b *Buffer) Write(buf []byte) (int, error) {
-	if len(buf) == 0 {
+	n := len(buf)
+	if n == 0 {
 		return b.Flush()
 	}
 	totalWritten := 0
 
-	for _, e := range buf {
-		b.data[b.written] = e
-		b.written++
-		if b.written == b.size {
-			err := b.cb(b.data)
-			if err != nil {
-				return totalWritten, err
-			}
-			b.written = 0
+	for n > 0 {
+		err := b.cb(buf[:n])
+		if err != nil {
+			return b.written, err
 		}
-		totalWritten++
+		buf = buf[n:]
+		n -= int(math.Min(float64(b.size), float64(n)))
 	}
-
 	return totalWritten, nil
 }
 
@@ -46,6 +44,7 @@ func (b *Buffer) Flush() (int, error) {
 			return b.written, err
 		}
 	}
+	b.data = f
 	b.written = 0
 	return 0, nil
 }

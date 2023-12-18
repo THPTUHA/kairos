@@ -12,48 +12,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// WebsocketConfig represents config for WebsocketHandler.
 type WebsocketConfig struct {
-	// CheckOrigin func to provide custom origin check logic.
-	// nil means that sameHostOriginCheck function will be used which
-	// expects Origin host to match request Host.
-	CheckOrigin func(r *http.Request) bool
-
-	// ReadBufferSize is a parameter that is used for raw websocket Upgrader.
-	// If set to zero reasonable default value will be used.
-	ReadBufferSize int
-
-	// WriteBufferSize is a parameter that is used for raw websocket Upgrader.
-	// If set to zero reasonable default value will be used.
-	WriteBufferSize int
-
-	// UseWriteBufferPool enables using buffer pool for writes.
+	CheckOrigin        func(r *http.Request) bool
+	ReadBufferSize     int
+	WriteBufferSize    int
 	UseWriteBufferPool bool
+	MessageSizeLimit   int
+	WriteTimeout       time.Duration
+	Compression        bool
 
-	// MessageSizeLimit sets the maximum size in bytes of allowed message from client.
-	// By default, 65536 bytes (64KB) will be used.
-	MessageSizeLimit int
-
-	// WriteTimeout is maximum time of write message operation.
-	// Slow client will be disconnected.
-	// By default, 1 * time.Second will be used.
-	WriteTimeout time.Duration
-
-	// Compression allows enabling websocket permessage-deflate
-	// compression support for raw websocket connections. It does
-	// not guarantee that compression will be used - i.e. it only
-	// says that server will try to negotiate it with client.
-	// Note: enabling compression may lead to performance degradation.
-	Compression bool
-
-	// CompressionLevel sets a level for websocket compression.
-	// See possible value description at https://golang.org/pkg/compress/flate/#NewWriter
-	CompressionLevel int
-
-	// CompressionMinSize allows setting minimal limit in bytes for
-	// message to use compression when writing it into client connection.
-	// By default, it's 0 - i.e. all messages will be compressed when
-	// WebsocketCompression enabled and compression negotiated with client.
+	CompressionLevel   int
 	CompressionMinSize int
 
 	PingPongConfig
@@ -263,23 +231,18 @@ func newWebsocketTransport(conn *websocket.Conn, opts websocketTransportOptions,
 	return transport
 }
 
-// Name returns name of transport.
 func (t *websocketTransport) Name() string {
 	return transportWebsocket
 }
 
-// Protocol returns transport deliverprotocol.
 func (t *websocketTransport) Protocol() ProtocolType {
 	return t.opts.protoType
 }
 
-// DisabledPushFlags ...
 func (t *websocketTransport) DisabledPushFlags() uint64 {
-	// Websocket sends disconnects in Close frames.
 	return PushFlagDisconnect
 }
 
-// PingPongConfig ...
 func (t *websocketTransport) PingPongConfig() PingPongConfig {
 	t.mu.RLock()
 	useNativePingPong := t.nativePingTimer != nil
@@ -311,7 +274,6 @@ func (t *websocketTransport) writeData(data []byte) error {
 	return nil
 }
 
-// Write data to transport.
 func (t *websocketTransport) Write(message []byte) error {
 	select {
 	case <-t.closeCh:
@@ -319,7 +281,6 @@ func (t *websocketTransport) Write(message []byte) error {
 	default:
 		protoType := t.Protocol().toProto()
 		if protoType == deliverprotocol.TypeJSON {
-			// Fast path for one JSON message.
 			return t.writeData(message)
 		}
 		encoder := deliverprotocol.GetDataEncoder(protoType)
@@ -329,7 +290,6 @@ func (t *websocketTransport) Write(message []byte) error {
 	}
 }
 
-// WriteMany data to transport.
 func (t *websocketTransport) WriteMany(messages ...[]byte) error {
 	select {
 	case <-t.closeCh:
@@ -347,7 +307,6 @@ func (t *websocketTransport) WriteMany(messages ...[]byte) error {
 
 const closeFrameWait = 5 * time.Second
 
-// Close closes transport.
 func (t *websocketTransport) Close(disconnect Disconnect) error {
 	t.mu.Lock()
 	if t.closed {
@@ -370,7 +329,6 @@ func (t *websocketTransport) Close(disconnect Disconnect) error {
 		select {
 		case <-t.graceCh:
 		default:
-			// Wait for closing handshake completion.
 			tm := timers.AcquireTimer(closeFrameWait)
 			select {
 			case <-t.graceCh:

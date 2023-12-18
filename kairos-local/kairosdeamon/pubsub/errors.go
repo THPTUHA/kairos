@@ -6,23 +6,12 @@ import (
 )
 
 var (
-	// ErrTimeout returned if operation timed out.
-	ErrTimeout = errors.New("timeout")
-	// ErrClientDisconnected can be returned if client goes to
-	// disconnected state while operation in progress.
-	ErrClientDisconnected = errors.New("client disconnected")
-	// ErrClientClosed can be returned if client is closed.
-	ErrClientClosed = errors.New("client closed")
-	// ErrSubscriptionUnsubscribed returned if Subscription is unsubscribed.
+	ErrTimeout                  = errors.New("timeout")
+	ErrClientDisconnected       = errors.New("client disconnected")
+	ErrClientClosed             = errors.New("client closed")
 	ErrSubscriptionUnsubscribed = errors.New("subscription unsubscribed")
-	// ErrDuplicateSubscription returned if subscription to the same channel
-	// already registered in current client instance. This is due to the fact
-	// that server does not allow subscribing to the same channel twice for
-	// the same connection.
-	ErrDuplicateSubscription = errors.New("duplicate subscription")
-	// ErrUnauthorized is a special error which may be returned by application
-	// from GetToken function to indicate lack of operation permission.
-	ErrUnauthorized = errors.New("unauthorized")
+	ErrDuplicateSubscription    = errors.New("duplicate subscription")
+	ErrUnauthorized             = errors.New("unauthorized")
 )
 
 type RefreshError struct {
@@ -57,7 +46,6 @@ func (c ConnectError) Error() string {
 	return fmt.Sprintf("connect error: %v", c.Err)
 }
 
-// Error represents protocol-level error.
 type Error struct {
 	Code    uint32
 	Message string

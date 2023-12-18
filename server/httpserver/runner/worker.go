@@ -77,6 +77,7 @@ type Worker struct {
 	requestsMu     sync.RWMutex
 	cacheMu        sync.RWMutex
 	requests       map[int64]request
+	responsesIDs   map[int64]bool
 	points         map[string]*Point
 	taskDelivers   map[int64][]*taskDeliver
 	brokerDelivers map[int64][]*brokerDeliver
@@ -100,6 +101,7 @@ func NewWorker(workerID int64, workflow *workflow.Workflow, conf *WorkerConfig, 
 		natsOptions:    defaultNatsOptions(),
 		conf:           conf,
 		requests:       map[int64]request{},
+		responsesIDs:   make(map[int64]bool),
 		points:         make(map[string]*Point),
 		taskDelivers:   make(map[int64][]*taskDeliver),
 		brokerDelivers: make(map[int64][]*brokerDeliver),
@@ -113,7 +115,7 @@ func (w *Worker) IsRunning() bool {
 	w.mu.Lock()
 	status := w.status
 	defer w.mu.Unlock()
-	return status == events.WorkerRunning
+	return status == workflow.Running
 }
 
 func (w *Worker) updateStatusDeliverTask(taskID int64, d *taskDeliver) {
@@ -197,10 +199,6 @@ func (w *Worker) Destroy() bool {
 	w.setWfStatus(workflow.Destroying)
 	success := true
 	from := w.points["kairos"]
-	var cmd = workflow.CmdTask{
-		Cmd:        workflow.RequestDestroyWf,
-		WorkflowID: w.workflow.ID,
-	}
 
 	for k, v := range w.points {
 		if strings.HasSuffix(k, workflow.SubClient) {
@@ -208,16 +206,25 @@ func (w *Worker) Destroy() bool {
 		}
 	}
 
-	for _, p := range w.clientsActive {
+	for _, ca := range w.clientsActive {
+		var cmd = workflow.CmdTask{
+			Cmd:        workflow.RequestDestroyWf,
+			WorkflowID: w.workflow.ID,
+		}
+		p := ca
+
 		wait.Add(1)
 		go w.deliverAsync(from, p, &cmd, func(crt *workflow.CmdReplyTask, err error) {
-			wait.Done()
+			fmt.Println("Reciver delete", crt.Status, crt.RunOn)
+			defer wait.Done()
 			if err != nil {
 				success = false
 				w.wrapDeliverErr(from, p, &cmd, crt, fmt.Errorf("Client %s can't clear workflow, msg = %s ", p.Name, crt.Message))
 				return
 			}
+
 			if crt.Status == workflow.SuccessDestroyWorkflow {
+				fmt.Println("RUN HERE TODO")
 				w.mu.Lock()
 				p.Status = PointDestroy
 				fmt.Println("Destroy starting......")
@@ -230,10 +237,9 @@ func (w *Worker) Destroy() bool {
 					fmt.Printf("%+v\n", p)
 				}
 				fmt.Println("Destroy finish......")
-				w.mu.Unlock()
-				w.mu.Lock()
 				for _, p := range w.clientsActive {
 					if p.Status != PointDestroy {
+						w.mu.Unlock()
 						return
 					}
 				}
@@ -258,7 +264,6 @@ func (w *Worker) Destroy() bool {
 					}
 					close(w.closeCh)
 					close(w.eventChan)
-					close(w.deliverErrCh)
 				}
 
 			} else {
@@ -388,11 +393,9 @@ func (w *Worker) run() {
 
 func (w *Worker) retryDeliver() {
 	for e := range w.deliverErrCh {
-		fmt.Printf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v reciever= %+v\n", e.Msg.Cmd, e.Msg.Task, e.Msg.Broker, e.Receiver)
 		w.conf.Logger.WithFields(logrus.Fields{
 			"from":     e.From.Name,
 			"receiver": e.Receiver.Name,
-			"err":      e.err.Error(),
 		})
 
 		ne := e
@@ -403,16 +406,15 @@ func (w *Worker) retryDeliver() {
 				reply.TaskID = msg.Task.ID
 			}
 			reply.WorkflowID = w.workflow.ID
-			if reply.Message == "" {
+			if reply.Message == "" && e.err != nil {
 				reply.Message = e.err.Error()
 			}
 
-			fmt.Printf("[ERRR DELIVER  2222 ----] CMD= %d  task= %+v broker= %+v reciever= %+v\n", msg.Cmd, msg.Task, msg.Broker, e.Receiver)
+			fmt.Printf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v reciever= %+v\n", msg.Cmd, msg.Task, msg.Broker, e.Receiver)
 			switch msg.Cmd {
 			case workflow.SetTaskCmd:
 				reply.Cmd = workflow.ReplySetTaskCmd
 				reply.Status = workflow.FaultSetTask
-				// fmt.Printf("Cmd= %d task=%+v", workflow.SetTaskCmd, msg.Task)
 				w.logWorkflow(
 					fmt.Sprintf("Task %s can't setup on client %s, msg = %s ",
 						msg.Task.Name,
@@ -449,7 +451,7 @@ func (w *Worker) retryDeliver() {
 				w.logWorkflow(
 					fmt.Sprintf("Broker %s can't setup on client %s, msg = %s ",
 						msg.Broker.Name,
-						msg.From,
+						e.Receiver.Name,
 						reply.Message),
 					models.WFRecordFault,
 					ne,
@@ -483,6 +485,7 @@ func (w *Worker) wrapDeliverErr(from *Point, receiver *Point, cmd *workflow.CmdT
 func (w *Worker) setWfStatus(status int) {
 	fmt.Printf("[SET STATUS WORKFLOW] %d user = %d\n", status, w.workflow.UserID)
 	w.workflow.Status = status
+	w.status = status
 	msg := workflow.MonitorWorkflow{
 		Cmd:        workflow.SetStatusWorkflow,
 		UserID:     w.workflow.UserID,
@@ -584,12 +587,16 @@ func (w *Worker) Run() error {
 
 func (w *Worker) reciveMessageSync() error {
 	_, err := w.natsConn.Subscribe(fmt.Sprintf("%s-%d", messaging.REQUEST_WORKER_SYNC, w.workflow.UserID), func(msg *nats.Msg) {
-		fmt.Println("RUN HERE SYNC-----", w.workflow.ID)
+
 		var reply workflow.CmdReplyTask
 		err := json.Unmarshal(msg.Data, &reply)
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+		fmt.Println("RUN HERE SYNC-----", w.workflow.ID)
+		fmt.Printf("REPLY--%+v\n", reply)
 		if (err != nil || reply.WorkflowID != w.workflow.ID) &&
-			strings.HasSuffix(reply.RunOn, workflow.SubChannel) &&
-			strings.HasSuffix(reply.RunOn, workflow.SubClient) {
+			!strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
 			return
 		}
 
@@ -599,7 +606,7 @@ func (w *Worker) reciveMessageSync() error {
 		req.Cmd = workflow.InputTaskCmd
 		req.DeliverID = w.nextCmdID()
 		reply.WorkflowID = w.workflow.ID
-		// result task
+
 		req.From = reply.RunOn
 		resultCh := make(chan []byte)
 		req.WorkflowID = reply.WorkflowID
@@ -612,7 +619,6 @@ func (w *Worker) reciveMessageSync() error {
 
 func (w *Worker) reciveMessage() error {
 	_, err := w.natsConn.Subscribe(fmt.Sprint(w.workflow.UserID), func(msg *nats.Msg) {
-		// TODO cho đi qua broker => trả về điểm đến => thực hiện lưu message và deliver
 		var reply workflow.CmdReplyTask
 		err := json.Unmarshal(msg.Data, &reply)
 		if (err != nil || reply.WorkflowID != w.workflow.ID) &&
@@ -620,7 +626,7 @@ func (w *Worker) reciveMessage() error {
 			strings.HasSuffix(reply.RunOn, workflow.SubClient) {
 			return
 		}
-		// Output
+
 		fmt.Println("[ NATS REPLY !!]")
 		if reply.DeliverID == DeliverBorkerCmd {
 			reply.Status = workflow.SuccessReceiveOutputTaskCmd
@@ -628,15 +634,26 @@ func (w *Worker) reciveMessage() error {
 			fmt.Printf("[ REPLY MSG SEND TO BROKER] ============= %+v\n", reply)
 			var req workflow.CmdTask
 			req.Cmd = workflow.InputTaskCmd
-			// result task
 			req.From = reply.RunOn
 			req.WorkflowID = reply.WorkflowID
-			// req.Offset = reply.Result.Offset
+
+			if reply.RunCount != 0 {
+				w.requestsMu.RLock()
+				ok := w.responsesIDs[reply.RunCount]
+				fmt.Println("RUNCOUNT---", reply.RunCount, ok)
+				if !ok {
+					w.requestsMu.RUnlock()
+					return
+				}
+				fmt.Println("FUCKING ERR", reply.RunCount, ok)
+				delete(w.responsesIDs, reply.RunCount)
+				w.requestsMu.RUnlock()
+			}
+
 			w.computeMsg(&reply, &req, nil)
 		} else {
 			reply.WorkflowID = w.workflow.ID
 
-			w.conf.Logger.Debugf("RESPONSE DELIVER %+v", reply)
 			w.requestsMu.RLock()
 			req, ok := w.requests[reply.DeliverID]
 			w.requestsMu.RUnlock()
@@ -652,8 +669,8 @@ func (w *Worker) reciveMessage() error {
 }
 
 func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask, resultCh chan []byte) {
-	fmt.Println("COMPUTE MSG")
 	if !w.IsRunning() {
+		w.conf.Logger.Error("worker not running")
 		return
 	}
 	w.workflow.Brokers.Range(func(key string, broker *workflow.Broker) error {
@@ -663,15 +680,22 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 			Name: broker.Name,
 		}
 
-		fmt.Println("brokder-------", broker.Listens, broker.Flows.Endpoints, reply.TaskName, broker.IsListen(reply.RunOn))
-		if (broker.IsListen(reply.TaskName) || broker.IsListen(reply.RunOn)) && len(broker.Listens) == 0 {
+		if reply.WorkflowID != w.workflow.ID {
+			return fmt.Errorf("invalid message")
+		}
+
+		if (broker.IsListen(reply.TaskName) || broker.IsListen(reply.RunOn)) && len(broker.Clients) == 0 {
 			m, _ := json.Marshal(reply)
 			w.conf.Logger.Debugf("Reply runon=%s sendAt=%d Now=%d", reply.RunOn, reply.SendAt, helper.GetTimeNow())
+			sender := w.points[reply.RunOn]
+			if sender == nil {
+				return fmt.Errorf("can't find sender")
+			}
 			w.CBQueue.Push(func(duration time.Duration) {
-				sender := w.points[reply.RunOn]
-				// task -> broker
+
 				w.logMessageFlowReply(sender, &from, m, helper.GetTimeNow()-reply.SendAt)
 			})
+
 			req.Task = &workflow.Task{
 				ID:         reply.TaskID,
 				WorkflowID: reply.WorkflowID,
@@ -716,6 +740,7 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 				}
 			} else {
 				if !broker.Queue {
+					broker.DynamicVars = make(map[string]*workflow.CmdReplyTask)
 					fmt.Println("RUN TO EMPTY QUEUE BROKER")
 					if strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
 						w.cacheMu.RLock()
@@ -781,7 +806,6 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 					fmt.Println("DEBG DYNAMIC VAR", k)
 				}
 
-				fmt.Printf(" REPLY --- %+v\n", replies)
 				trun := broker.Template.NewRutime(replies)
 				exeOutput := trun.Execute()
 				delivers := exeOutput.DeliverFlows
@@ -836,10 +860,15 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 	})
 }
 func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, reply *workflow.CmdReplyTask, req *workflow.CmdTask, trun *workflow.TemplateRuntime, resultCh chan []byte) {
+	hasSync := false
 	for _, path := range delivers {
 		fmt.Printf("[ DEBUG OUTPUT TASK] %+v\n", path)
 		w.conf.Logger.Infof("Path: from= %s to receiver= %s msg= %+v", from.Name, path.Reciever, path.Msg)
 		receiver := w.points[path.Reciever]
+		if receiver == nil {
+			w.conf.Logger.Error(fmt.Errorf("can't find receiver %s", path.Reciever))
+			return
+		}
 		reqDeliver := *req
 		if strings.HasSuffix(path.Reciever, workflow.SubChannel) {
 			reqDeliver.Message = path.Msg
@@ -864,10 +893,16 @@ func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, re
 		w.conf.Logger.Debugf("request %+v", reqDeliver)
 		w.conf.Logger.Debugf("reply %+v", reply)
 		if path.Send == workflow.SENDU {
-			req.DeliverID = w.nextCmdID()
+			reqDeliver.DeliverID = w.nextCmdID()
+			reqDeliver.RunCount = reqDeliver.DeliverID
+			w.requestsMu.RLock()
+			w.responsesIDs[reqDeliver.DeliverID] = true
+			w.requestsMu.RUnlock()
+			fmt.Println("SENDU---", reqDeliver.DeliverID)
 		}
 
 		if path.Send == workflow.SENDSYNC {
+			hasSync = true
 			reqDeliver.Cmd = workflow.RequestTaskRunSyncCmd
 			if receiver.Type == TaskPoint {
 				w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
@@ -883,11 +918,9 @@ func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, re
 				go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply)
 			}
 		} else {
-			// TODO set message
 			if receiver.Type == TaskPoint {
 				w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
 					if receiver.ID == task.ID {
-
 						for _, c := range task.Clients {
 							cr := w.points[workflow.GetClientName(c)]
 							go w.deliverInputTaskCmd(from, cr, &reqDeliver, reply)
@@ -898,6 +931,9 @@ func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, re
 			} else {
 				go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply)
 			}
+		}
+		if resultCh != nil && !hasSync {
+			resultCh <- []byte("")
 		}
 	}
 }
@@ -934,6 +970,7 @@ func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *
 		delivers := exeOutput.DeliverFlows
 		track := exeOutput.Tracking
 		result := exeOutput.Result
+		fmt.Printf("OUTPUT %+v  tracking %+v\n", exeOutput, track)
 		if track.Err != "" && resultCh != nil {
 			resultCh <- []byte(track.Err)
 		}
@@ -1019,7 +1056,6 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 		cmd.DeliverID = w.nextCmdID()
 	}
 	fmt.Println("DELIVERID -------------------- ", cmd.DeliverID)
-	// TODO save message
 	w.addRequest(cmd.DeliverID, cb)
 
 	err := w.deliver(cmd)
@@ -1040,11 +1076,9 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 			if !ok {
 				return
 			}
-			fmt.Printf("[TIMEOUT DELIVER %+v]\n", cmd)
 			var reply workflow.CmdReplyTask
 			req.cb(&reply, ErrTimeout)
 		case <-w.closeCh:
-			log.Debug().Msg("close chan")
 			w.requestsMu.RLock()
 			req, ok := w.requests[cmd.DeliverID]
 			w.requestsMu.RUnlock()
@@ -1063,51 +1097,64 @@ func (w *Worker) deliverTaskToClient(from *Point, receiver *Point, msg *workflow
 		w.logMessageFlowRequest(from, receiver, msg, duration.Milliseconds())
 	})
 	err := w.deliverAsync(from, receiver, msg, func(r *workflow.CmdReplyTask, err error) {
-		if err != nil {
-			w.conf.Logger.Error(err)
-			w.wrapDeliverErr(from, receiver, msg, r, err)
-			return
-		}
-		switch r.Cmd {
-		case workflow.ReplySetTaskCmd:
-			fmt.Printf("[CALLBACK DELIVER Reply SetTaskCmd] REPLY= %+v\n", r)
-			w.CBQueue.Push(func(duration time.Duration) {
-				m, _ := json.Marshal(r)
-				w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
-			})
-
-			w.eventChan <- &Event{
-				cmd:     ReceiveDeliverTaskCmd,
-				cmdtask: r,
-			}
-		case workflow.ReplyStartTaskCmd:
-			fmt.Printf("[CALLBACK DELIVER Reply StartTaskCmd] REPLY= %+v\n", r)
-			m, _ := json.Marshal(r)
-			w.CBQueue.Push(func(duration time.Duration) {
-				// TODO add record task ready
-				w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
-			})
-		case workflow.ReplySetBrokerCmd:
-			fmt.Printf("[CALLBACK DELIVER Reply SetBrokerCmd] REPLY= %+v\n", r)
-			m, err := json.Marshal(r)
-			if err != nil {
-				w.conf.Logger.Error(err)
-				return
-			}
-			w.CBQueue.Push(func(duration time.Duration) {
-				// TODO add record task ready
-				w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
-			})
-			w.eventChan <- &Event{
-				cmd:     ReceiveDeliverBrokerCmd,
-				cmdtask: r,
-			}
-		}
+		w.checkCmdReply(from, receiver, msg, r, err, false)
 	})
 	if err != nil {
 		w.conf.Logger.Error(err)
 	}
 	return err
+}
+
+func (w *Worker) checkCmdReply(from *Point, receiver *Point, msg *workflow.CmdTask, r *workflow.CmdReplyTask, err error, ignore bool) error {
+	if err != nil {
+		w.conf.Logger.Error(err)
+		if !ignore {
+			w.wrapDeliverErr(from, receiver, msg, r, err)
+		}
+		return err
+	}
+	switch r.Cmd {
+	case workflow.ReplySetTaskCmd:
+		fmt.Printf("[CALLBACK DELIVER Reply SetTaskCmd] REPLY= %+v\n", r)
+		w.CBQueue.Push(func(duration time.Duration) {
+			m, _ := json.Marshal(r)
+			w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
+		})
+
+		w.eventChan <- &Event{
+			cmd:     ReceiveDeliverTaskCmd,
+			cmdtask: r,
+		}
+	case workflow.ReplyStartTaskCmd:
+		fmt.Printf("[CALLBACK DELIVER Reply StartTaskCmd] REPLY= %+v\n", r)
+		m, _ := json.Marshal(r)
+		w.CBQueue.Push(func(duration time.Duration) {
+			w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
+		})
+	case workflow.ReplySetBrokerCmd:
+		fmt.Printf("[CALLBACK DELIVER Reply SetBrokerCmd] REPLY= %+v\n", r)
+		m, err := json.Marshal(r)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return err
+		}
+
+		if r.Status == workflow.FaultSetBroker {
+			if !ignore {
+				w.wrapDeliverErr(from, receiver, msg, r, nil)
+			}
+			return fmt.Errorf("set broker %s error", receiver.Name)
+		}
+
+		w.CBQueue.Push(func(duration time.Duration) {
+			w.logMessageFlowReply(receiver, from, m, helper.GetTimeNow()-msg.SendAt)
+		})
+		w.eventChan <- &Event{
+			cmd:     ReceiveDeliverBrokerCmd,
+			cmdtask: r,
+		}
+	}
+	return nil
 }
 
 func (w *Worker) deliverTask(from *Point, task *workflow.Task, cmd workflow.RequestActionTask) error {
@@ -1144,37 +1191,26 @@ func (w *Worker) deliverTask(from *Point, task *workflow.Task, cmd workflow.Requ
 
 func (w *Worker) Recover() error {
 	w.setWfStatus(workflow.Recovering)
+	success := true
+	var wg sync.WaitGroup
 	for {
 		wfrs, err := storage.GetWorkflowRecordsRecovery(w.workflow.ID, 10)
-		fmt.Println("AAAAA---", len(wfrs))
-		success := true
-		var wg sync.WaitGroup
+		fmt.Println("Recover number ---", len(wfrs))
+
 		if err != nil {
 			w.conf.Logger.Error(err)
 			return err
 		}
 		if len(wfrs) == 0 {
-			w.setWfStatus(workflow.Running)
-			if success {
-				msg := workflow.MonitorWorkflow{
-					Cmd:        workflow.RecoverWorkflow,
-					UserID:     w.workflow.UserID,
-					WorkflowID: w.workflow.ID,
-					Data: `{
-						"status": "` + fmt.Sprint(success) + `"
-					}`,
-				}
-				js, _ := json.Marshal(msg)
-				err := w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
-				if err != nil {
-					w.conf.Logger.Error(err)
-				}
-			}
-			return nil
+			break
 		}
 		for _, e := range wfrs {
+			if e.DeliverErr == "" {
+				continue
+			}
 			wg.Add(1)
 			var deliverErr DeliverErr
+			fmt.Println("DELIVERRR---", e.DeliverErr)
 			err = json.Unmarshal([]byte(e.DeliverErr), &deliverErr)
 			if err != nil {
 				w.conf.Logger.Error(err)
@@ -1182,20 +1218,33 @@ func (w *Worker) Recover() error {
 				return err
 			}
 			w.deliverAsync(deliverErr.From, deliverErr.Receiver, deliverErr.Msg, func(crt *workflow.CmdReplyTask, err error) {
-				wg.Done()
+				defer wg.Done()
 				if err != nil {
 					w.conf.Logger.Error(err)
 					success = false
 					return
 				}
+				err = w.checkCmdReply(deliverErr.From, deliverErr.Receiver, deliverErr.Msg, crt, err, true)
+				if err != nil {
+					success = false
+					w.conf.Logger.Error(err)
+					return
+				}
 				err = storage.SetWfRecovered(e.ID)
 				if err != nil {
-					w.conf.Logger.Error(err)
+					success = false
+					return
 				}
 			})
 		}
+
 		wg.Wait()
 		if !success {
+			w.logWorkflow(
+				fmt.Sprintf("Fault recover workflow"),
+				models.WFRecordFault,
+				nil,
+			)
 			msg := workflow.MonitorWorkflow{
 				Cmd:        workflow.RecoverWorkflow,
 				UserID:     w.workflow.UserID,
@@ -1205,7 +1254,6 @@ func (w *Worker) Recover() error {
 				}`,
 			}
 			js, _ := json.Marshal(msg)
-			fmt.Println("Recover ---", msg)
 			err := w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
 			if err != nil {
 				w.conf.Logger.Error(err)
@@ -1214,6 +1262,31 @@ func (w *Worker) Recover() error {
 		}
 	}
 
+	if success {
+		w.setWfStatus(workflow.Running)
+		w.logWorkflow(
+			fmt.Sprintf("Success recover workflow"),
+			models.WFRecordScuccess,
+			nil,
+		)
+
+		msg := workflow.MonitorWorkflow{
+			Cmd:        workflow.RecoverWorkflow,
+			UserID:     w.workflow.UserID,
+			WorkflowID: w.workflow.ID,
+			Data: `{
+				"status": "` + fmt.Sprint(success) + `"
+			}`,
+		}
+		js, _ := json.Marshal(msg)
+		err := w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
+
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+	}
+
+	return nil
 }
 
 func (w *Worker) deliverBrokers(cmd workflow.RequestActionTask) error {
@@ -1229,12 +1302,19 @@ func (w *Worker) deliverBrokers(cmd workflow.RequestActionTask) error {
 				Broker:     broker,
 				WorkflowID: w.workflow.ID,
 			}
+			f, err := json.Marshal(cmd)
+
+			err = json.Unmarshal(f, &cmd)
+			if err != nil {
+				w.conf.Logger.Error(err)
+				return err
+			}
 			point := w.points[workflow.GetClientName(c)]
 			cmd.Channel = point.Name
 
 			receiver := point
 
-			err := w.deliverTaskToClient(from, receiver, &cmd)
+			err = w.deliverTaskToClient(from, receiver, &cmd)
 			if err != nil {
 				w.conf.Logger.Error(err)
 				return err
@@ -1299,7 +1379,7 @@ func (w *Worker) pushAllCmdTask(cmd workflow.RequestActionTask) error {
 			w.Sched.AddTask(task)
 		case workflow.HttpHookTask:
 
-		case workflow.HttpTask, workflow.FileTask, workflow.ScriptTask, workflow.SqlTask:
+		default:
 			fmt.Printf("[KAIROS PUSH TASK TO CLIENT] %s : task = %s, taskid= %d\n", task.Executor, task.Name, task.ID)
 
 			err := w.deliverTask(from, task, cmd)
@@ -1497,20 +1577,23 @@ func (w *Worker) logWorkflow(record string, status int, de *DeliverErr) {
 	var data string
 	var err error
 
+	isRecovered := true
 	if de != nil {
 		js, err := json.Marshal(de)
 		if err != nil {
 			w.conf.Logger.Error(err)
 			return
 		}
+		isRecovered = false
 		data = string(js)
 	}
 	err = storage.InsertWorkflowRecord(&models.WorkflowRecords{
-		CreatedAt:  helper.GetTimeNow(),
-		WorkflowID: w.workflow.ID,
-		Record:     record,
-		Status:     status,
-		DeliverErr: data,
+		CreatedAt:   helper.GetTimeNow(),
+		WorkflowID:  w.workflow.ID,
+		Record:      record,
+		Status:      status,
+		DeliverErr:  data,
+		IsRecovered: isRecovered,
 	})
 	if err != nil {
 		w.conf.Logger.Error(err)

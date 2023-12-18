@@ -1,31 +1,28 @@
 version: '1'
 name: debug
-namespace: abc
 vars:
-  PAYLOAD: |
-    {
-      "method": "GET",
-      "url": "http://example.com",
-      "headers": "[]",
-      "body": "",
-      "timeout": "30",
-      "expectCode": "200",
-      "expectBody": ""
-    }
 tasks:
-  a:
-    schedule: '@every 5s'
-    timezone: Asia/Ho_Chi_Minh
-    executor: http
-    clients:
-      - client1
-      - client2
-    success: none
+  sql:
+    chedule: "@every 4s"
+    executor: sql
+    clients: [client1]
+    wait: input
     payload: |
-      {{.PAYLOAD}} 
+      {
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": "workflow"
+      }
+
 brokers:
-  b:
-    listens:
-      - a_task
-    flows:
-      - client2_client
+  brok:
+    listens: [listen_channel]
+    flows: |
+      {{get .listen_channel ("content") | get ("msg") | .msg }}
+          {{sendsync .msg  .sql_task | .result }}
+          {{send .result .listen_channel}}
+          {{return .result}}
+      {{end}}

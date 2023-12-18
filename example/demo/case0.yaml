@@ -1,14 +1,43 @@
 version: '1'
-name: simple
-namespace: demo
+name: debug2
+vars:
+  driver: mysql
+  dbname: workflow
 tasks:
-  temp: 
-    schedule: '@every 5s'
-    timezone: Asia/Ho_Chi_Minh
-    executor: script 
+  user_sql:
+    executor: sql
+    schedule: "@every 2s"
+    clients: [client1]
+    wait: "input"
+    payload: |
+      {
+        "driver": {{.driver}},
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": {{.dbname}}
+      }
+
+  user_file:
+    schedule: "@every 6s"
+    executor: file
     clients: [client1]
     payload: |
       {
-        "command": "ls",
-        "commandArgs": "[\"-l\",\".\"]"
+        "method": "read",
+        "path": "/text.txt"
       }
+brokers:
+  brok:
+    clients: [client1]
+    listens: [user_sql_task, user_file_task]
+    flows: |
+      {{get .user_file_task ("result") | .result | get ("success") | .success}}
+        {{if .success}}
+           {{ script | .sql }}
+          {{define .mp map | put ("sql") .sql | .result}}
+            {{send .result .user_sql_task}}
+          {{end}}
+        {{end}}
+      {{end}}

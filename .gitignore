@@ -11,3 +11,4 @@ kairos-executor-sql
 kairos.boltdb
 kairos1.boltdb
 node_modules
+.kube

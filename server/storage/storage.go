@@ -494,7 +494,7 @@ func DetailWorkflow(workflowID int64, userID string) (*workflow.Workflow, error)
 	fmt.Printf("NAME --- %+v \n", names)
 	channelM, err := GetChannels(&ChannelOptions{
 		UserID: fmt.Sprint(w.UserID),
-		Names:  names,
+		Names:  names[:0],
 	})
 	if err != nil {
 		fmt.Println("err 7")
@@ -522,8 +522,8 @@ func DetailWorkflow(workflowID int64, userID string) (*workflow.Workflow, error)
 		})
 	}
 
-	fmt.Printf("CLIENTS %+v \n", w.Clients)
-	fmt.Printf("CHANNELS %+v \n", w.Channels)
+	fmt.Printf("CLIENTS WORKFLOW %+v \n", w.Clients)
+	fmt.Printf("CHANNELS WORKFLOW %+v \n", w.Channels)
 	return &w, err
 }
 
@@ -951,6 +951,22 @@ func CreateChannel(c *models.Channel) (int64, error) {
 	return c.ID, nil
 }
 
+func DeleteChannels(userID, channelName string) error {
+	query := "DELETE FROM channels WHERE name = $1 AND user_id = $2"
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	_, err = stmt.Exec(channelName, userID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func GetInfoUser(userID string) (*models.User, error) {
 	query := "SELECT id, username, email, avatar  FROM users WHERE id = $1"
 	stmt, err := db.Prepare(query)
@@ -1049,7 +1065,7 @@ func GetChannelInfoByCertID(certID int64) ([]*ChannelPermit, error) {
 	}
 	defer rows.Close()
 
-	var channelPermits []*ChannelPermit
+	channelPermits := make([]*ChannelPermit, 0)
 	for rows.Next() {
 		var permis ChannelPermit
 		err := rows.Scan(&permis.ID, &permis.Name, &permis.Role)
@@ -1402,14 +1418,14 @@ func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, 
 }
 
 func InsertWorkflowRecord(record *models.WorkflowRecords) error {
-	query := "INSERT INTO workflow_records (workflow_id, record, created_at, status, deliver_err) VALUES ($1, $2, $3, $4, $5) RETURNING id"
+	query := "INSERT INTO workflow_records (workflow_id, record, created_at, status, deliver_err, is_recovered) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
 	stmt, err := Get().Prepare(query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(record.WorkflowID, record.Record, record.CreatedAt, record.Status, record.DeliverErr).Scan(&record.ID)
+	err = stmt.QueryRow(record.WorkflowID, record.Record, record.CreatedAt, record.Status, record.DeliverErr, record.IsRecovered).Scan(&record.ID)
 	if err != nil {
 		return err
 	}

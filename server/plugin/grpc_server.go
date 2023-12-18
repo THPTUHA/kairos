@@ -15,30 +15,17 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// GRPCServiceName is the name of the service that the health check should
-// return as passing.
 const GRPCServiceName = "plugin"
 
-// DefaultGRPCServer can be used with the "GRPCServer" field for Server
-// as a default factory method to create a gRPC server with no extra options.
 func DefaultGRPCServer(opts []grpc.ServerOption) *grpc.Server {
 	return grpc.NewServer(opts...)
 }
 
-// GRPCServer is a ServerType implementation that serves plugins over
-// gRPC. This allows plugins to easily be written for other languages.
-//
-// The GRPCServer outputs a custom configuration as a base64-encoded
-// JSON structure represented by the GRPCServerConfig config structure.
 type GRPCServer struct {
 	Plugins map[string]Plugin
 	Server  func([]grpc.ServerOption) *grpc.Server
 
-	// DoneCh is the channel that is closed when this server has exited.
 	DoneCh chan struct{}
-
-	// Stdout/StderrLis are the readers for stdout/stderr that will be copied
-	// to the stdout/stderr connection that is output.
 	Stdout io.Reader
 	Stderr io.Reader
 
@@ -50,7 +37,6 @@ type GRPCServer struct {
 	logger hclog.Logger
 }
 
-// ServerProtocol impl.
 func (s *GRPCServer) Init() error {
 	var opts []grpc.ServerOption
 	s.server = s.Server(opts)
@@ -87,8 +73,6 @@ func (s *GRPCServer) Init() error {
 	return nil
 }
 
-// Stop calls Stop on the underlying grpc.Server and Close on the underlying
-// grpc.Broker if present.
 func (s *GRPCServer) Stop() {
 	s.server.Stop()
 
@@ -98,8 +82,6 @@ func (s *GRPCServer) Stop() {
 	}
 }
 
-// GracefulStop calls GracefulStop on the underlying grpc.Server and Close on
-// the underlying grpc.Broker if present.
 func (s *GRPCServer) GracefulStop() {
 	s.server.GracefulStop()
 
@@ -109,16 +91,10 @@ func (s *GRPCServer) GracefulStop() {
 	}
 }
 
-// Config is the GRPCServerConfig encoded as JSON then base64.
 func (s *GRPCServer) Config() string {
-	// Create a buffer that will contain our final contents
 	var buf bytes.Buffer
 
-	// Wrap the base64 encoding with JSON encoding.
 	if err := json.NewEncoder(&buf).Encode(s.config); err != nil {
-		// We panic since ths shouldn't happen under any scenario. We
-		// carefully control the structure being encoded here and it should
-		// always be successful.
 		panic(err)
 	}
 
@@ -133,8 +109,6 @@ func (s *GRPCServer) Serve(lis net.Listener) {
 	}
 }
 
-// GRPCServerConfig is the extra configuration passed along for consumers
-// to facilitate using GRPC plugins.
 type GRPCServerConfig struct {
 	StdoutAddr string `json:"stdout_addr"`
 	StderrAddr string `json:"stderr_addr"`

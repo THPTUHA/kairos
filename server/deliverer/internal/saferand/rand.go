@@ -5,11 +5,6 @@ import (
 	"sync"
 )
 
-// Rand is a concurrency-safe source of pseudo-random numbers. The Go
-// stdlib's math/rand.Source is not concurrency-safe. The global source in
-// math/rand would be concurrency safe (due to its internal use of
-// lockedSource), but it is prone to inter-package interference with the PRNG
-// state.
 type Rand struct {
 	mu sync.Mutex
 	r  *rand.Rand

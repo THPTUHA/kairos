@@ -1,14 +1,50 @@
 version: '1'
-name: schedule_noti_expired
-namespace: demo
+name: debug2
+vars:
+  driver: mysql
+  dbname: workflow
 tasks:
-  pubsub_noti:
-    timezone: Asia/Ho_Chi_Minh
-    executor: pubsub 
-    wait: true
+  user_sql:
+    executor: sql
+    clients: [client1]
+    wait: "input"
+    payload: |
+      {
+        "driver": {{.driver}},
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": {{.dbname}}
+      }
+
+  user_file:
+    schedule: "@every 3s"
+    executor: file
+    clients: [client2]
+    payload: |
+      {
+        "method": "read",
+        "path": "/text.txt"
+      }
 brokers:
-  pub_collect:
-    listens: [request_pub_channel]
+  brok:
+    listens: [user_file_task]
     flows: |
-      {{get .request_pub_channel ("content") | .content}}
-      {{send .content .pubsub_noti_task}}
+      {{get .user_file_task ("result") | .result}}
+        {{get .result ("success") | .success}}
+          {{get .result ("output") | .output}}
+             {{if .success}}
+              {{define .mp map | put ("sql") .output | .result}}
+                {{send .result .user_sql_task}}
+              {{end}}
+            {{end}} 
+          {{end}}
+        {{end}}
+      {{end}}
+  send:
+    listens: [user_sql_task]
+    flows: |
+      {{get .user_sql_task ("result") | .result}}
+        {{send .result .listen_channel}}
+      {{end}}

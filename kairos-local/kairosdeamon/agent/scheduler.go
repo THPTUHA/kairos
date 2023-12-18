@@ -112,7 +112,6 @@ func (s *Scheduler) Stop() context.Context {
 		log.Info().Msg("scheduler: Stopping scheduler")
 		s.started = false
 
-		// expvars
 		cronInspect.Do(func(kv expvar.KeyValue) {
 			kv.Value = nil
 		})

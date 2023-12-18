@@ -11,7 +11,6 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/THPTUHA/kairos/server/storage/models"
-	"github.com/dop251/goja"
 	"github.com/go-redis/redis"
 	"github.com/panjf2000/ants"
 	"github.com/rs/zerolog/log"
@@ -150,23 +149,7 @@ func (r *Runner) startInitWorkflow(isFirst bool) error {
 				return err
 			}
 
-			fs, err := storage.FindFunctionsByUserID(wf.UserID)
-			if err != nil {
-				return err
-			}
-			scriptCode := ""
-			for _, f := range fs {
-				scriptCode += f.Content + "\n"
-			}
-			fmt.Printf("scriptCode --- %s\n", scriptCode)
-			vm := goja.New()
-			prog, err := goja.Compile("", scriptCode, true)
-			_, err = vm.RunProgram(prog)
-			if err != nil {
-				return err
-			}
-
-			if err = wf.Compile(vm); err != nil {
+			if err = wf.Compile(nil); err != nil {
 				return err
 			}
 
