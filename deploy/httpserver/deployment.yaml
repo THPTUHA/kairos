@@ -1,21 +1,53 @@
-httpserver:
-  port: 8001
-  max_worklow_concurrent: 100000
-pubsub:
-  port: 8002
-nats:
-  url: nats://127.0.0.1:4222
+apiVersion: apps/v1
+kind: Deployment
+metadata:
   name: httpserver
-auth:
-  hmacsecret: kairosauthac
-  hmrfsecret: kairosauthrf
-  clientid: 71554845947-c59tt5rm1f3hc7rmjo18d6a4p0sce7in.apps.googleusercontent.com
-  client_secret: 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
-db: 
-  postgres:
-    username: kairos
-    password: kairos
-    uri: 127.0.0.1
-    port: 5432
-    databaseName: kairos
-    protocol: tcp
+  namespace: kairos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kairos
+  template:
+    metadata:
+      labels:
+        app: kairos
+    spec:
+      containers:
+        - name: httpserver
+          image: nexta2020/kairos
+          ports:
+            - containerPort: 8001
+            - containerPort: 8002
+          command:
+            - "kairos"
+            - "httpserver"
+            - "--file"
+            - "/config/httpserver.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: httpserver-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: kairos
+  name: httpserver
+spec:
+  selector:
+    app: httpserver
+  ports:
+    - name: port-8001
+      port: 8001
+      targetPort: 8001
+      protocol: TCP
+    - name: port-8002
+      port: 8002
+      targetPort: 8002
+      protocol: TCP
+

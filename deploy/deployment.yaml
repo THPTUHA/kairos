@@ -8,10 +8,10 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "1000m"
 spec:
   rules:
-    - host: badaosuotdoi.com
+    - host: kairos.badaosuotdoi.com
       http:
         paths:
           - path: /
             backend:
-              serviceName: school
+              serviceName: webui
               servicePort: 3500

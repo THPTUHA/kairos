@@ -9,6 +9,8 @@ nats:
 auth:
   hmacsecret: kairosauthac
   hmrfsecret: kairosauthrf
+  clientid: 71554845947-c59tt5rm1f3hc7rmjo18d6a4p0sce7in.apps.googleusercontent.com
+  client_secret: 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
 db: 
   postgres:
     username: kairos
