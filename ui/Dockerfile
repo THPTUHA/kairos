@@ -3,13 +3,11 @@ FROM node:16
 WORKDIR /usr/src/app
 
 COPY package.json .
-COPY yarn.lock .
-
-RUN yarn install
+RUN npm install
 
 COPY . .
 
-RUN yarn build
+RUN npm build
 
-EXPOSE 3000
-CMD ["yarn", "start"]
+EXPOSE 3500
+CMD ["npm", "start"]
