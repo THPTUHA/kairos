@@ -49,7 +49,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "export NODE_OPTIONS=--max-old-space-size=8192 react-scripts build",
     "prebuild-x": "del -f ../server/httpserver/routes/ui/dist",
     "postbuild": "mv ./build ../server/ui/dist",
     "test": "react-scripts test",

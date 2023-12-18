@@ -1,0 +1,19 @@
+httpserver:
+  port: 8001
+  max_worklow_concurrent: 100000
+pubsub:
+  port: 8002
+nats:
+  url: nats://nats.kairos.svc.cluster.local
+  name: httpserver
+auth:
+  hmacsecret: kairosauthac
+  hmrfsecret: kairosauthrf
+db: 
+  postgres:
+    username: kairos
+    password: kairos
+    uri: 127.0.0.1
+    port: 5432
+    databaseName: kairos
+    protocol: tcp

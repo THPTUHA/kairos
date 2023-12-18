@@ -1,0 +1,8 @@
+deliverer:
+  port: 8003
+nats:
+  url: nats://nats.kairos.svc.cluster.local
+  name: deliverer
+auth:
+  hmacsecret: kairosauthac
+  hmrfsecret: kairosauthrf
