@@ -3,7 +3,7 @@ services:
   webui:
     build: .
     ports:
-      - "3000:3000"
+      - "3456:3000"
     environment:
       - REACT_APP_HTTPSERVER=http://kairos.badaosuotdoi.com
-      - REACT_APP_BASE_URL=http://localhost:3000/
+      - REACT_APP_BASE_URL=http://kairosweb.badaosuotdoi.com
