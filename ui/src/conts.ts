@@ -50,6 +50,13 @@ const BrokerPointColor = ` text-[#FFA500] `;
 const ChannelPointColor = `text-white`;
 const TaskPointColor = ` text-pink-600 `;
 
+const ViewRealtime= 1;
+const ViewHistory = 2;
+const ViewTimeLine = 3;
+
+const SuccessCode = [SuccessSetTask, ScuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
+const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask]
+
 export {
   ColorGreen,
   ColorRed,
@@ -99,4 +106,12 @@ export {
   BrokerPointColor,
   ChannelPointColor,
   TaskPointColor,
+
+  ViewRealtime,
+  ViewHistory,
+  ViewTimeLine,
+
+  SuccessCode,
+  FailureCode,
 }
+

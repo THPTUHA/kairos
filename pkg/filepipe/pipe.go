@@ -14,9 +14,6 @@ func (p pipe) Context() context.Context {
 func (p pipe) Files() <-chan File {
 	return p.files
 }
-
-// Pipes the current Channel to the give list of Stages and returns the
-// last jobs otput pipe.
 func (p pipe) Pipe(stages ...Stage) Pipe {
 	switch len(stages) {
 	case 0:
@@ -28,7 +25,6 @@ func (p pipe) Pipe(stages ...Stage) Pipe {
 	}
 }
 
-// Waits for the end of channel and closes all the files.
 func (p pipe) Wait() error {
 	var err error
 	for f := range p.files {
@@ -40,7 +36,6 @@ func (p pipe) Wait() error {
 	return err
 }
 
-// This is a combination of p.Pipe(....).Wait()
 func (p pipe) Then(stages ...Stage) error {
 	return p.Pipe(stages...).Wait()
 }

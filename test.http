@@ -7,7 +7,7 @@ Content-Type: application/json
 }
 
 ###
-GET http://localhost:8001/apis/v1/login
+GET http://badaosuotdoi.com/apis/v1/login
 Content-Type: application/json
 
 ###
@@ -105,9 +105,9 @@ Content-Type: application/json
     "user": "12345"
   },
   "executor": "script",
-  "executor_config": {
+  "executor_config":  {
     "command": "/bin/sh",
-    "commandArgs": "[\"-c \", \" kubectl rollout restart deployment backend-service-cms\"]"
+    "commandArgs": "[\"-c\", \" docker buildx build  --platform linux/amd64 -t nexta2020/shopok /Users/nghiabadao/Code/demo/shopok \"]"
   }
 } 
 
@@ -251,7 +251,7 @@ Content-Type: application/json
 DELETE http://localhost:8080/v1/task/327/delete
 Content-Type: application/json
 ###
-DELETE http://localhost:8080/v1/broker/81/delete
+DELETE http://localhost:8080/v1/broker/306/delete
 Content-Type: application/json
 
 ###
@@ -320,7 +320,7 @@ GET http://localhost:3111/apis/login
 POST http://localhost:3111/apis/apply-collection
 Content-Type: application/json
 ###
-GET http://localhost:8001/apis/v1/service/workflow/list
+GET http://badaosuotdoi.com/apis/v1/service/workflow/list
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3NfdXVpZCI6IjRjZjIwMzY2LThjMjYtNDY0MS05NzI3LTc5YTBkNDUyYmY3YSIsImV4cCI6MTcwMTg1MjYyNCwidXNlcl9pZCI6IjEiLCJ1c2VyX25hbWUiOiJtaW5obmdoaWFiYWRhbzEwMDJAZ21haWwuY29tIn0.rNuSeu37JTQeppqKR1oaUyNsqXy2BrCom2cTR4o_dgw
 
@@ -448,8 +448,21 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2I
 }
 
 ###
-POST https://webhook.site/e968b886-1ac0-4549-b584-6d38fe5dac09
+GET http://localhost:8001/apis/v1/service/graph/timeline
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+###
+GET http://localhost:8001/apis/v1/service/graph/group?group=kairos-200-1703325003
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
+
+###
+POST http://localhost:8001/apis/v1/service/graph/part
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
 
 {
-  "hello":"OK"
+  "parts": ["part-201-1703353905"],
+  "parents": ["part-201-1703353905"]
 }

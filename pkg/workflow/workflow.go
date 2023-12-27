@@ -695,7 +695,13 @@ type CmdReplyTask struct {
 	Content    *Content           `json:"content,omitempty"`
 	Result     *Result            `json:"result,omitempty"`
 	SendAt     int64              `json:"send_at"`
-	RunCount   int64              `json:"run_coun,omitemptyt"`
+	RunCount   int64              `json:"run_coun,omitempty"`
+	Group      string             `json:"group,omitempty"`
+	Start      bool               `json:"start,omitempty"`
+	Parent     string             `json:"parent,omitempty"`
+	Part       string             `json:"part,omitempty"`
+	BeginPart  bool               `json:"begin_part,omitempty"`
+	FinishPart bool               `json:"finish_part,omitempty"`
 }
 
 type CmdTask struct {
@@ -711,6 +717,9 @@ type CmdTask struct {
 	Offset     int               `json:"offset,omitempty"`
 	RunCount   int64             `json:"run_coun,omitemptyt"`
 	Broker     *Broker           `json:"broker,omitempty"`
+	Group      string            `json:"group,omitempty"`
+	Parent     string            `json:"parent,omitempty"`
+	Part       string            `json:"part,omitempty"`
 }
 
 const (

@@ -899,7 +899,7 @@ func (*Store) listTxFunc(prefix string, kvs *[]kv, found *bool, opts *ExecutionO
 	}
 }
 
-func (s *Store) computeStatus(taskID string, exGroup int64, tx *buntdb.Tx) (string, error) {
+func (s *Store) computeStatus(taskID string, exGroup string, tx *buntdb.Tx) (string, error) {
 	kvs := []kv{}
 	found := false
 	prefix := fmt.Sprintf("%s:%s:", executionsPrefix, taskID)

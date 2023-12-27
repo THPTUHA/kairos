@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner
+  namespace: kairos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: runner
+  template:
+    metadata:
+      labels:
+        app: runner
+    spec:
+      containers:
+        - name: runner
+          image: nexta2020/kairos
+          ports:
+            - containerPort: 8005
+          command:
+            - "kairos"
+            - "runner"
+            - "--file"
+            - "/config/runner.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: runner-config

@@ -127,7 +127,6 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			if e != nil {
 				return nil, e
 			}
-			fmt.Println("FUCK IF", mp[exp.Params[1]], mp[exp.Params[2]])
 			r, err := CompareStringsAndNumbers(mp[exp.Params[1]], mp[exp.Params[2]], EQ_EXP)
 			if err != nil {
 				return nil, err

@@ -1,5 +1,39 @@
 import requests from "./requests";
 
+export interface MessageFlow {
+    id: number;
+    status: number;
+    sender_id: number;
+    sender_type: number;
+    sender_name: string;
+    receiver_id: number;
+    receiver_type: number;
+    receiver_name: string;
+    workflow_id: number;
+    message: string;
+    attempt: number;
+    flow: number;
+    created_at: number;
+    deliver_id: number;
+    request_size: number;
+    response_size: number;
+    cmd: number;
+    workflow_name: string;
+    start: boolean;
+    group: string;
+    task_id: number;
+    send_at: number;
+    receive_at: number;
+    task_name: string;
+    part: string;
+    parent: string;
+    begin_part: boolean;
+    finish_part: boolean;
+    outobject: any;
+    broker_group: string;
+    tracking: string;
+  }
+
 export const GraphService = {
     get({ workflow_ids }:
         { workflow_ids: number[] }) {
@@ -19,4 +53,27 @@ export const GraphService = {
             })
             .then(res => res.body.data as any);
     },
+    getTimeLine() {
+        return requests
+            .get(`apis/v1/service/graph/timeline`)
+            .send()
+            .then(res => res.body.data as MessageFlow[]);
+    },
+    getGroupID(group: string) {
+        return requests
+            .get(`apis/v1/service/graph/group?group=${group}`)
+            .send()
+            .then(res => res.body.data as MessageFlow[]);
+    },
+    getParts(parts: string[], parents: string[]){
+        return requests
+            .post(`apis/v1/service/graph/part`)
+            .send({parts, parents})
+            .then(res => (
+                {
+                    inputs: res.body.inputs as MessageFlow[],
+                    outputs: res.body.outputs as MessageFlow[],
+                }
+            ));
+    }
 }

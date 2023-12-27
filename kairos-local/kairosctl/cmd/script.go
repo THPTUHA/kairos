@@ -35,8 +35,8 @@ func init() {
 	kairosctlCmd.AddCommand(scriptCmd)
 	scriptCmd.PersistentFlags().StringVar(&scriptConfig.Path, "path", "", "Path file script")
 	scriptCmd.PersistentFlags().StringVar(&scriptConfig.Name, "name", "", "Name script")
-	scriptCmd.PersistentFlags().BoolVar(&scriptConfig.List, "list", false, "Name script")
-	scriptCmd.PersistentFlags().BoolVar(&scriptConfig.Delete, "delete", false, "Path file script")
+	scriptCmd.PersistentFlags().BoolVar(&scriptConfig.List, "list", false, "List script")
+	scriptCmd.PersistentFlags().BoolVar(&scriptConfig.Delete, "delete", false, "Delete script")
 	scriptCmd.PersistentFlags().BoolVar(&scriptConfig.Show, "show", false, "Show file script")
 	scriptCmd.PersistentFlags().StringVar(&scriptConfig.Endpoint, "endpoint", "http://localhost:8080", "Endpoint")
 }
@@ -51,7 +51,6 @@ func scriptRun() error {
 			return err
 		}
 		filePath := filepath.Join(dir, scriptConfig.Path)
-		fmt.Println("PATH--- ", filePath)
 
 		file, err := os.Open(filePath)
 		if err != nil {

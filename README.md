@@ -124,3 +124,6 @@ protoc  --go_out=.  --go_opt=paths=source_relative \
 Pubsub:
   
   kubectl create configmap httpserver-config --from-file=httpserver.yaml -n kairos
+kubectl exec -i postgres-5dfbf7c866-4tstv -- psql -U kairos -d kairos < /server/storage/migration/000001_kairos.up.sql
+
+kubectl get pods --all-namespaces | awk '$4=="Evicted" {print "kubectl delete pod --namespace=" $1 " " $2}' | sh

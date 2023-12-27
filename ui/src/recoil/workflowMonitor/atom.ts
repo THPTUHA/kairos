@@ -1,6 +1,6 @@
 import { atom } from "recoil";
 
-const workflowMonitorAtom = atom<any>({
+const workflowMonitorAtom = atom<any|null>({
   key: "workflowMonitorAtom",
   default: null
 });

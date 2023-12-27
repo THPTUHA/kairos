@@ -16,8 +16,8 @@ import { Delivering, Pause, Pending, Running, Destroying, Recovering, RecoverWor
 import { useRecoilState, useRecoilValue } from "recoil";
 import workflowMonitorAtom from "../../recoil/workflowMonitor/atom";
 import Modal from "react-responsive-modal";
-import { FaPause, FaPlay } from "react-icons/fa6";
 import { RiDeviceRecoverLine } from "react-icons/ri";
+import { useNavigate } from "react-router-dom";
 
 const locale = {
     emptyText: <span>Empty workflow</span>,
@@ -38,6 +38,7 @@ const WorkflowListPage = () => {
     const [openLog, setOpenLog] = useState(0)
 
     const [wfCmd, setWfCmd] = useRecoilState(workflowMonitorAtom)
+    const nav = useNavigate()
 
     const onWfYamlClose = () => {
         setShowYamlEditor(false)
@@ -98,6 +99,13 @@ const WorkflowListPage = () => {
         {
             title: 'Name',
             dataIndex: 'name',
+            render: (value: string)=>{
+                return <div 
+                className="cursor-pointer"
+                onClick={()=>{
+                    nav("/dashboard?view=timeline")
+                }}>{value}</div>
+            }
         },
         {
             title: 'Namespace',
@@ -184,7 +192,6 @@ const WorkflowListPage = () => {
 
     useEffect(() => {
         if (wfCmd) {
-            console.log({ wfCmd })
             if (wfCmd.cmd === SetStatusWorkflow) {
                 for (const w of workflows) {
                     if (w.id == wfCmd.workflow_id) {
@@ -210,7 +217,6 @@ const WorkflowListPage = () => {
         }
     }, [wfCmd])
 
-    console.log("Value", wflog.value)
     return (
         <div>
             <div className="flex">
@@ -275,7 +281,6 @@ const WorkflowListPage = () => {
                     }
                 </div>
             </Modal>
-
             <Modal
                 open={openLog > 0}
                 onClose={() => { setOpenLog(0) }}
@@ -294,7 +299,6 @@ const WorkflowListPage = () => {
                                 </div>
                             ))}</div>
                     }
-
                 </div>
             </Modal>
         </div>

@@ -8,7 +8,7 @@ tasks:
     payload: |
       {
         "command": "/bin/sh",
-        "commandArgs": "[\"-c\", \" docker build -t next2020/backend-cms /Users/nghiabadao/Code/project/backend_cms \"]"
+        "commandArgs": "[\"-c\", \" docker build -t dockeruser/backend-cms /Users/nghiabadao/Code/project/backend_cms \"]"
       }
   push_image:
     executor: script
@@ -17,7 +17,7 @@ tasks:
     payload: |
       {
         "command": "/bin/sh",
-        "commandArgs": "[\"-c\", \"docker push next2020/backend-cms \"]"
+        "commandArgs": "[\"-c\", \"docker push dockeruser/backend-cms \"]"
       }
   deploy:
     executor: k8sdeploy
@@ -35,7 +35,6 @@ tasks:
     payload: |
       {
       }
-
 brokers:
   build_image:
     listens: [build_image_task]
@@ -51,6 +50,7 @@ brokers:
           {{end}}
         {{end}}
       {{end}}
+  
   push_image:
     listens: [push_image_task]
     flows: |
@@ -65,6 +65,7 @@ brokers:
           {{end}}
         {{end}}
       {{end}}
+
   deploy:
     listens: [deploy_task]
     flows: |
@@ -79,12 +80,14 @@ brokers:
           {{end}}
         {{end}}
       {{end}}
+
   log:
     listens: [listen_channel]
     flows: |
       {{get .listen_channel ("content") | get ("msg") | .msg }}
         {{send .msg .logs_task}}
       {{end}}
+      
   show:
     listens:  [logs_task]
     flows: |

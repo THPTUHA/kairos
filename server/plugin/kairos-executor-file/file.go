@@ -41,7 +41,11 @@ func (s *File) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) (
 	method := args.Config["method"]
 	input := args.Config["input"]
 	fmt.Println("Wating....")
-	time.Sleep(10 * time.Second)
+	for i := 0; i < 100; i++ {
+		cb.Update([]byte(fmt.Sprintf("Update %d", i)), true)
+		time.Sleep(3 * time.Second)
+	}
+
 	fmt.Println("Finish...")
 	if input != "" {
 		var mp map[string]interface{}

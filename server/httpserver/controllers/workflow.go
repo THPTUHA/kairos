@@ -209,10 +209,15 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 	// 	return nil
 	// })
 
-	events.Get() <- &events.WfEvent{
+	var e = events.WfEvent{
 		Cmd:      events.WfCmdCreate,
 		Workflow: wf,
 	}
+	b, err := json.Marshal(e)
+	if err != nil {
+		ctr.Log.Error(err)
+	}
+	ctr.nats.Publish(messaging.RUNNER_HTTP, b)
 }
 
 func (ctr *Controller) DropWorkflow(c *gin.Context) {
@@ -235,14 +240,16 @@ func (ctr *Controller) DropWorkflow(c *gin.Context) {
 	var wf workflow.Workflow
 	wf.ID = wid
 
-	events.Get() <- &events.WfEvent{
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Droping workflow",
+	})
+
+	var e = events.WfEvent{
 		Cmd:      events.WfCmdDelete,
 		Workflow: &wf,
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Droping workflow",
-	})
+	ctr.publishRunner(&e)
 }
 
 func (ctr *Controller) ListWorkflow(c *gin.Context) {
@@ -254,7 +261,40 @@ func (ctr *Controller) ListWorkflow(c *gin.Context) {
 		})
 		return
 	}
-	ctr.wfRunner.SetWfStatus(wfs)
+
+	ids := make([]int64, len(wfs))
+	for idx, w := range wfs {
+		ids[idx] = w.ID
+	}
+
+	e := events.WfEvent{
+		Cmd:   events.WfCmdInfo,
+		WfIDs: ids,
+	}
+
+	b, err := json.Marshal(e)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	res, err := ctr.nats.Request(messaging.RUNNER_HTTP, b, 10*time.Second)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	err = json.Unmarshal(res.Data, &wfs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "List workflow",
@@ -287,10 +327,21 @@ func (ctr *Controller) StopWorkflow(c *gin.Context) {
 		"message": "Droping workflow",
 	})
 
-	events.Get() <- &events.WfEvent{
+	var event = events.WfEvent{
 		Cmd:      events.WfCmdDelete,
 		Workflow: &wf,
 	}
+	ctr.publishRunner(&event)
+}
+
+func (ctr *Controller) publishRunner(event *events.WfEvent) {
+	e, err := json.Marshal(event)
+	if err != nil {
+		ctr.Log.Error(err)
+		return
+	}
+
+	ctr.nats.Publish(messaging.RUNNER_HTTP, e)
 }
 
 func (ctr *Controller) StartWorkflow(c *gin.Context) {
@@ -318,10 +369,6 @@ func (ctr *Controller) StartWorkflow(c *gin.Context) {
 		"message": "Starting workflow",
 	})
 
-	events.Get() <- &events.WfEvent{
-		Cmd:      events.WfCmdStart,
-		Workflow: &wf,
-	}
 }
 
 func (ctr *Controller) DetailWorkflow(c *gin.Context) {
@@ -444,12 +491,13 @@ func (ctr *Controller) RecoverWorkflow(c *gin.Context) {
 	var wf workflow.Workflow
 	wf.ID = wid
 
-	events.Get() <- &events.WfEvent{
-		Cmd:      events.WfCmdRecover,
-		Workflow: &wf,
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Recover workflow",
 	})
+
+	var e = events.WfEvent{
+		Cmd:      events.WfCmdRecover,
+		Workflow: &wf,
+	}
+	ctr.publishRunner(&e)
 }

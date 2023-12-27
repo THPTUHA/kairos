@@ -1,38 +1,11 @@
 import { Google } from '@mui/icons-material';
-import { Layout, Menu } from 'antd';
-import { Content, Footer, Header } from 'antd/es/layout/layout';
+import { Layout } from 'antd';
+import { Content, Header } from 'antd/es/layout/layout';
 import { Link } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import userInfoAtom from '../recoil/userInfo/atom';
 import { LuWorkflow } from "react-icons/lu";
-// function test(){
-//     const kairos = new Kairos('ws://localhost:8000/connection/websocket');
 
-//     kairos.on('connected', function(ctx){
-//        console.log("connected")
-//     });
-
-//     kairos.on('connecting', function(ctx){
-//         console.log("Connect ting")
-//     });
-
-//     kairos.on('disconnected', function(ctx){
-//        console.log("disconnected")
-//     });
-
-//     const sub = kairos.newSubscription("chat:index"); 
-//     sub.on('publication', function(ctx) {
-//         console.log(ctx.data)
-//     })
-//     sub.subscribe();
-
-//     kairos.connect();
-//     if (sub.state == SubscriptionState.Subscribed){
-//         sub.publish({"hello":"baby"})
-//     }
-// }
-
-// test()
 const HomePage = () => {
     const userInfo = useRecoilValue(userInfoAtom)
 

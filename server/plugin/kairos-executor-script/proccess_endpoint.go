@@ -10,18 +10,23 @@ import (
 
 type Output struct {
 	data []byte
-	err  error
+}
+
+type Error struct {
+	data []byte
 }
 type ProcessEndpoint struct {
 	process   *LaunchedProcess
 	closetime time.Duration
 	output    chan *Output
+	err       chan *Error
 }
 
 func NewProcessEndpoint(process *LaunchedProcess) *ProcessEndpoint {
 	return &ProcessEndpoint{
 		process: process,
 		output:  make(chan *Output),
+		err:     make(chan *Error),
 	}
 }
 
@@ -81,6 +86,10 @@ func (pe *ProcessEndpoint) Output() chan *Output {
 	return pe.output
 }
 
+func (pe *ProcessEndpoint) Error() chan *Error {
+	return pe.err
+}
+
 func (pe *ProcessEndpoint) Send(msg []byte) bool {
 	pe.process.stdin.Write(msg)
 	return true
@@ -88,7 +97,7 @@ func (pe *ProcessEndpoint) Send(msg []byte) bool {
 
 func (pe *ProcessEndpoint) StartReading() {
 	go pe.log_stderr()
-	go pe.process_binout()
+	go pe.process_txtout()
 }
 
 func (pe *ProcessEndpoint) process_txtout() {
@@ -103,13 +112,12 @@ func (pe *ProcessEndpoint) process_txtout() {
 			}
 			pe.output <- &Output{
 				data: trimEOL(buf),
-				err:  nil,
 			}
-			break
+			close(pe.output)
+			return
 		}
 		pe.output <- &Output{
 			data: trimEOL(buf),
-			err:  nil,
 		}
 	}
 }
@@ -126,13 +134,12 @@ func (pe *ProcessEndpoint) process_binout() {
 			}
 			pe.output <- &Output{
 				data: trimEOL(buf),
-				err:  nil,
 			}
-			break
+			close(pe.output)
+			return
 		}
 		pe.output <- &Output{
 			data: append(make([]byte, 0, n), buf[:n]...),
-			err:  nil,
 		}
 	}
 }
@@ -141,6 +148,7 @@ func (pe *ProcessEndpoint) log_stderr() {
 	bufstderr := bufio.NewReader(pe.process.stderr)
 	for {
 		buf, err := bufstderr.ReadSlice('\n')
+		defer close(pe.err)
 		if err != nil {
 			if err != io.EOF {
 				fmt.Printf("process: Unexpected error while reading STDERR from process: %s", err)
@@ -149,9 +157,8 @@ func (pe *ProcessEndpoint) log_stderr() {
 			}
 			break
 		}
-		pe.output <- &Output{
-			data: nil,
-			err:  fmt.Errorf(string(trimEOL(buf))),
+		pe.err <- &Error{
+			data: buf,
 		}
 		// fmt.Printf("stderr: %s", string(trimEOL(buf)))
 	}

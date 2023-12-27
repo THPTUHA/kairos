@@ -202,9 +202,15 @@ func (a *Agent) Stop() error {
 func (a *Agent) handleTaskEvent() {
 	for te := range a.taskCh {
 		re := workflow.CmdReplyTask{
-			DeliverID: te.DeliverID,
-			Channel:   te.Channel,
+			DeliverID:  te.DeliverID,
+			Group:      te.Group,
+			Channel:    te.Channel,
+			FinishPart: true,
+			Part:       te.Part,
+			Parent:     te.Parent,
 		}
+		// TODO save te
+
 		if te.Task != nil {
 			re.WorkflowID = te.Task.WorkflowID
 			re.TaskID = te.Task.ID
@@ -256,6 +262,7 @@ func (a *Agent) handleTaskEvent() {
 			fmt.Printf("[AGENT HANLE Input TaskCmd ] %+v\n", te)
 			re.Cmd = workflow.ReplyInputTaskCmd
 			re.Status = workflow.SuccessReceiveInputTaskCmd
+			re.TaskID = te.Task.ID
 			go a.hub.Publish(&re)
 			task, err := a.Store.GetTask(fmt.Sprint(te.Task.ID), nil)
 			if err != nil {
@@ -317,7 +324,6 @@ func (a *Agent) handleTaskEvent() {
 					} else {
 						te.Broker.Template.FuncCalls = a.Script
 						Funcs := te.Broker.Template.FuncNotFound
-						fmt.Printf("BROKER TEMp---- %+v\n", Funcs)
 
 						if len(Funcs) > 0 {
 							for _, f := range Funcs {
@@ -448,7 +454,7 @@ func (a *Agent) setupBroker(b *workflow.Broker) error {
 					re.Task = &workflow.Task{
 						Input: string(input),
 					}
-					ex := NewExecution(t.ID)
+					ex := NewExecution(t.ID, t.GetGroup())
 					go a.Run(t, ex, &re)
 				}
 				input, err := json.Marshal(output)
@@ -774,7 +780,6 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 	}
 
 	if input != "" {
-		fmt.Printf("INPUT TASK CCC %+v \n", input)
 		var mp map[string]interface{}
 		err := json.Unmarshal([]byte(input), &mp)
 		if err != nil {
@@ -816,8 +821,15 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 			task:      task,
 			input:     make(chan []byte),
 			buffer: bufcb.NewBuffer(maxBufSize, func(b []byte) error {
-				execution.FinishedAt = time.Now()
 				execution.Output = strings.TrimRight(string(b), "\u0000")
+				t := task.ToCmdReplyTask()
+				if execution.Offset == 0 {
+					t.BeginPart = true
+					execution.Part = task.GetPart()
+					if re != nil {
+						execution.Parent = re.Part
+					}
+				}
 				execution.Offset++
 				fmt.Println("BUFFER OUT : ", string(b))
 				err := agent.SaveExecutorResult(execution)
@@ -826,10 +838,12 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 					return err
 				}
 
-				t := task.ToCmdReplyTask()
 				t.Cmd = workflow.ReplyOutputTaskCmd
 				t.Result = execution.GetResult()
+				t.Part = execution.Part
+				t.Parent = execution.Parent
 				if re != nil {
+					t.Group = re.Group
 					t.RunCount = re.RunCount
 				}
 				time.Sleep(time.Second)
@@ -848,6 +862,8 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		if err == nil && out.Error != "" {
 			err = errors.New(out.Error)
 		}
+		execution.FinishedAt = time.Now()
+		fmt.Println("FINISH TASK----", out)
 		if err != nil {
 			agent.logger.WithError(err).WithField("task", task.Name).WithField("plugin", executor).Error("agent: command error output")
 			execution.Success = false
@@ -856,7 +872,7 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 			execution.Success = true
 		}
 
-		if out != nil && out.Output != nil {
+		if out != nil {
 			_, _ = helper.buffer.Write(out.Output)
 			helper.buffer.Flush()
 		}
@@ -988,7 +1004,6 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 		execution.FinishedAt = time.Now()
 		execution.Output = helper.circbuf.String()
 		execution.Offset++
-		fmt.Println(" BUFFER OUT SYNC---", execution.Output)
 		err = agent.SaveExecutorResult(execution)
 		if err != nil {
 			agent.logger.WithField("executor", "set").Error(err)

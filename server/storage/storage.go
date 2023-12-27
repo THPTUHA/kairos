@@ -726,67 +726,49 @@ func GetVars(q *VarsQuery) ([]*models.Vars, error) {
 }
 
 func LogMessageFlow(mf *models.MessageFlow) (int64, error) {
-	if mf.Flow == models.DeliverFlow {
-		var stauts int
-		err := db.QueryRow("SELECT id,status FROM message_flows WHERE workflow_id = $1 AND deliver_id = $2 AND created_at = $3",
-			mf.WorkflowID, mf.DeliverID, mf.CreatedAt).Scan(&mf.ID, &stauts)
-		if err == sql.ErrNoRows {
-			return InsertMessageFlow(mf)
-		}
-		if err == nil && stauts == workflow.Delivering {
-			if _, err = db.Exec("UPDATE message_flows SET status=$1,elapsed_time=$2,response_size=$3  WHERE id=$4",
-				mf.Status, mf.ElapsedTime, mf.ResponseSize, mf.ID); err != nil {
-				return mf.ID, err
-			}
+	// if mf.Flow == models.DeliverFlow {
+	// 	var stauts int
+	// 	err := db.QueryRow("SELECT id,status FROM message_flows WHERE workflow_id = $1 AND deliver_id = $2 AND created_at = $3",
+	// 		mf.WorkflowID, mf.DeliverID, mf.CreatedAt).Scan(&mf.ID, &stauts)
+	// 	if err == sql.ErrNoRows {
+	// 		return InsertMessageFlow(mf)
+	// 	}
+	// 	if err == nil && stauts == workflow.Delivering {
+	// 		if _, err = db.Exec("UPDATE message_flows SET status=$1,elapsed_time=$2,response_size=$3  WHERE id=$4",
+	// 			mf.Status, mf.ElapsedTime, mf.ResponseSize, mf.ID); err != nil {
+	// 			return mf.ID, err
+	// 		}
 
-		}
-		return mf.ID, err
-	}
+	// 	}
+	// 	return mf.ID, err
+	// }
 	return InsertMessageFlow(mf)
 }
 
 func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
-	query := `
-		INSERT INTO message_flows 
-		(	status, 
-			sender_id, 
-			sender_type, 
-			receiver_id, 
-			receiver_type, 
-			workflow_id, 
-			message,
-			attemp, 
-			created_at, 
-			flow,
-			deliver_id,
-			elapsed_time,
-			request_size,
-			response_size,
-			sender_name,
-			receiver_name,
-			cmd
-		 )
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,$12,$13,$14, $15, $16,$17)
-		RETURNING id`
+	stmt, err := db.Prepare(`
+		INSERT INTO message_flows (
+			status, sender_id, sender_type, sender_name, receiver_id,
+			receiver_type, receiver_name, workflow_id, message, attempt,
+			created_at, flow, deliver_id, request_size, response_size,
+			cmd, start, "group", task_id, send_at, receive_at, task_name,
+			part, parent, begin_part, finish_part, tracking, broker_group
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+		) RETURNING id
+	`)
+	if err != nil {
+		return -1, err
+	}
+	defer stmt.Close()
 
-	err := db.QueryRow(query,
-		mf.Status,
-		mf.SenderID,
-		mf.SenderType,
-		mf.ReceiverID,
-		mf.ReceiverType,
-		mf.WorkflowID,
-		mf.Message,
-		mf.Attemp,
-		mf.CreatedAt,
-		mf.Flow,
-		mf.DeliverID,
-		mf.ElapsedTime,
-		mf.RequestSize,
-		mf.ResponseSize,
-		mf.SenderName,
-		mf.ReceiverName,
-		mf.Cmd,
+	// Execute the SQL statement and retrieve the generated ID
+	err = stmt.QueryRow(
+		mf.Status, mf.SenderID, mf.SenderType, mf.SenderName, mf.ReceiverID,
+		mf.ReceiverType, mf.ReceiverName, mf.WorkflowID, mf.Message, mf.Attempt,
+		mf.CreatedAt, mf.Flow, mf.DeliverID, mf.RequestSize, mf.ResponseSize,
+		mf.Cmd, mf.Start, mf.Group, mf.TaskID, mf.SendAt, mf.ReceiveAt, mf.TaskName,
+		mf.Part, mf.Parent, mf.BeginPart, mf.FinishPart, mf.Tracking, mf.BrokerGroup,
 	).Scan(&mf.ID)
 	if err != nil {
 		return -1, err
@@ -1267,6 +1249,209 @@ func countSenderReceiverPairs(wfIDs string) ([]*GraphEdge, error) {
 	return edges, nil
 }
 
+func GetMessageFlowsByUserID(userID int64) ([]*models.MessageFlow, error) {
+	rows, err := db.Query(`
+		SELECT
+			mf.id,  mf.sender_id, mf.sender_type, mf.sender_name,
+			mf.receiver_id, mf.receiver_type, mf.receiver_name, mf.workflow_id,
+			mf.attempt, mf.created_at, mf.flow, mf.deliver_id, mf.cmd, mf.group, w.name,
+			mf.part, mf.parent, mf.begin_part, mf.finish_part
+		FROM
+			message_flows mf
+		JOIN
+			workflows w ON mf.workflow_id = w.id
+		WHERE
+			w.user_id = $1 AND mf.start = true
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messageFlows []*models.MessageFlow
+
+	for rows.Next() {
+		var mf models.MessageFlow
+		err := rows.Scan(
+			&mf.ID, &mf.SenderID, &mf.SenderType, &mf.SenderName,
+			&mf.ReceiverID, &mf.ReceiverType, &mf.ReceiverName, &mf.WorkflowID,
+			&mf.Attempt, &mf.CreatedAt, &mf.Flow, &mf.DeliverID,
+			&mf.Cmd, &mf.Group, &mf.WorkflowName,
+			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart,
+		)
+		if err != nil {
+			return nil, err
+		}
+		messageFlows = append(messageFlows, &mf)
+	}
+
+	return messageFlows, nil
+}
+
+func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
+	rows, err := db.Query(`
+		WITH flow_tops as (
+			SELECT
+				max(id) as id
+			FROM
+				message_flows
+			WHERE
+				"group" = $1
+			GROUP BY sender_id, sender_type, receiver_id, receiver_type, task_id, part
+		) SELECT mf.id, status, sender_id, sender_type, sender_name, receiver_id,
+			receiver_type, receiver_name, workflow_id, message, attempt,
+			created_at, flow, deliver_id, request_size, response_size,
+			cmd, start, "group", task_id, send_at, receive_at, task_name,
+			mf.part, mf.parent, mf.begin_part, mf.finish_part
+		FROM message_flows mf, flow_tops ft
+		WHERE mf.id = ft.id
+		ORDER BY mf.id ASC
+	`, groupID)
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var messageFlows []*models.MessageFlow
+
+	for rows.Next() {
+		var mf models.MessageFlow
+		err := rows.Scan(
+			&mf.ID, &mf.Status, &mf.SenderID, &mf.SenderType, &mf.SenderName, &mf.ReceiverID,
+			&mf.ReceiverType, &mf.ReceiverName, &mf.WorkflowID, &mf.Message, &mf.Attempt,
+			&mf.CreatedAt, &mf.Flow, &mf.DeliverID, &mf.RequestSize, &mf.ResponseSize,
+			&mf.Cmd, &mf.Start, &mf.Group, &mf.TaskID, &mf.SendAt, &mf.ReceiveAt, &mf.TaskName,
+			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart,
+		)
+		if err != nil {
+			return nil, err
+		}
+		messageFlows = append(messageFlows, &mf)
+	}
+
+	return messageFlows, nil
+}
+
+func GetMessageFlowsByPart(parts []any) ([]*models.MessageFlow, error) {
+
+	placeholders := make([]string, len(parts))
+	for i := range parts {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	partStr := strings.Join(placeholders, ",")
+
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part IN (%s) ORDER BY ID DESC LIMIT 20`, partStr)
+	rows, err := db.Query(query, parts...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	messageFlows := make([]*models.MessageFlow, 0)
+
+	for rows.Next() {
+		var mf models.MessageFlow
+		err := rows.Scan(
+			&mf.ID,
+			&mf.Status,
+			&mf.SenderID,
+			&mf.SenderType,
+			&mf.SenderName,
+			&mf.ReceiverID,
+			&mf.ReceiverType,
+			&mf.ReceiverName,
+			&mf.WorkflowID,
+			&mf.Message,
+			&mf.Attempt,
+			&mf.CreatedAt,
+			&mf.Flow,
+			&mf.DeliverID,
+			&mf.RequestSize,
+			&mf.ResponseSize,
+			&mf.Cmd,
+			&mf.Start,
+			&mf.Group,
+			&mf.TaskID,
+			&mf.SendAt,
+			&mf.ReceiveAt,
+			&mf.TaskName,
+			&mf.Part,
+			&mf.Parent,
+			&mf.BeginPart,
+			&mf.FinishPart,
+			&mf.Tracking,
+			&mf.BrokerGroup,
+		)
+		if err != nil {
+			return nil, err
+		}
+		messageFlows = append(messageFlows, &mf)
+	}
+
+	return messageFlows, nil
+}
+
+func GetMessageFlowsByParent(parents []any) ([]*models.MessageFlow, error) {
+
+	placeholdersp := make([]string, len(parents))
+
+	for i := range parents {
+		placeholdersp[i] = fmt.Sprintf("$%d", i+1)
+	}
+	parentStr := strings.Join(placeholdersp, ",")
+
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE parent IN (%s) ORDER BY ID DESC LIMIT 20`, parentStr)
+	rows, err := db.Query(query, parents...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	messageFlows := make([]*models.MessageFlow, 0)
+
+	for rows.Next() {
+		var mf models.MessageFlow
+		err := rows.Scan(
+			&mf.ID,
+			&mf.Status,
+			&mf.SenderID,
+			&mf.SenderType,
+			&mf.SenderName,
+			&mf.ReceiverID,
+			&mf.ReceiverType,
+			&mf.ReceiverName,
+			&mf.WorkflowID,
+			&mf.Message,
+			&mf.Attempt,
+			&mf.CreatedAt,
+			&mf.Flow,
+			&mf.DeliverID,
+			&mf.RequestSize,
+			&mf.ResponseSize,
+			&mf.Cmd,
+			&mf.Start,
+			&mf.Group,
+			&mf.TaskID,
+			&mf.SendAt,
+			&mf.ReceiveAt,
+			&mf.TaskName,
+			&mf.Part,
+			&mf.Parent,
+			&mf.BeginPart,
+			&mf.FinishPart,
+			&mf.Tracking,
+			&mf.BrokerGroup,
+		)
+		if err != nil {
+			return nil, err
+		}
+		messageFlows = append(messageFlows, &mf)
+	}
+
+	return messageFlows, nil
+}
+
 func AddTaskRecord(record *models.TaskRecord) error {
 	query := "INSERT INTO task_records (status, output, task_id, started_at, finished_at, client_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id"
 	err := db.QueryRow(query, record.Status, record.Output, record.TaskID, record.StartedAt, record.FinishedAt, record.ClientID, record.CreatedAt).Scan(&record.ID)
@@ -1358,7 +1543,7 @@ func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, 
 	if userID != 0 && workflowName != "" {
 		query = `SELECT mf.id, mf.status, sender_id, sender_type, receiver_id, 
 				receiver_type, workflow_id, message, attemp, mf.created_at, flow, 
-				deliver_id, elapsed_time, request_size, response_size, 
+				deliver_id, request_size, response_size, 
 				sender_name, receiver_name,cmd. w.name as workflow_name
 				FROM message_flows mf 
 				JOIN workflows w ON mf.workflow_id = w.id 
@@ -1368,7 +1553,7 @@ func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, 
 	} else if userID != 0 {
 		query = `SELECT mf.id, mf.status, sender_id, sender_type, receiver_id, 
 				receiver_type, workflow_id, message, attemp, mf.created_at, flow, 
-				deliver_id, elapsed_time, request_size, response_size,
+				deliver_id, request_size, response_size,
 				sender_name, receiver_name,cmd, w.name as workflow_name
 				FROM message_flows mf 
 				JOIN workflows w ON mf.workflow_id = w.id  
@@ -1396,11 +1581,10 @@ func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, 
 			&flow.ReceiverType,
 			&flow.WorkflowID,
 			&flow.Message,
-			&flow.Attemp,
+			&flow.Attempt,
 			&flow.CreatedAt,
 			&flow.Flow,
 			&flow.DeliverID,
-			&flow.ElapsedTime,
 			&flow.RequestSize,
 			&flow.ResponseSize,
 			&flow.SenderName,

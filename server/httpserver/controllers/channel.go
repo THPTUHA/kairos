@@ -97,7 +97,6 @@ func (ctr *Controller) DeleteChannel(c *gin.Context) {
 
 	var ch models.Channel
 	ch.Name = channelName
-	fmt.Println("FUCK---", channelName, userID)
 	uid, _ := strconv.ParseInt(userID.(string), 10, 64)
 	ch.UserID = uid
 	data, err := json.Marshal(ch)

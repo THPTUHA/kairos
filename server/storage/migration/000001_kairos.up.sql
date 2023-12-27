@@ -77,18 +77,15 @@ CREATE TABLE IF NOT EXISTS brokers (
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS task_summaries (
+CREATE TABLE IF NOT EXISTS clients (
     id bigserial PRIMARY KEY,
-    status INT NOT NULL,
-    task_id     INT NOT NULL,
-    attemp      INT NOT NULL,
-	success_count INT NOT NULL,
-	error_count   INT NOT NULL,
-	last_success  INT NOT NULL,
-	last_error    INT NOT NULL,
-    created_at BIGINT NOT NUll,
-    CONSTRAINT fk_task FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
+    name VARCHAR(255) NOT NULL,
+    user_id INT NOT NULL,
+    active_since BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
 
 CREATE TABLE IF NOT EXISTS task_records (
     id bigserial PRIMARY KEY,
@@ -124,26 +121,27 @@ CREATE TABLE IF NOT EXISTS message_flows (
     receiver_name VARCHAR(255) DEFAULT '',
     workflow_id bigserial NOT NULL,
     message TEXT,
-    attemp INT DEFAULT 0,
+    attempt INT DEFAULT 0,
     created_at BIGINT NOT NUll,
     flow INT NOT NULL,
     deliver_id INT NOT NULL,
-    elapsed_time BIGINT NOT NULL,
     request_size INT NOT NULL,
     response_size INT NOT NULL,
     cmd INT NOT NULL,
+    start BOOLEAN DEFAULT FALSE,
+    "group" VARCHAR(255) NOT NUlL,
+    task_id INT,
+    send_at BIGINT NOT NULL,
+    receive_at BIGINT NOT NULL,
+    task_name VARCHAR(255) NOT NUlL,
+    part  VARCHAR(255),
+    parent  VARCHAR(255) DEFAULT '',
+    begin_part BOOLEAN DEFAULT FALSE,
+    finish_part BOOLEAN DEFAULT FALSE,
+    tracking TEXT,
+    broker_group VARCHAR(255) DEFAULT '',
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
-
-CREATE TABLE IF NOT EXISTS clients (
-    id bigserial PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    user_id INT NOT NULL,
-    active_since BIGINT NOT NULL,
-    created_at BIGINT NOT NULL,
-    CONSTRAINT fk_user_id FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 
 CREATE TABLE IF NOT EXISTS certificates (
     id bigserial PRIMARY KEY,

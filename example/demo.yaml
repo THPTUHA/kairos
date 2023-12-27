@@ -1,0 +1,30 @@
+version: '1'
+name: debug
+vars:
+tasks:
+  file:
+    executor: file
+    clients: [client1]
+    wait: input
+    payload: |
+      {
+        "method": "read"
+      }
+
+brokers:
+  brok:
+    listens: [listen_channel, file_task]
+    flows: |
+      {{wait .listen_channel}}
+        {{get .listen_channel ("content") | get ("msg") | .msg }}
+            {{send .msg .file_task}}
+        {{end}}
+      {{end}}
+      
+      {{wait .file_task}}
+        {{get .file_task ("result") | get ("output") | .output }}
+            {{send .output .listen_channel}}
+        {{end}}
+      {{end}}
+      
+  

@@ -31,7 +31,8 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
     const [error, setError] = useState<Error>();
     const [userInfo, setUserInfo] = useRecoilState(userInfoAtom)
     const [wfCmd, setWfCmd] = useRecoilState(workflowMonitorAtom)
-
+    const [pathSelect, setPathSelect]= useState(location.pathname)
+    
     const setup = useAsync(async () => {
         const u = await services.users
             .get()
@@ -61,7 +62,7 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                     console.log("disconnected")
                 });
 
-                kairos.on('publication', function (ctx) {
+                kairos.on('publication', function (ctx:any) {
                     // console.log("Reciver message",ctx.data)
                     console.log("CTX----", ctx)
                     const msg = ctx.data
@@ -103,6 +104,14 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
         }
     }, [error])
 
+    const route = useLocation()
+    useEffect(()=>{
+        if( route.pathname){
+            console.log("Change",route.pathname)
+            setPathSelect( route.pathname.split("?")[0])
+        }
+    },[route])
+
     return (
         <>
             {
@@ -114,7 +123,7 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                                 {/* <div className="demo-logo-vertical" >KAIROS</div> */}
                                 <Menu
                                     theme="dark"
-                                    defaultSelectedKeys={[location.pathname]}
+                                    selectedKeys={[pathSelect]}
                                     mode="inline"
                                     onClick={(key) => { }}
                                 >

@@ -260,7 +260,7 @@ const (
 )
 
 var OPEN_EXP = []string{
-	MERGE_EXP, RANGE_EXP, PUT_EXP, DELETE_EXP, POP_EXP, IF_EXP, GET_EXP, PUSH_EXP,
+	MERGE_EXP, RANGE_EXP, PUT_EXP, DELETE_EXP, POP_EXP, IF_EXP, GET_EXP, PUSH_EXP, WAIT_EXP,
 }
 
 var COMPARE_EXP = []string{
@@ -425,11 +425,12 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 				return nil, -1, err
 			}
 		case WAIT_EXP:
-			// for _, e := range c[1:] {
-			// 	if !t.Vars.Exists(strings.TrimPrefix(c[1], ".")) {
-			// 		return nil, -1, fmt.Errorf("exp: %s invalid param %s", c[0], e)
-			// 	}
-			// }
+			for _, e := range c[1:] {
+				if !includes(t.Input, strings.TrimPrefix(e, ".")) && !strings.HasSuffix(e, SubChannel) {
+					return nil, -1, fmt.Errorf("exp: %s invalid param %s", WAIT_EXP, e)
+				}
+			}
+			open++
 		case PRINTF_EXP:
 			if err := isContants(c[1]); err != nil {
 				return nil, -1, err
@@ -771,7 +772,6 @@ type ExecOutput struct {
 }
 
 func (t *TemplateRuntime) Execute() *ExecOutput {
-	dfs := make([]*DeliverFlow, 0)
 	index := strings.Split(t.expIndex, "-")
 	rowIdx, _ := strconv.Atoi(index[0])
 	expIdx, _ := strconv.Atoi(index[1])
@@ -786,9 +786,9 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 			fmt.Println("INDEX", len(t.exps), idx)
 			for _, e := range t.exps[idx] {
 				fmt.Printf("EXP %+v\n", e)
-
 			}
 		}
+
 		exp := t.exps[idx]
 		for _, e := range exp {
 			if includes(OPEN_EXP, e.Func) {
@@ -810,9 +810,11 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 					Exp: fmt.Sprintf("expression number %+v: %s", idx+1, fmt.Sprintf("%s %s", e.Func, strings.Join(e.Params, " "))),
 				})
 			}
-			if err != nil && e.Func == WAIT_EXP {
-				return &exeOutput
-			}
+
+			// if err != nil && e.Func == WAIT_EXP {
+
+			// 	return &exeOutput
+			// }
 
 			if e.Func == SENDSYNC || e.Func == SEND || e.Func == SENDU {
 				if err != nil {
@@ -830,10 +832,9 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 				df.Send = e.Func
 				df.Msg = out[0]
 				t.expIndex = fmt.Sprintf("%d-%d", idx, (edx + 1))
-				dfs = append(dfs, &df)
+				exeOutput.DeliverFlows = append(exeOutput.DeliverFlows, &df)
 
 				if e.Func == SENDSYNC {
-					exeOutput.DeliverFlows = dfs
 					return &exeOutput
 				}
 				continue
@@ -994,7 +995,6 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 
 		t.ExpInput = []interface{}{}
 	}
-	exeOutput.DeliverFlows = dfs
 	return &exeOutput
 }
 

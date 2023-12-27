@@ -11,10 +11,8 @@ import (
 	"github.com/THPTUHA/kairos/pkg/logger"
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
 	"github.com/THPTUHA/kairos/server/httpserver/config"
-	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/httpserver/pubsub"
 	"github.com/THPTUHA/kairos/server/httpserver/routes"
-	"github.com/THPTUHA/kairos/server/httpserver/runner"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
@@ -41,16 +39,11 @@ func (server *HttpServer) start() {
 	signal.Notify(signals,
 		os.Interrupt,
 	)
-	worklowRunner := runner.NewRunner(runner.Configs{
-		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
-		Logger:                logger.InitLogger("debug", "runner"),
-	})
 
 	server.Router = routes.New(&routes.RouteConfig{
-		Pubsub:   server.PubsubChan,
-		WfRunner: worklowRunner,
-		Nats:     server.NatConn,
-		Config:   server.Config,
+		Pubsub: server.PubsubChan,
+		Nats:   server.NatConn,
+		Config: server.Config,
 	})
 
 	srv := &http.Server{
@@ -71,10 +64,6 @@ func (server *HttpServer) start() {
 		os.Exit(0)
 	}()
 
-	go func() {
-		worklowRunner.Start(signals)
-	}()
-
 	log.Info().Msg("Starting the server...")
 	if err := server.Router.Run(fmt.Sprintf(":%d", server.Config.HTTPServer.Port)); err != nil {
 		log.Error().Err(err).Msg("Server is not running!")
@@ -87,7 +76,6 @@ func NewHTTPServer(file string) (*HttpServer, error) {
 		log.Error().Msg(err.Error())
 		return nil, err
 	}
-	events.Init()
 
 	err = storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.DB.Postgres.URI,
@@ -128,16 +116,10 @@ func (server *HttpServer) Start() error {
 		os.Interrupt,
 	)
 
-	worklowRunner := runner.NewRunner(runner.Configs{
-		MaxWorkflowConcurrent: server.Config.HTTPServer.MaxWorkflowConcurrent,
-		Logger:                logger.InitLogger("debug", "runner"),
-	})
-
 	server.Router = routes.New(&routes.RouteConfig{
-		Pubsub:   server.PubsubChan,
-		WfRunner: worklowRunner,
-		Nats:     server.NatConn,
-		Config:   server.Config,
+		Pubsub: server.PubsubChan,
+		Nats:   server.NatConn,
+		Config: server.Config,
 	})
 
 	srv := &http.Server{
@@ -145,7 +127,6 @@ func (server *HttpServer) Start() error {
 		Handler: server.Router.Build(),
 	}
 
-	go worklowRunner.Start(signals)
 	go server.serviceNats()
 	go pubsub.Start(server.Config, server.PubsubChan)
 
@@ -176,7 +157,6 @@ func main() {
 	}
 
 	fmt.Printf("CONFIG %+v\n", config)
-	events.Init()
 
 	storage.Connect(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		config.DB.Postgres.URI,

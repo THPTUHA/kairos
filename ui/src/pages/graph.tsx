@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import ForceGraph from "../libs/ForceGraph"
 import { useAsync } from "react-use";
 import { services } from "../services";
@@ -176,7 +176,6 @@ const GraphPage = () => {
 
     }, [selectedNodes])
 
-    console.log("pointRecord", pointRecord.value)
     const wfs = useAsync(async () => {
         const wfs = await services.workflows
             .list()

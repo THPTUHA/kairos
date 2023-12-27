@@ -126,7 +126,7 @@ func (t *Task) RequestRun(re *workflow.CmdTask) {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID)
+		ex := NewExecution(t.ID, re.Group)
 
 		if err := t.Agent.Run(t, ex, re); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -152,7 +152,7 @@ func (t *Task) Run() {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID)
+		ex := NewExecution(t.ID, t.GetGroup())
 
 		if err := t.Agent.Run(t, ex, nil); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -178,7 +178,7 @@ func (t *Task) RunTrigger(re *workflow.CmdTask) error {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID)
+		ex := NewExecution(t.ID, re.Group)
 
 		if err := t.Agent.Run(t, ex, re); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -206,7 +206,7 @@ func (t *Task) RunSync(re *workflow.CmdTask) (*workflow.Result, error) {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID)
+		ex := NewExecution(t.ID, t.GetGroup())
 
 		if result, err := t.Agent.RunSync(t, ex, re); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -263,4 +263,12 @@ func (t *Task) String() string {
 func (t *Task) GetTimeLocation() *time.Location {
 	loc, _ := time.LoadLocation(t.Timezone)
 	return loc
+}
+
+func (t *Task) GetGroup() string {
+	return fmt.Sprintf("deamon-%d-%d", t.WorkflowID, time.Now().UnixNano())
+}
+
+func (t *Task) GetPart() string {
+	return fmt.Sprintf("deamonpart-%d-%d", t.WorkflowID, time.Now().UnixNano())
 }

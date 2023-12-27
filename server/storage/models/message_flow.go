@@ -16,13 +16,24 @@ type MessageFlow struct {
 	ReceiverName string `json:"receiver_name"`
 	WorkflowID   int64  `json:"workflow_id"`
 	Message      string `json:"message"`
-	Attemp       int    `json:"attempt"`
+	Attempt      int    `json:"attempt"`
 	Flow         int    `json:"flow"`
 	CreatedAt    int64  `json:"created_at"`
 	DeliverID    int64  `json:"deliver_id"`
-	ElapsedTime  int64  `json:"elapsed_time"`
 	RequestSize  int    `json:"request_size"`
 	ResponseSize int    `json:"response_size"`
 	Cmd          int    `json:"cmd"`
 	WorkflowName string `json:"workflow_name"`
+	Start        bool   `json:"start"`
+	Group        string `json:"group"`
+	TaskID       int64  `json:"task_id"`
+	SendAt       int64  `json:"send_at"`
+	ReceiveAt    int64  `json:"receive_at"`
+	TaskName     string `json:"task_name"`
+	Part         string `json:"part"`
+	Parent       string `json:"parent"`
+	BeginPart    bool   `json:"begin_part"`
+	FinishPart   bool   `json:"finish_part"`
+	Tracking     string `json:"tracking"`
+	BrokerGroup  string `json:"broker_group"`
 }

@@ -6,32 +6,24 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/controllers"
 	"github.com/THPTUHA/kairos/server/httpserver/middlewares"
 	"github.com/THPTUHA/kairos/server/httpserver/pubsub"
-	"github.com/THPTUHA/kairos/server/httpserver/routes/ui"
 	v1 "github.com/THPTUHA/kairos/server/httpserver/routes/v1"
-	"github.com/THPTUHA/kairos/server/httpserver/runner"
 	"github.com/gin-gonic/gin"
 	"github.com/nats-io/nats.go"
 )
 
 type Route struct {
-	ginApp   *gin.Engine
-	pubsub   chan *pubsub.PubSubPayload
-	wfRunner *runner.Runner
-	nats     *nats.Conn
-	Config   *config.Configs
+	ginApp *gin.Engine
+	pubsub chan *pubsub.PubSubPayload
+	nats   *nats.Conn
+	Config *config.Configs
 }
 
 func (r *Route) initialize() {
-	rootPath := r.ginApp.Group("/")
-	t := ui.UI(rootPath)
-	r.ginApp.SetHTMLTemplate(t)
-
 	routeGroup := r.ginApp.Group("/apis/v1")
 	tokenService := auth.NewTokenService()
 
 	ctr := controllers.NewController(&controllers.ControllerConfig{
 		PubSubCh:     r.pubsub,
-		WfRunner:     r.wfRunner,
 		TokenService: tokenService,
 		Nats:         r.nats,
 	})
@@ -63,10 +55,9 @@ func (r *Route) Run(path string) error {
 }
 
 type RouteConfig struct {
-	Pubsub   chan *pubsub.PubSubPayload
-	WfRunner *runner.Runner
-	Nats     *nats.Conn
-	Config   *config.Configs
+	Pubsub chan *pubsub.PubSubPayload
+	Nats   *nats.Conn
+	Config *config.Configs
 }
 
 func New(conf *RouteConfig) *Route {
@@ -75,10 +66,9 @@ func New(conf *RouteConfig) *Route {
 	ginApp.Use(middlewares.CORSMiddleware())
 
 	return &Route{
-		ginApp:   ginApp,
-		pubsub:   conf.Pubsub,
-		wfRunner: conf.WfRunner,
-		nats:     conf.Nats,
-		Config:   conf.Config,
+		ginApp: ginApp,
+		pubsub: conf.Pubsub,
+		nats:   conf.Nats,
+		Config: conf.Config,
 	}
 }

@@ -59,19 +59,19 @@ func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper)
 	process := NewProcessEndpoint(launched)
 	defer process.Terminate()
 
-	inputCh := make(chan []byte)
+	// inputCh := make(chan []byte)
 	process.StartReading()
 
-	go func() {
-		if len(inputs) > 0 {
-			for _, i := range inputs {
-				inputCh <- []byte(i)
-			}
-		}
-		for {
-			inputCh <- cb.Input()
-		}
-	}()
+	// go func() {
+	// 	if len(inputs) > 0 {
+	// 		for _, i := range inputs {
+	// 			inputCh <- []byte(i)
+	// 		}
+	// 	}
+	// 	for {
+	// 		inputCh <- cb.Input()
+	// 	}
+	// }()
 
 	for {
 		select {
@@ -79,22 +79,28 @@ func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper)
 			if !ok || len(msgOne.data) == 0 {
 				return []byte("finish"), nil
 			}
-			if msgOne.err != nil {
-				_, err := cb.Update([]byte(msgOne.err.Error()), false)
-				if err != nil {
-					return nil, err
-				}
-			} else {
+			if msgOne.data != nil {
 				_, err := cb.Update(msgOne.data, true)
 				if err != nil {
 					return nil, err
 				}
 			}
-
-		case msgTwo, ok := <-inputCh:
-			if !ok || !process.Send(msgTwo) {
-				return nil, nil
+		case errOne, ok := <-process.Error():
+			if !ok || len(errOne.data) == 0 {
+				return []byte("finish"), nil
 			}
+			if errOne.data != nil && ok {
+				_, err := cb.Update(errOne.data, false)
+				if err != nil {
+					return nil, err
+				}
+			}
+			// return []byte("fuck"), nil
+
+			// case msgTwo, ok := <-inputCh:
+			// 	if !ok || !process.Send(msgTwo) {
+			// 		return nil, nil
+			// 	}
 		}
 	}
 }

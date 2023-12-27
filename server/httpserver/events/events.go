@@ -10,11 +10,13 @@ const (
 	WfCmdDelete
 	WfCmdStart
 	WfCmdRecover
+	WfCmdInfo
 )
 
 type WfEvent struct {
 	Cmd      int
 	Workflow *workflow.Workflow
+	WfIDs    []int64
 }
 
 const (
@@ -25,16 +27,3 @@ const (
 const (
 	DestroyWorker = iota
 )
-
-var wfChan chan *WfEvent
-
-func Init() {
-	wfChan = make(chan *WfEvent)
-}
-
-func Get() chan *WfEvent {
-	if wfChan == nil {
-		Init()
-	}
-	return wfChan
-}

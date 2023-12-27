@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/THPTUHA/kairos/pkg/workflow"
@@ -16,15 +15,17 @@ type Execution struct {
 	Success    bool      `json:"success"`
 	Output     string    `json:"output,omitempty"`
 	NodeName   string    `json:"node_name,omitempty"`
-	Group      int64     `json:"group,omitempty"`
+	Group      string    `json:"group,omitempty"`
 	Attempt    uint      `json:"attempt,omitempty"`
 	Offset     int       `json:"offset,omitempty"`
+	Part       string    `json:"part,omitempty"`
+	Parent     string    `json:"parent,omitempty"`
 }
 
-func NewExecution(taskID string) *Execution {
+func NewExecution(taskID string, group string) *Execution {
 	return &Execution{
 		TaskID:  taskID,
-		Group:   time.Now().UnixNano(),
+		Group:   group,
 		Attempt: 1,
 	}
 }
@@ -34,7 +35,7 @@ func (e *Execution) Key() string {
 }
 
 func (e *Execution) GetGroup() string {
-	return strconv.FormatInt(e.Group, 10)
+	return e.Group
 }
 
 func (e *Execution) GetResult() *workflow.Result {
@@ -42,12 +43,17 @@ func (e *Execution) GetResult() *workflow.Result {
 	r.Output = e.Output
 	r.Success = e.Success
 	r.Attempt = e.Attempt
-	r.StartedAt = e.StartedAt.Unix()
 	r.FinishedAt = e.FinishedAt.Unix()
 	r.Offset = e.Offset
 
 	if e.FinishedAt.Unix() < 0 {
 		r.FinishedAt = 0
+	}
+
+	if r.Offset > 1 {
+		r.StartedAt = 0
+	} else {
+		r.StartedAt = e.StartedAt.Unix()
 	}
 	return &r
 }

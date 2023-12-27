@@ -9,4 +9,7 @@ func Graph(ginApp *gin.RouterGroup, ctr *controllers.Controller) {
 	routeGroup := ginApp.Group("/graph")
 	routeGroup.POST("/get", ctr.GetGraph)
 	routeGroup.POST("/data", ctr.GraphData)
+	routeGroup.GET("/timeline", ctr.GetTimeLine)
+	routeGroup.GET("/group", ctr.GetGroupID)
+	routeGroup.POST("/part", ctr.DetailPoint)
 }

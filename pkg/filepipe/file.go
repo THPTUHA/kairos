@@ -102,7 +102,7 @@ type fileinfo struct {
 	isDir   bool
 	sys     interface{}
 
-	base string //base, usually glob.Base
+	base string
 }
 
 func (f fileinfo) Name() string {

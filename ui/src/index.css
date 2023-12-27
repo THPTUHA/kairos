@@ -15,3 +15,21 @@ code {
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes pulse {
+  0%, 100% {
+    fill: rgb(10, 135, 10); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+  25% {
+    fill: rgb(9, 183, 9); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+  75% {
+    fill: rgba(0, 200, 0, 1); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+}
+
+g.active rect,
+g.active ellipse,
+g.active circle {
+  animation: pulse 1s infinite; /* Tốc độ chậm hơn */
+}

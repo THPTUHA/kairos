@@ -46,7 +46,10 @@ func NewDelivererServer(file string) (*DelivererServer, error) {
 
 	d.config = config
 	// d.redis = NewRedisDB(RedisHost, RedisPort, "")
-	d.createSub(log)
+	err = d.createSub(log)
+	if err != nil {
+		return nil, err
+	}
 	d.logger = log
 	return &d, nil
 }
@@ -56,15 +59,20 @@ type ChannelRole struct {
 	Role int32
 }
 
-func (d *DelivererServer) createSub(log *logrus.Entry) {
-	sub := NewNatsSub(&natsSubConfig{
+func (d *DelivererServer) createSub(log *logrus.Entry) error {
+	sub, err := NewNatsSub(&natsSubConfig{
 		url:           d.config.Nats.URL,
 		name:          "deliverer",
 		reconnectWait: 2 * time.Second,
 		maxReconnects: 10,
 		logger:        log,
 	})
+	if err != nil {
+		d.logger.Error(err)
+		return err
+	}
 	d.sub = sub
+	return nil
 }
 
 func (d *DelivererServer) createNode() error {
@@ -326,16 +334,16 @@ type natsSub struct {
 	Con    *nats.Conn
 }
 
-func NewNatsSub(config *natsSubConfig) *natsSub {
+func NewNatsSub(config *natsSubConfig) (*natsSub, error) {
 	nc, err := nats.Connect(config.url, optNats(config)...)
 	if err != nil {
 		config.logger.Error(err)
-		return nil
+		return nil, err
 	}
 	return &natsSub{
 		config: config,
 		Con:    nc,
-	}
+	}, nil
 }
 
 func optNats(o *natsSubConfig) []nats.Option {

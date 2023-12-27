@@ -1,0 +1,9 @@
+selector:
+    matchLabels:
+      app: webui
+
+same name
+
+metadata:
+  namespace: kairos
+  name: webui

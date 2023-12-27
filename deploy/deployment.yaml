@@ -11,7 +11,7 @@ spec:
     - host: kairos.badaosuotdoi.com
       http:
         paths:
-          - path: /
+          - path: /kairos
             backend:
               serviceName: webui
               servicePort: 3500

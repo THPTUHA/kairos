@@ -1,0 +1,19 @@
+Giao diện timeline + history + realtime (sáng mai code xem ntn)
+Thử nghiệm triển khai với microservice (cố gắng code để đảm bảo hiển thị được log docker lên ) 
+(test trước với 1 service cơ bản đảm bảo luồng)
+    - Nhiều service chạy song song, lần lượt (thử nghiệm với 2 service chạy độc tự code = react, node đơn giản
+    có thêm test(nếu được -- ko ưu tiên) )
+    - Xem được log task ở local
+    - Dừng được workflow.
+    - Thông báo thành công qua mail
+    - Điều chỉnh được workflow thực thi qua api. (Dùng api để kịch hoạt và xem log)
+
+Đảm bảo daemon gửi dữ liệu về server từ disconnect sang connect
+
+-- ưu tiên sau
+Thử nghiệm làm thông báo định kỳ về người dùng
+
+Thử nghiệm với backup database:
+    - Viết file script
+    - Xem được log thực hiện
+

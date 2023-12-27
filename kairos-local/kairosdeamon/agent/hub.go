@@ -64,7 +64,6 @@ func (hub *Hub) HandleConnectServer(auth *config.Auth) error {
 	})
 	hub.Client = client
 	hub.channel = fmt.Sprintf("kairosdeamon-%s", auth.ClientID)
-	fmt.Println(" CHANNEL ---", hub.channel)
 	err := client.Connect()
 	if err != nil {
 		return err
