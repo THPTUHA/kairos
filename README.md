@@ -123,7 +123,16 @@ protoc  --go_out=.  --go_opt=paths=source_relative \
 
 Pubsub:
   
-  kubectl create configmap httpserver-config --from-file=httpserver.yaml -n kairos
 kubectl exec -i postgres-5dfbf7c866-4tstv -- psql -U kairos -d kairos < /server/storage/migration/000001_kairos.up.sql
 
 kubectl get pods --all-namespaces | awk '$4=="Evicted" {print "kubectl delete pod --namespace=" $1 " " $2}' | sh
+
+
+/var/lib/pgsql/<version>/data/postgresql.conf
+Sử file postgresql.conf thành listen_addresses = '*'
+và pg_hba.conf thành host    all             all             0.0.0.0/0            md5
+psql -h 61.28.230.61 -U kairos -d kairos -f server/storage/migration/000001_kairos.up.sql
+
+kubectl create configmap httpserver-config --from-file=httpserver.yaml -n kairos
+kubectl create configmap runner-config --from-file=runner.yaml -n kairos
+kubectl create configmap deliverer-config --from-file=deliverer.yaml -n kairos

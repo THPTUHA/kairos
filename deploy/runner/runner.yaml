@@ -6,7 +6,7 @@ runner:
   deliver_timeout: 3
 
 nats:
-  url: nats://127.0.0.1:4222
+  url: nats://nats.kairos.svc.cluster.local
   name: runner
   reconnect_wait: 2
   max_reconnect: 10
@@ -15,7 +15,7 @@ db:
   postgres:
     username: kairos
     password: kairos
-    uri: 127.0.0.1
+    uri: 61.28.230.61
     port: 5432
     databaseName: kairos
     protocol: tcp

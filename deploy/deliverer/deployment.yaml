@@ -22,7 +22,14 @@ spec:
             - "kairos"
             - "deliverer"
             - "--file"
-            - "deliverer.yaml"
+            - "/config/deliverer.yaml"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: deliverer-config
 ---
 apiVersion: v1
 kind: Service

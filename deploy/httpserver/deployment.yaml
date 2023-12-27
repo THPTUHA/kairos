@@ -51,7 +51,7 @@ spec:
       targetPort: 8002
       protocol: TCP
 ---
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   namespace: kairos
@@ -61,14 +61,20 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "1000m"
 spec:
   rules:
-    - host: badaosuotdoi.com
+    - host: kairos.badaosuotdoi.com
       http:
         paths:
           - path: /apis/v1/
+            pathType: Prefix
             backend:
-              serviceName: httpserver
-              servicePort: port-8001
+              service:
+                name: httpserver
+                port:
+                  number: 8001
           - path: /server/
+            pathType: Prefix
             backend:
-              serviceName: httpserver
-              servicePort: port-8002
+              service:
+                name: httpserver
+                port:
+                  number: 8002

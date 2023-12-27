@@ -30,3 +30,17 @@ spec:
         - name: config-volume
           configMap:
             name: runner-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: kairos
+  name: runner
+spec:
+  selector:
+    app: runner
+  ports:
+    - name: port-8005
+      port: 8005
+      targetPort: 8005
+      protocol: TCP
