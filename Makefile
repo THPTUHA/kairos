@@ -78,3 +78,7 @@ clean-cache:
 
 webui:
 	cd ./ui && docker buildx build  --platform linux/amd64 -t nexta2020/webui .
+
+image:
+	docker buildx build  --platform linux/amd64 -t nexta2020/kairos .
+	docker push nexta2020/kairos

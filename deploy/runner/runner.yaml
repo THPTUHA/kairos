@@ -1,0 +1,21 @@
+runner:
+  port: 8005
+  max_workflow_concurrent: 10000
+  max_attemp_deliver: 100
+  timeout_retry_deliver: 10
+  deliver_timeout: 3
+
+nats:
+  url: nats://127.0.0.1:4222
+  name: runner
+  reconnect_wait: 2
+  max_reconnect: 10
+
+db: 
+  postgres:
+    username: kairos
+    password: kairos
+    uri: 127.0.0.1
+    port: 5432
+    databaseName: kairos
+    protocol: tcp
