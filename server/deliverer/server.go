@@ -31,6 +31,13 @@ type DelivererServer struct {
 	logger *logrus.Entry
 }
 
+type ObjectStatusCmd struct {
+	Cmd      int    `json:"cmd"`
+	ObjectID string `json:"object_id"`
+	Type     int    `json:"type"`
+	Status   int    `json:"status"`
+}
+
 func NewDelivererServer(file string) (*DelivererServer, error) {
 	log := log.InitLogger(logrus.DebugLevel.String(), "deliverer")
 	var d DelivererServer
@@ -106,6 +113,16 @@ func (d *DelivererServer) createNode() error {
 				Name: id,
 				Role: models.ReadWriteRole,
 			})
+			go func() {
+				us := ObjectStatusCmd{
+					Cmd:      workflow.ObjectStatusWorkflow,
+					ObjectID: user.ClientID,
+					Type:     models.ClientUser,
+					Status:   1,
+				}
+				js, _ := json.Marshal(us)
+				d.node.Publish(fmt.Sprintf("kairosuser-%s", user.UserID), js)
+			}()
 		case models.ChannelUser:
 			id = fmt.Sprintf("kairoschannel-%s", user.ClientID)
 			certID, _ := strconv.ParseInt(user.ClientID, 10, 64)
@@ -145,10 +162,9 @@ func (d *DelivererServer) createNode() error {
 
 		credentials := &Credentials{
 			UserID:   fmt.Sprintf("%s@%s", id, user.UserID),
-			ExpireAt: time.Now().Unix() + 300000,
+			ExpireAt: time.Now().Unix() + 30000000,
 		}
 
-		fmt.Println("Connect user", id)
 		for _, c := range channels {
 			subs[c.Name] = SubscribeOptions{
 				Role: c.Role,
@@ -164,12 +180,6 @@ func (d *DelivererServer) createNode() error {
 
 	node.OnConnect(func(client *Client) {
 		fmt.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
-		// msgs := d.GetCacheKey(client.UserID())
-		// go func() {
-		// 	for _, ms := range msgs {
-		// 		client.Send([]byte(ms))
-		// 	}
-		// }()
 
 		client.OnSubscribe(func(e SubscribeEvent, cb SubscribeCallback) {
 			fmt.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
@@ -186,19 +196,38 @@ func (d *DelivererServer) createNode() error {
 			fmt.Printf("client %s publishes into channel %s: %s", client.UserID(), e.Channel, string(e.Data))
 			var cmd workflow.CmdReplyTask
 			err := json.Unmarshal(e.Data, &cmd)
-			// d.redis.Del(fmt.Sprintf("%s-%d", cmd.Channel, cmd.DeliverID))
 			if err != nil {
 				d.logger.WithField("onpublish", "receiver data").Error(err)
 				return
 			}
 			go func() {
-				d.reply(uid, string(e.Data))
+				if cmd.WorkflowID != 0 {
+					d.logger.WithField("cmd", cmd.Cmd).Infof("to workflow id = %d data=%+v", cmd.WorkflowID, string(e.Data))
+					d.reply(fmt.Sprintf("w-%d", cmd.WorkflowID), string(e.Data))
+				} else {
+					d.logger.WithField("cmd", cmd.Cmd).Infof("to user %s", string(e.Data))
+					d.reply(uid, string(e.Data))
+				}
 			}()
 			// workflowID, cmd, payload, cb
 			cb(PublishReply{}, nil)
 		})
 
 		client.OnDisconnect(func(e DisconnectEvent) {
+			id := client.UserID()
+			ids := strings.Split(id, "@")
+			uid := ids[1]
+			cid := strings.Split(ids[0], "-")[1]
+			go func() {
+				us := ObjectStatusCmd{
+					Cmd:      workflow.ObjectStatusWorkflow,
+					ObjectID: cid,
+					Type:     models.ClientUser,
+					Status:   0,
+				}
+				js, _ := json.Marshal(us)
+				d.node.Publish(fmt.Sprintf("kairosuser-%s", uid), js)
+			}()
 			fmt.Printf("client %s type disconnected", client.UserID())
 		})
 
@@ -217,7 +246,6 @@ func (d *DelivererServer) handleLog(e LogEntry) {
 }
 
 func (d *DelivererServer) reply(natChan string, data string) {
-	fmt.Printf("[DELIVER REPLY NATS] Channel = %s, Data=%+v \n", natChan, data)
 	d.sub.Con.Publish(natChan, []byte(data))
 }
 

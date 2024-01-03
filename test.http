@@ -90,7 +90,7 @@ Content-Type: application/json
   }
 } 
 
-###
+###Users/nghiabadao/Code/project/backend_cms
 POST http://localhost:8080/v1/tasks
 Content-Type: application/json
 
@@ -111,6 +111,29 @@ Content-Type: application/json
   }
 } 
 
+###
+
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "metadata": {
+    "user": "12345"
+  },
+  "executor": "dockerlite",
+  "executor_config":  {
+    "action":"build",
+    "imageName": "nexta2020/shopok",
+    "contextDir": "/Users/nghiabadao/Code/demo/shopok"
+  }
+} 
+
 
 ###
 POST http://localhost:8080/v1/tasks
@@ -125,10 +148,31 @@ Content-Type: application/json
   },
   "executor": "k8sdeploy",
   "executor_config": {
-    "service": "backend-service-cms",
-    "cmd": "log"
+    "service": "shopok",
+    "cmd": "deploy",
+    "namespace": "demo"
   }
 } 
+
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
+
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "executor": "k8sdeploy",
+  "executor_config": {
+    "service": "shopok",
+    "cmd": "log",
+    "namespace": "demo"
+  }
+} 
+
 
 ###
 POST http://localhost:8080/v1/tasks
@@ -466,3 +510,5 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2I
   "parts": ["part-201-1703353905"],
   "parents": ["part-201-1703353905"]
 }
+
+###

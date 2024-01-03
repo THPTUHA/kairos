@@ -211,7 +211,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
     });
   }
 
-  publish(channel: string, data: any): Promise<PublishResult> {
+  publish(channel: string, data: any, workflow_id?: number): Promise<PublishResult> {
     const payload: CmdReplyTask = {
       send_at: getTimeNow(),
       cmd: ReplyMessageCmd,
@@ -219,6 +219,11 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
       content: data,
       deliver_id: data.deliver_id,
     }
+    
+    if(workflow_id){
+      payload.workflow_id = workflow_id
+    }
+    console.log("PAYLOAD",payload)
 
     if (!channel.includes("-")) {
       if (channel.includes(":")) {
@@ -1337,6 +1342,7 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
 
   private _handlePublication(channel: string, pub: any) {
     const sub = this._getSub(channel);
+    console.log("PUB---", pub)
     if (!sub) {
       if (this._isServerSub(channel)) {
         const ctx = this._getPublicationContext(channel, pub);
@@ -1346,20 +1352,20 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
             deliver_id: ctx.deliver_id,
             run_on: channel,
             status: SuccessReceiveInputTaskCmd,
-            send_at: getTimeNow()
+            send_at: getTimeNow(),
+            workflow_id : pub.data.workflow_id
           }
           if (ctx.task) {
             reply.task_id =  ctx.task.id
             reply.task_name = ctx.task.name
-            reply.workflow_id = ctx.task.workflow_id
           }
           ctx.data = ctx.message
           delete ctx.message
-          this.publish(channel, reply)
+          this.publish(channel, reply,reply.workflow_id)
         }
         this.emit('publication', ctx);
       }
-      return;
+      return; 
     }
     // @ts-ignore
     sub._handlePublication(pub);
@@ -1375,7 +1381,6 @@ export class Kairos extends (EventEmitter as new () => TypedEventEmitter<ClientE
 
   private _handlePush(data: any, next: any) {
     const channel = data.channel;
-    console.log("_handlePush", data)
     if (data.pub) {
       this._handlePublication(channel, data.pub);
     } else if (data.message) {

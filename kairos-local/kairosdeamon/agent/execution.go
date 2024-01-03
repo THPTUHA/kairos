@@ -7,6 +7,12 @@ import (
 	"github.com/THPTUHA/kairos/pkg/workflow"
 )
 
+const (
+	PendingTask = iota
+	RunningTask
+	FaultTask
+)
+
 type Execution struct {
 	Id         string    `json:"id,omitempty"`
 	TaskID     string    `json:"task_id,omitempty"`
@@ -20,6 +26,7 @@ type Execution struct {
 	Offset     int       `json:"offset,omitempty"`
 	Part       string    `json:"part,omitempty"`
 	Parent     string    `json:"parent,omitempty"`
+	Status     int       `json:"status,omitempty"`
 }
 
 func NewExecution(taskID string, group string) *Execution {

@@ -33,21 +33,20 @@ func (ctr *Controller) GetClients(c *gin.Context) {
 	for _, c := range clients {
 		clientIDs = append(clientIDs, fmt.Sprintf("kairosdeamon-%d@%s", c.ID, userID.(string)))
 	}
+	uis := make([]*UserInfo, 0)
+
 	data, _ := json.Marshal(clientIDs)
 	msg, err := ctr.nats.Request(messaging.CLIENT_STATUS, data, 3*time.Second)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err": err.Error(),
-		})
-		return
-	}
-	uis := make([]*UserInfo, 0)
-	err = json.Unmarshal(msg.Data, &uis)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err": err.Error(),
-		})
-		return
+		ctr.Log.Error(err)
+	} else {
+		err = json.Unmarshal(msg.Data, &uis)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 	}
 
 	for _, c := range clients {

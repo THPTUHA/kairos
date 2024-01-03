@@ -376,7 +376,7 @@ func (s *Store) SetBroker(broker *workflow.Broker) error {
 func (s *Store) getBrokerTxFunc(brokerID string, broker *workflow.Broker) func(tx *bolt.Tx) error {
 	return func(tx *bolt.Tx) error {
 
-		brokerBkt, err := tx.CreateBucketIfNotExists(tasksBucket)
+		brokerBkt, err := tx.CreateBucketIfNotExists(brokersBucket)
 		if err != nil {
 			return err
 		}
@@ -401,6 +401,9 @@ func (s *Store) GetBroker(id string) (*workflow.Broker, error) {
 	return &broker, nil
 }
 
+type BrokerQuery struct {
+}
+
 func (s *Store) GetBrokers() ([]*workflow.Broker, error) {
 	brokers := make([]*workflow.Broker, 0)
 	bx, err := s.db.Begin(true)
@@ -413,10 +416,9 @@ func (s *Store) GetBrokers() ([]*workflow.Broker, error) {
 	if err != nil {
 		return brokers, err
 	}
-
 	c := brokerBkt.Cursor()
 	for k, v := c.First(); k != nil; k, v = c.Next() {
-		fmt.Println("Broker value", string(v))
+		s.logger.Infof("Brokder ID = %s", k)
 		var broker workflow.Broker
 		err := json.Unmarshal(v, &broker)
 		if err != nil {

@@ -21,7 +21,7 @@ const MenuItems = [
     { path: "/workflows", title: "workflows", icon: <GoWorkflow /> },
     { path: "/clients", title: "clients", icon: <GrVirtualMachine /> },
     { path: "/channels", title: "channels", icon: <RiWechatChannelsLine /> },
-    // { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
+    { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
     { path: "/certificates", title: "certificates", icon: <GrCertificate /> },
     { path: "/dashboard", title: "dashboard", icon: <TbLayoutDashboard /> },
     { path: "/graphs", title: "graph", icon: <FcWorkflow /> },

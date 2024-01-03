@@ -27,6 +27,38 @@ const WorklowFileDefault: WorkflowFile = {
     version: "1.0"
 }
 
+const formatFile = (workflowFile: any) => {
+    delete workflowFile["channels"]
+    delete workflowFile["clients"]
+    if (!workflowFile["vars"]) {
+        delete workflowFile["vars"]
+    }
+    if (workflowFile["brokers"] && Object.keys(workflowFile["brokers"]).length == 0) {
+        delete workflowFile["brokers"]
+    }
+    const bkeys = workflowFile.brokers ? Object.keys(workflowFile.brokers): []
+    for (const bk of bkeys) {
+        const broker = workflowFile.brokers[bk]
+        delete broker["workflow_id"]
+        if (!broker.queue) {
+            delete broker["queue"]
+        }
+        if(!broker.clients){
+            delete broker["clients"]
+        }
+    }
+
+    const keys = Object.keys(workflowFile.tasks)
+    for (const k of keys) {
+        const task = workflowFile.tasks[k]
+        if (!task.wait) {
+            delete task["wait"]
+        }
+        delete task["workflow_id"]
+    }
+    return workflowFile
+}
+
 const WorkflowListPage = () => {
     const [workflowFile, setWorkflowFile] = useState<WorkflowFile>();
     const [wfSelected, setWfSelected] = useState(0)
@@ -90,21 +122,21 @@ const WorkflowListPage = () => {
                                 : value == Pending
                                     ? <div>Pending</div> :
                                     value == Destroying
-                                        ? <div>Destroying</div> : 
+                                        ? <div>Destroying</div> :
                                         value == Recovering
-                                        ? <div>Recovering</div>:""
+                                            ? <div>Recovering</div> : ""
                 }</>
             }
         },
         {
             title: 'Name',
             dataIndex: 'name',
-            render: (value: string)=>{
-                return <div 
-                className="cursor-pointer"
-                onClick={()=>{
-                    nav("/dashboard?view=timeline")
-                }}>{value}</div>
+            render: (value: string) => {
+                return <div
+                    className="cursor-pointer"
+                    onClick={() => {
+                        nav("/dashboard?view=timeline")
+                    }}>{value}</div>
             }
         },
         {
@@ -161,7 +193,7 @@ const WorkflowListPage = () => {
                                 onClick={() => {
                                     services.workflows
                                         .recover(record.id)
-                                        .then(()=>{
+                                        .then(() => {
                                             Toast.success("Start recover")
                                         })
                                         .catch(setError)
@@ -206,10 +238,10 @@ const WorkflowListPage = () => {
                 setWorkflows(wfs)
             }
 
-            if(wfCmd.cmd === RecoverWorkflow){
-                if(wfCmd.data.status === "false"){
+            if (wfCmd.cmd === RecoverWorkflow) {
+                if (wfCmd.data.status === "false") {
                     Toast.error("Workflow recover error")
-                }else if(wfCmd.data.status === "true"){
+                } else if (wfCmd.data.status === "true") {
                     Toast.success("Workflow recover success")
                 }
                 setWfCmd(null)
@@ -253,7 +285,7 @@ const WorkflowListPage = () => {
             >
                 <div className="min-w-[800px]">
                     {
-                        workflowFile && onlyRead && <ObjectEditor value={workflowFile} />
+                        workflowFile && onlyRead && <ObjectEditor value={formatFile(workflowFile)} />
                     }
 
                     {
@@ -261,7 +293,7 @@ const WorkflowListPage = () => {
                     }
                     {
                         !onlyRead &&
-                        <div className="flex">
+                        <div className="flex items-center">
                             <button onClick={() => {
                                 if (workflowFile) {
                                     services.workflows
@@ -270,7 +302,7 @@ const WorkflowListPage = () => {
                                         .catch(setError);
                                 }
                             }}
-                                className="bg-green-500"
+                                className="font-bold mx-2"
                             > Apply</button>
                             <UploadButton onUpload={(e: Workflow) => {
                                 if (e) {

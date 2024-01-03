@@ -7,3 +7,12 @@ nodeName: "kairosdeamon"
 agentHTTPAddrPort: 8080
 agentDefaultPort: 6868
 agentDataDir: "kairos.boltdb"
+
+# serverPort: 3111
+# loginEndpoint: "http://kairos.badaosuotdoib.com/apis/v1/login"
+# serverPubSubEnpoint: "ws://kairos.badaosuotdoib.com/server/pubsub"
+# pubSubEnpoint: "ws://kairos.badaosuotdoib.com/pubsub"
+# nodeName: "kairosdeamon"
+# agentHTTPAddrPort: 8080
+# agentDefaultPort: 6868
+# agentDataDir: "kairos.boltdb"

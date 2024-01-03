@@ -87,6 +87,7 @@ type Worker struct {
 	closeCh           chan struct{}
 	Sched             *Scheduler
 	flowMap           map[string]string
+	requestMap        map[string]string
 	fm                sync.RWMutex
 	workerNatsOptions *workerNatsOptions
 	natsConn          *nats.Conn
@@ -106,6 +107,7 @@ func NewWorker(workerID int64, workflow *workflow.Workflow, conf *WorkerConfig, 
 		points:            make(map[string]*Point),
 		taskDelivers:      make(map[int64][]*taskDeliver),
 		brokerDelivers:    make(map[int64][]*brokerDeliver),
+		requestMap:        make(map[string]string),
 		flowMap:           make(map[string]string),
 		Sched:             Sched,
 		deliverCmd:        helper.GetTimeNow(),
@@ -131,7 +133,7 @@ func (w *Worker) updateStatusDeliverTask(taskID int64, d *taskDeliver) {
 	} else {
 		exist := false
 		for idx, e := range v {
-			if fmt.Sprintf("%s%s", e.client, workflow.SubClient) == d.client {
+			if fmt.Sprintf("%s%s", e.client, workflow.SubClient) == d.client || e.client == "kairos" {
 				v[idx] = d
 				w.taskDelivers[taskID] = v
 				exist = true
@@ -178,7 +180,7 @@ func (w *Worker) allDelivered() bool {
 	for k, s := range w.taskDelivers {
 		for _, e := range s {
 			if e.status != workflow.SuccessSetTask {
-				fmt.Printf(" TTTTTTask taskid =%d name=%s not deliver %d\n", k, e.client, e.status)
+				w.conf.Logger.Warnf("taskid =%d client=%s not deliver status=%d\n", k, e.client, e.status)
 				return false
 			}
 		}
@@ -187,7 +189,7 @@ func (w *Worker) allDelivered() bool {
 	for k, s := range w.brokerDelivers {
 		for _, e := range s {
 			if e.status != workflow.SuccessSetBroker {
-				fmt.Printf(" BBBBroker broker =%d name=%s not deliver %d\n", k, e.client, e.status)
+				w.conf.Logger.Warnf("broker =%d client=%s not deliver status=%d\n", k, e.client, e.status)
 				return false
 			}
 		}
@@ -307,6 +309,7 @@ type WorkerConfig struct {
 	ReconnectWait        time.Duration
 	MaxReconnects        int
 	Logger               *logrus.Entry
+	NatURL               string
 }
 
 type request struct {
@@ -403,6 +406,7 @@ func (w *Worker) retryDeliver() {
 
 		ne := e
 		msg := ne.Msg
+		errStatus := -99
 		w.CBQueue.Push(func(_ time.Duration) {
 			reply := e.Reply
 			if msg.Task != nil {
@@ -412,12 +416,11 @@ func (w *Worker) retryDeliver() {
 			if reply.Message == "" && e.err != nil {
 				reply.Message = e.err.Error()
 			}
-
-			fmt.Printf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v reciever= %+v\n", msg.Cmd, msg.Task, msg.Broker, e.Receiver)
+			reply.Status = errStatus
+			w.conf.Logger.Errorf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v receiver= %+v, message= %s\n", msg.Cmd, msg.Task, msg.Broker, e.Receiver, msg.Message)
 			switch msg.Cmd {
 			case workflow.SetTaskCmd:
 				reply.Cmd = workflow.ReplySetTaskCmd
-				reply.Status = workflow.FaultSetTask
 				w.logWorkflow(
 					fmt.Sprintf("Task %s can't setup on client %s, msg = %s ",
 						msg.Task.Name,
@@ -428,7 +431,6 @@ func (w *Worker) retryDeliver() {
 				)
 			case workflow.TriggerStartTaskCmd:
 				reply.Cmd = workflow.ReplyStartTaskCmd
-				reply.Status = workflow.FaultTriggerTask
 				w.logWorkflow(
 					fmt.Sprintf("Task %s can't trigger on client %s, msg = %s ",
 						msg.Task.Name,
@@ -439,18 +441,19 @@ func (w *Worker) retryDeliver() {
 				)
 			case workflow.InputTaskCmd:
 				reply.Cmd = workflow.ReplyInputTaskCmd
-				reply.Status = workflow.FaultInputTask
-				w.logWorkflow(
-					fmt.Sprintf("Result of task %s can't deliver to %s, msg = %s ",
-						msg.Task.Name,
-						e.Receiver.Name,
-						reply.Message),
-					models.WFRecordFault,
-					ne,
-				)
+				if msg.Task != nil {
+					w.logWorkflow(
+						fmt.Sprintf("Result of task %s can't deliver to %s, msg = %s ",
+							msg.Task.Name,
+							e.Receiver.Name,
+							reply.Message),
+						models.WFRecordFault,
+						ne,
+					)
+				}
+
 			case workflow.SetBrokerCmd:
 				reply.Cmd = workflow.ReplySetBrokerCmd
-				reply.Status = workflow.FaultSetBroker
 				w.logWorkflow(
 					fmt.Sprintf("Broker %s can't setup on client %s, msg = %s ",
 						msg.Broker.Name,
@@ -461,7 +464,6 @@ func (w *Worker) retryDeliver() {
 				)
 			case workflow.RequestDestroyWf:
 				reply.Cmd = workflow.ReplyDestroyWf
-				reply.Status = workflow.FaultDestroyWorkflow
 				w.logWorkflow(
 					reply.Message,
 					models.WFRecordFault,
@@ -469,8 +471,11 @@ func (w *Worker) retryDeliver() {
 				)
 			}
 			reply.DeliverID = msg.DeliverID
+			reply.Group = msg.Group
+			reply.Parent = msg.Parent
+			reply.Part = msg.Part
 			m, _ := json.Marshal(reply)
-			w.logMessageFlowReply(e.From, e.Receiver, m, time.Now().UnixMilli()-msg.SendAt, "")
+			w.logMessageFlowReply(e.Receiver, e.From, m, time.Now().UnixMilli()-msg.SendAt, "")
 		})
 	}
 }
@@ -506,7 +511,7 @@ func (w *Worker) setWfStatus(status int) {
 
 func (w *Worker) Run() error {
 	w.conf.Logger.Debug(fmt.Sprintf("worker %d run ", w.ID))
-	natConn, err := nats.Connect(nats.DefaultURL, optNatsWorker(defaultNatsOptions())...)
+	natConn, err := nats.Connect(w.conf.NatURL, optNatsWorker(defaultNatsOptions())...)
 	if err != nil {
 		return err
 	}
@@ -603,7 +608,6 @@ func (w *Worker) reciveMessageSync() error {
 			return
 		}
 
-		reply.Status = workflow.SuccessReceiveOutputTaskCmd
 		fmt.Printf("[SYNC BROKER] ============= %+v\n", reply)
 		var req workflow.CmdTask
 		req.Cmd = workflow.InputTaskCmd
@@ -617,11 +621,99 @@ func (w *Worker) reciveMessageSync() error {
 		result := <-resultCh
 		msg.Respond([]byte(result))
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	_, err = w.natsConn.Subscribe(fmt.Sprintf("%s-%d", messaging.TRIGGER, w.workflow.ID), func(msg *nats.Msg) {
+		var trigger models.Trigger
+		err := json.Unmarshal(msg.Data, &trigger)
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+		var cmd workflow.CmdTask
+		cmd.Cmd = workflow.TriggerCmd
+		if trigger.Type == "broker" {
+			cmd.Broker = &workflow.Broker{
+				ID:         trigger.ObjectID,
+				WorkflowID: trigger.WorkflowID,
+				Schedule:   trigger.Schedule,
+				Input:      trigger.Input,
+				Flows: workflow.BrokerFlows{
+					Endpoints: make([]string, 0),
+				},
+			}
+		} else if trigger.Type == "task" {
+			cmd.Task = &workflow.Task{
+				ID:         trigger.ObjectID,
+				WorkflowID: trigger.WorkflowID,
+				Schedule:   trigger.Schedule,
+				Input:      trigger.Input,
+			}
+		}
+		if trigger.Client != "" {
+			from := w.points["kairos"]
+			receiver := w.points[workflow.GetClientName(trigger.Client)]
+			err := w.deliverAsync(from, receiver, &cmd, func(crt *workflow.CmdReplyTask, err error) {
+				if err != nil {
+					w.wrapDeliverErr(from, receiver, &cmd, crt, err)
+					return
+				}
+
+				w.CBQueue.Push(func(duration time.Duration) {
+					w.UpdateTrigger(trigger.ID, 1)
+				})
+			})
+			if err != nil {
+				w.conf.Logger.Error(err)
+			}
+		}
+	})
+	return nil
+}
+
+func (w *Worker) handleLogFromDeam(log *workflow.LogDaemon) {
+	if log.Reply != nil {
+		w.conf.Logger.Warnf("LOGGER  REPLY =  %+v", log.Reply)
+		reply := log.Reply
+		reply.DeliverID = -2
+		from := w.points[reply.RunOn]
+		to := w.points[workflow.GetBrokerName(reply.BrokerName)]
+		m, err := json.Marshal(reply)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return
+		}
+		if from == nil {
+			w.conf.Logger.Errorf("Not found from name=%s", reply.TaskName)
+			return
+		}
+		if to == nil {
+			w.conf.Logger.Errorf("Not found from name=%s", reply.BrokerName)
+			return
+		}
+
+		w.logMessageFlowReply(from, to, m, log.SendAt, log.BrokerGroup)
+	} else if log.Request != nil {
+		w.conf.Logger.Warnf("LOGGER  REQUEST =  %+v", log.Request)
+		request := log.Request
+		request.DeliverID = -2
+		from := w.points[workflow.GetBrokerName(log.BrokerName)]
+		// để giống chiều từ server đến daemon.
+		to := w.points[log.RunOn]
+		if from == nil {
+			w.conf.Logger.Errorf("Not found from name=%s", log.BrokerName)
+			return
+		}
+		if to == nil {
+			w.conf.Logger.Errorf("Not found from name=%s", request.Task.Name)
+			return
+		}
+		w.logMessageFlowRequest(from, to, request, log.SendAt, log.Tracking, log.BrokerGroup)
+	}
 }
 
 func (w *Worker) reciveMessage() error {
-	_, err := w.natsConn.Subscribe(fmt.Sprint(w.workflow.UserID), func(msg *nats.Msg) {
+	_, err := w.natsConn.Subscribe(fmt.Sprintf("w-%d", w.workflow.ID), func(msg *nats.Msg) {
 		var reply workflow.CmdReplyTask
 		err := json.Unmarshal(msg.Data, &reply)
 		if (err != nil || reply.WorkflowID != w.workflow.ID) &&
@@ -630,7 +722,17 @@ func (w *Worker) reciveMessage() error {
 			return
 		}
 
-		fmt.Println("[ NATS REPLY !!]")
+		fmt.Printf("[ NATS REPLY !!] %+v\n", reply)
+		if reply.Cmd == workflow.ReplyLogWfCmd {
+			var log workflow.LogDaemon
+			if err := json.Unmarshal(msg.Data, &log); err == nil {
+				w.handleLogFromDeam(&log)
+			} else {
+				w.conf.Logger.Error(err)
+			}
+			return
+		}
+
 		if reply.DeliverID == DeliverBorkerCmd {
 			reply.Status = workflow.SuccessReceiveOutputTaskCmd
 			reply.WorkflowID = w.workflow.ID
@@ -639,7 +741,6 @@ func (w *Worker) reciveMessage() error {
 				Cmd:        workflow.InputTaskCmd,
 				From:       reply.RunOn,
 				WorkflowID: reply.WorkflowID,
-				Part:       w.getPart(reply.Part),
 			}
 
 			if reply.RunCount != 0 {
@@ -653,7 +754,6 @@ func (w *Worker) reciveMessage() error {
 				delete(w.responsesIDs, reply.RunCount)
 				w.requestsMu.RUnlock()
 			}
-
 			w.computeMsg(&reply, &req, nil)
 		} else {
 			reply.WorkflowID = w.workflow.ID
@@ -678,7 +778,33 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 	// 	w.conf.Logger.Error("worker not running")
 	// 	return
 	// }
+
+	if reply.Group == "" {
+		w.conf.Logger.Errorf("Empty group runon=%s wid=%d", reply.RunOn, reply.WorkflowID)
+		return
+	}
+
+	req.Group = reply.Group
+
+	m, _ := json.Marshal(reply)
+
+	sender := w.points[reply.RunOn]
+	if sender == nil {
+		w.conf.Logger.Errorf("unknow %s", reply.RunOn)
+		return
+	}
+
+	isHasDest := false
+	if reply.TaskInput != "" {
+		w.conf.Logger.Warnf("TaskInput %+v", reply.TaskInput)
+		w.CBQueue.Push(func(duration time.Duration) {
+			w.logMessageFlowReply(sender, sender, m, reply.SendAt, "")
+		})
+		return
+	}
+
 	w.workflow.Brokers.Range(func(key string, broker *workflow.Broker) error {
+		// reply.Part = w.getReplyPart(reply.Parent, broker.ID, BrokerPoint)
 		from := Point{
 			ID:   broker.ID,
 			Type: BrokerPoint,
@@ -686,31 +812,14 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 		}
 
 		if reply.WorkflowID != w.workflow.ID {
+			w.conf.Logger.Error("invalid message")
 			return fmt.Errorf("invalid message")
 		}
 
 		if (broker.IsListen(reply.TaskName) || broker.IsListen(reply.RunOn)) && len(broker.Clients) == 0 {
-			bg := w.getBrokerGroup()
-			if reply.Group == "" {
-				reply.Group = w.getGroup()
-				reply.Start = true
-				fmt.Println("RUN HERE VC", reply.Group)
-			}
-			req.Group = reply.Group
-			if reply.Part == "" && strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
-				reply.Part = w.getPart("")
-			}
-
-			m, _ := json.Marshal(reply)
+			isHasDest = true
+			bg := w.getBrokerGroup() // tính thời điểm vào broker
 			w.conf.Logger.Debugf("Reply runon=%s sendAt=%d Now=%d", reply.RunOn, reply.SendAt, helper.GetTimeNow())
-			sender := w.points[reply.RunOn]
-			if sender == nil {
-				return fmt.Errorf("can't find sender")
-			}
-
-			w.CBQueue.Push(func(duration time.Duration) {
-				w.logMessageFlowReply(sender, &from, m, reply.SendAt, bg)
-			})
 
 			req.Task = &workflow.Task{
 				ID:         reply.TaskID,
@@ -735,6 +844,10 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 				}
 				w.conf.Logger.Infof("Reciver message from %s value= %+v", reply.RunOn, reply.Content)
 			}
+
+			w.CBQueue.Push(func(duration time.Duration) {
+				w.logMessageFlowReply(sender, &from, m, reply.SendAt, bg)
+			})
 
 			if len(broker.Flows.Endpoints) > 0 {
 				for _, endpoint := range broker.Flows.Endpoints {
@@ -824,6 +937,7 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 
 				trun := broker.Template.NewRutime(replies)
 				exeOutput := trun.Execute()
+
 				delivers := exeOutput.DeliverFlows
 				w.CBQueue.Push(func(duration time.Duration) {
 					// input, err := json.Marshal(replies)
@@ -874,84 +988,98 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 		}
 		return nil
 	})
+
+	if !isHasDest {
+		w.CBQueue.Push(func(duration time.Duration) {
+			from := w.points["kairos"]
+			w.logMessageFlowReply(sender, from, m, reply.SendAt, "")
+		})
+	}
 }
+
 func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, reply *workflow.CmdReplyTask, req *workflow.CmdTask, trun *workflow.TemplateRuntime, resultCh chan []byte, exeOutput *workflow.ExecOutput, bg string) {
 	hasSync := false
 	for _, path := range delivers {
-		fmt.Printf("[ DEBUG OUTPUT TASK] %+v\n", path)
-		w.conf.Logger.Infof("Path: from= %s to receiver= %s msg= %+v", from.Name, path.Reciever, path.Msg)
-		receiver := w.points[path.Reciever]
-		if receiver == nil {
-			w.conf.Logger.Error(fmt.Errorf("can't find receiver %s", path.Reciever))
-			return
-		}
-		reqDeliver := *req
-		reqDeliver.Part = w.getPart(reply.Part)
-		reqDeliver.Parent = reply.Part
-		if strings.HasSuffix(path.Reciever, workflow.SubChannel) {
-			reqDeliver.Message = path.Msg
-		} else if strings.HasSuffix(path.Reciever, workflow.SubTask) {
-			input, ok := path.Msg.(string)
-			if !ok {
-				b, _ := json.Marshal(path.Msg)
-				input = string(b)
+		receivers := strings.Split(path.Reciever, ",")
+		for _, rev := range receivers {
+			fmt.Printf("[ DEBUG OUTPUT TASK] %+v\n", path)
+			w.conf.Logger.Infof("Path: from= %s to receiver= %s msg= %+v", from.Name, rev, path.Msg)
+			receiver := w.points[rev]
+			if receiver == nil {
+				w.conf.Logger.Error(fmt.Errorf("can't find receiver %s", rev))
+				return
 			}
-			reqDeliver.Task = &workflow.Task{
-				ID:         receiver.ID,
-				WorkflowID: reply.WorkflowID,
-				Name:       receiver.Name,
-				Input:      input,
+			reqDeliver := *req
+			reqDeliver.WorkflowID = w.workflow.ID
+			if reply != nil {
+				reqDeliver.Part = w.getPart(reply.Part, receiver.ID, receiver.Type)
+				reqDeliver.Parent = reply.Part
 			}
-		} else if strings.HasSuffix(path.Reciever, workflow.SubClient) {
 
-		}
+			if strings.HasSuffix(rev, workflow.SubChannel) {
+				reqDeliver.Message = path.Msg
+			} else if strings.HasSuffix(rev, workflow.SubTask) {
+				input, ok := path.Msg.(string)
+				if !ok {
+					b, _ := json.Marshal(path.Msg)
+					input = string(b)
+				}
+				reqDeliver.Task = &workflow.Task{
+					ID:         receiver.ID,
+					WorkflowID: reply.WorkflowID,
+					Name:       receiver.Name,
+					Input:      input,
+				}
+			} else if strings.HasSuffix(rev, workflow.SubClient) {
 
-		fmt.Printf("NEW deliver %+v task = %+v\n", reqDeliver, reqDeliver.Task)
+			}
+			fmt.Printf("NEW deliver %+v task = %+v\n", reqDeliver, reqDeliver.Task)
 
-		w.conf.Logger.Debugf("request %+v", reqDeliver)
-		w.conf.Logger.Debugf("reply %+v", reply)
-		if path.Send == workflow.SENDU {
-			reqDeliver.DeliverID = w.nextCmdID()
-			reqDeliver.RunCount = reqDeliver.DeliverID
-			w.requestsMu.RLock()
-			w.responsesIDs[reqDeliver.DeliverID] = true
-			w.requestsMu.RUnlock()
-			fmt.Println("SENDU---", reqDeliver.DeliverID)
-		}
+			w.conf.Logger.Debugf("request %+v", reqDeliver)
+			w.conf.Logger.Debugf("reply %+v", reply)
+			if path.Send == workflow.SENDU {
+				reqDeliver.DeliverID = w.nextCmdID()
+				reqDeliver.RunCount = reqDeliver.DeliverID
+				w.requestsMu.RLock()
+				w.responsesIDs[reqDeliver.DeliverID] = true
+				w.requestsMu.RUnlock()
+				fmt.Println("SENDU---", reqDeliver.DeliverID)
+			}
 
-		if path.Send == workflow.SENDSYNC {
-			hasSync = true
-			reqDeliver.Cmd = workflow.RequestTaskRunSyncCmd
-			if receiver.Type == TaskPoint {
-				w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
-					if receiver.ID == task.ID {
-						for _, c := range task.Clients {
-							cr := w.points[workflow.GetClientName(c)]
-							go w.deliverRequestRunTaskSync(from, cr, reply, &reqDeliver, trun, resultCh, exeOutput, bg)
+			if path.Send == workflow.SENDSYNC {
+				hasSync = true
+				reqDeliver.Cmd = workflow.RequestTaskRunSyncCmd
+				if receiver.Type == TaskPoint {
+					w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
+						if receiver.ID == task.ID {
+							for _, c := range task.Clients {
+								cr := w.points[workflow.GetClientName(c)]
+								go w.deliverRequestRunTaskSync(from, cr, reply, &reqDeliver, trun, resultCh, exeOutput, bg)
+							}
 						}
-					}
-					return nil
-				})
+						return nil
+					})
+				} else {
+					go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply, exeOutput, bg)
+				}
 			} else {
-				go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply, exeOutput, bg)
-			}
-		} else {
-			if receiver.Type == TaskPoint {
-				w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
-					if receiver.ID == task.ID {
-						for _, c := range task.Clients {
-							cr := w.points[workflow.GetClientName(c)]
-							go w.deliverInputTaskCmd(from, cr, &reqDeliver, reply, exeOutput, bg)
+				if receiver.Type == TaskPoint {
+					w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
+						if receiver.ID == task.ID {
+							for _, c := range task.Clients {
+								cr := w.points[workflow.GetClientName(c)]
+								go w.deliverInputTaskCmd(from, cr, &reqDeliver, reply, exeOutput, bg)
+							}
 						}
-					}
-					return nil
-				})
-			} else {
-				go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply, exeOutput, bg)
+						return nil
+					})
+				} else {
+					go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply, exeOutput, bg)
+				}
 			}
-		}
-		if resultCh != nil && !hasSync {
-			resultCh <- []byte("")
+			if resultCh != nil && !hasSync {
+				resultCh <- []byte("")
+			}
 		}
 	}
 }
@@ -1014,7 +1142,7 @@ func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *
 func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTask, reply *workflow.CmdReplyTask, exeOutput *workflow.ExecOutput, bg string) {
 	fmt.Printf("[BROKER %+v DELIVER OUTPUT TASK BY ENDPOINT] \n", receiver)
 	w.CBQueue.Push(func(duration time.Duration) {
-		if reply.Cmd == workflow.ReplyOutputTaskCmd {
+		if reply != nil && reply.Cmd == workflow.ReplyOutputTaskCmd {
 			w.saveTaskRecord(reply)
 		}
 		var traking string
@@ -1031,12 +1159,16 @@ func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTas
 			w.wrapDeliverErr(from, receiver, req, crt, err)
 			return
 		}
+		crt.Group = req.Group
+		crt.Parent = req.Parent
+		crt.Part = req.Part
 		m, _ := json.Marshal(crt)
 
 		w.CBQueue.Push(func(duration time.Duration) {
 			w.logMessageFlowReply(receiver, from, m, crt.SendAt, "")
 		})
 	})
+
 	if err != nil {
 		var crt workflow.CmdReplyTask
 		w.wrapDeliverErr(from, receiver, req, &crt, err)
@@ -1053,7 +1185,7 @@ func (w *Worker) nextCmdID() int64 {
 	return atomic.AddInt64(&w.deliverCmd, 1)
 }
 
-func (w *Worker) getPart(replyPart string) string {
+func (w *Worker) getPart(replyPart string, rvID int64, rvType int) string {
 	w.fm.RLock()
 	defer w.fm.RUnlock()
 	if replyPart == "" {
@@ -1061,11 +1193,31 @@ func (w *Worker) getPart(replyPart string) string {
 		p := fmt.Sprintf("part-%d-%d", w.workflow.ID, id)
 		return p
 	}
-	reqPart, ok := w.flowMap[replyPart]
+	my := fmt.Sprintf("%s@%d-%d", replyPart, rvID, rvType)
+	reqPart, ok := w.flowMap[my]
 	if !ok {
 		id := w.nextCmdID()
 		p := fmt.Sprintf("part-%d-%d", w.workflow.ID, id)
-		w.flowMap[replyPart] = p
+		w.flowMap[my] = p
+		return p
+	}
+	return reqPart
+}
+
+func (w *Worker) getReplyPart(parentPart string, rvID int64, rvType int) string {
+	w.fm.RLock()
+	defer w.fm.RUnlock()
+	if parentPart == "" {
+		id := w.nextCmdID()
+		p := fmt.Sprintf("part-%d-%d", w.workflow.ID, id)
+		return p
+	}
+	my := fmt.Sprintf("%s@%d-%d", parentPart, rvID, rvType)
+	reqPart, ok := w.requestMap[my]
+	if !ok {
+		id := w.nextCmdID()
+		p := fmt.Sprintf("part-%d-%d", w.workflow.ID, id)
+		w.requestMap[my] = p
 		return p
 	}
 	return reqPart
@@ -1073,12 +1225,12 @@ func (w *Worker) getPart(replyPart string) string {
 
 func (w *Worker) getGroup() string {
 	id := w.nextCmdID()
-	return fmt.Sprintf("kairos-%d-%d", w.workflow.ID, id)
+	return fmt.Sprintf("kairos-%d-%d-0", w.workflow.ID, id)
 }
 
 func (w *Worker) getBrokerGroup() string {
 	id := w.nextCmdID()
-	return fmt.Sprintf("broker-%d-%d", w.workflow.ID, id)
+	return fmt.Sprintf("kairosbroker-%d-%d-0", w.workflow.ID, id)
 }
 
 func (w *Worker) deliver(cmd *workflow.CmdTask) error {
@@ -1143,7 +1295,7 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 }
 
 func (w *Worker) deliverTaskToClient(from *Point, receiver *Point, msg *workflow.CmdTask) error {
-	msg.Part = w.getPart("")
+	msg.Part = w.getPart("", -1, -1)
 	w.CBQueue.Push(func(duration time.Duration) {
 		w.logMessageFlowRequest(from, receiver, msg, duration.Milliseconds(), "", "")
 	})
@@ -1384,50 +1536,117 @@ func (w *Worker) pushAllCmdTask(cmd workflow.RequestActionTask) error {
 		w.conf.Logger.Debug(fmt.Sprintf("task name = %s, executor: %s", key, task.Executor))
 		switch task.Executor {
 		case workflow.PubSubTask:
-			arrs := make([]map[string]interface{}, 0)
+			w.updateStatusDeliverTask(task.ID, &taskDeliver{
+				client: "kairos",
+				status: workflow.PendingDeliver,
+			})
 			maps := make(map[string]interface{})
-			if err := json.Unmarshal([]byte(task.Payload), &arrs); err != nil {
-				err = json.Unmarshal([]byte(task.Payload), &maps)
-				if err != nil {
-					return err
-				}
+			if err := json.Unmarshal([]byte(task.Payload), &maps); err != nil {
+				return err
 			}
 
-			if len(maps) != 0 {
-				arrs = append(arrs, maps)
-			}
-
-			task.Execute = func() {
-				for _, m := range arrs {
+			if cmd == workflow.TriggerStartTaskCmd {
+				task.Execute = func(ct *workflow.CmdTask) {
+					from := w.points[workflow.GetTaskName(task.Name)]
+					outputs := make(map[string]interface{})
+					if ct != nil && ct.Task.Output != "" {
+						err := json.Unmarshal([]byte(ct.Task.Output), &outputs)
+						if err != nil {
+							w.conf.Logger.Error(err)
+							return
+						}
+					}
+					for k, v := range maps {
+						outputs[k] = v
+					}
 					data := ""
-					switch m["data"].(type) {
+					switch outputs["data"].(type) {
 					case string:
-						data = m["data"].(string)
+						data = outputs["data"].(string)
 					default:
-						str, _ := json.Marshal(m["data"])
+						str, _ := json.Marshal(outputs["data"])
 						data = string(str)
 					}
-					reciever := w.points[m["sub"].(string)]
+					objectName := outputs["sub"].(string)
+					receiver := w.points[objectName]
+					if receiver == nil {
+						w.conf.Logger.Errorf("sub %s not exist", objectName)
+						return
+					}
 					cmd := &workflow.CmdTask{
 						Cmd:       workflow.InputTaskCmd,
 						DeliverID: w.nextCmdID(),
-						Task: &workflow.Task{
-							ID:         task.ID,
-							Name:       task.Name,
-							Input:      data,
-							WorkflowID: task.WorkflowID,
-						},
-						Channel: reciever.Name,
+						Group:     w.getGroup(),
+						Channel:   receiver.Name,
 					}
 
-					fmt.Printf("DELIVER PUB SUB TASK TO FROM %+v TO %+v \n", from, reciever)
-					w.deliverAsync(from, reciever, cmd, func(crt *workflow.CmdReplyTask, err error) {
-						//TODO
-						fmt.Println("[RECIVER CMD REPLY TASK]", err)
+					if strings.HasSuffix(objectName, workflow.SubTask) {
+						cmd.Task = &workflow.Task{
+							ID:         receiver.ID,
+							Name:       receiver.Name,
+							Output:     data,
+							WorkflowID: w.workflow.ID,
+						}
+					} else if strings.HasSuffix(objectName, workflow.SubChannel) {
+						cmd.Channel = receiver.Name
+						cmd.Message = data
+					}
+
+					// if ct != nil {
+					// 	cmd.Group = ct.Group
+					// 	cmd.Parent = ct.Part
+					// 	cmd.Part = w.getPart(ct.Part)
+					// } else {
+					// 	cmd.Group = w.getGroup()
+					// 	cmd.Part = w.getPart("")
+					// 	cmd.Start = true
+					// }
+					delivers := make([]*workflow.DeliverFlow, 0)
+					delivers = append(delivers, &workflow.DeliverFlow{
+						Reciever: objectName,
+						Send:     "send",
+						Msg:      data,
 					})
+					w.handleDeliver(from, delivers, nil, cmd, nil, nil, nil, "")
+					// w.CBQueue.Push(func(duration time.Duration) {
+					// 	w.logMessageFlowRequest(from, receiver, cmd, duration.Milliseconds(), "", "")
+					// })
+					// w.deliverAsync(from, receiver, cmd, func(crt *workflow.CmdReplyTask, err error) {
+					// 	if err != nil {
+					// 		w.conf.Logger.Errorf("PUBSUB DELIVER ERR= %s", err.Error())
+					// 		return
+					// 	}
+					// 	crt.Parent = cmd.Parent
+					// 	crt.Part = cmd.Part
+					// 	crt.Group = cmd.Group
+					// 	crt.FinishPart = true
+					// 	m, _ := json.Marshal(crt)
+					// 	w.CBQueue.Push(func(duration time.Duration) {
+					// 		w.logMessageFlowReply(receiver, from, m, duration.Milliseconds(), "")
+					// 	})
+					// 	//TODO
+					// 	fmt.Println("[RECIVER CMD REPLY TASK]", crt)
+					// })
 				}
+				w.Sched.AddTask(task)
+				w.conf.Logger.Info("START Trigger")
 			}
 			w.Sched.AddTask(task)
+			cmdReply := workflow.ReplySetTaskCmd
+			status := workflow.SuccessSetTask
+			if cmd == workflow.TriggerStartTaskCmd {
+				cmdReply = workflow.ReplyStartTaskCmd
+				status = workflow.SuccessTriggerTask
+			}
+			w.eventChan <- &Event{
+				cmd: ReceiveDeliverTaskCmd,
+				cmdtask: &workflow.CmdReplyTask{
+					Cmd:    cmdReply,
+					Status: status,
+					RunOn:  "kairos",
+					TaskID: task.ID,
+				},
+			}
 		case workflow.HttpHookTask:
 
 		default:
@@ -1454,6 +1673,13 @@ type LogMessageReply struct {
 	ReceiveAt    int64                  `json:"receive_at"`
 }
 
+func (w *Worker) UpdateTrigger(triggerID int64, newStatus int) {
+	err := storage.UpdateStatusByID(triggerID, newStatus)
+	if err != nil {
+		w.conf.Logger.Error(err)
+	}
+}
+
 func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, receiverAt int64, broker_group string) {
 	var mf models.MessageFlow
 	var msg workflow.CmdReplyTask
@@ -1461,14 +1687,19 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	var m []byte
 	var err error
 	if msg.Result != nil {
-		m, err = json.Marshal(msg.Result)
-		if err != nil {
-			w.conf.Logger.Error(err)
-			return
+		if msg.TaskInput != "" {
+			m = []byte(msg.TaskInput)
+		} else {
+			m, err = json.Marshal(msg.Result)
+			if err != nil {
+				w.conf.Logger.Error(err)
+				return
+			}
 		}
 		if msg.Result.StartedAt != 0 {
 			mf.BeginPart = true
-		} else if msg.Result.FinishedAt != 0 {
+		}
+		if msg.Result.FinishedAt != 0 {
 			mf.FinishPart = true
 		}
 	} else if msg.Content != nil {
@@ -1482,18 +1713,27 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	} else {
 		mf.BeginPart = msg.BeginPart
 		mf.FinishPart = msg.FinishPart
+
 	}
+
+	if msg.DeliverID == -2 {
+		mf.Flow = models.LogFlow
+	} else if receiver.Type == KairosPoint {
+		mf.Flow = models.KairosLogFlow
+	} else {
+		mf.Flow = models.RecieverFlow
+	}
+
 	mf.SenderID = from.ID
 	mf.SenderType = from.Type
 	mf.SenderName = from.Name
 	mf.ReceiverID = receiver.ID
 	mf.ReceiverType = receiver.Type
 	mf.ReceiverName = receiver.Name
-	mf.WorkflowID = msg.WorkflowID
+	mf.WorkflowID = w.workflow.ID
 	mf.CreatedAt = helper.GetTimeNow()
 	mf.Message = string(m)
 	mf.Status = msg.Status
-	mf.Flow = models.RecieverFlow
 	mf.DeliverID = msg.DeliverID
 	mf.ResponseSize = len(mrs)
 	mf.Cmd = int(msg.Cmd)
@@ -1505,6 +1745,7 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	mf.Part = msg.Part
 	mf.Parent = msg.Parent
 	mf.BrokerGroup = broker_group
+	mf.StartInput = msg.StartInput
 	fmt.Printf("mf= %+v\n", mf)
 	id, err := storage.LogMessageFlow(&mf)
 
@@ -1534,48 +1775,51 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	}
 }
 
-type LogMessage struct {
-	ID          int64             `json:"id"`
-	From        *Point            `json:"from"`
-	Receiver    *Point            `json:"receiver"`
-	Msg         *workflow.CmdTask `json:"msg"`
-	CreatedAt   int64             `json:"created_at"`
-	Flow        int               `json:"flow"`
-	RequestSize int               `json:"request_size"`
-	SendAt      int64             `json:"send_at"`
-}
-
 func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workflow.CmdTask, sendAt int64, tracking string, broker_group string) {
 	var m []byte
+	if msg.Task == nil && msg.Broker == nil && msg.Channel == "" {
+		w.conf.Logger.Errorf("empty task and broker on request %+v", msg)
+		return
+	}
+
+	var mf models.MessageFlow
 	if receiver.Type == ChannelPoint {
-		fmt.Printf("FUCK CHANNEL %+v", msg)
 		if s, ok := msg.Message.(string); ok {
 			m = []byte(s)
 		} else {
 			m, _ = json.Marshal(msg.Message)
 		}
-
-	} else {
+	} else if msg.Task != nil {
 		m, _ = json.Marshal(msg.Task)
+		mf.TaskID = msg.Task.ID
+		mf.TaskName = msg.Task.Name
+	} else if msg.Broker != nil {
+		m, _ = json.Marshal(msg.Broker)
+		mf.TaskID = -1
 	}
-	var mf models.MessageFlow
+
+	if msg.DeliverID == -2 {
+		mf.Flow = models.LogFlow
+		mf.FinishPart = true
+	} else {
+		mf.Flow = models.DeliverFlow
+	}
 	mf.SenderID = from.ID
 	mf.SenderType = from.Type
 	mf.SenderName = from.Name
 	mf.ReceiverID = receiver.ID
 	mf.ReceiverType = receiver.Type
 	mf.ReceiverName = receiver.Name
-	mf.WorkflowID = msg.WorkflowID
+	mf.WorkflowID = w.workflow.ID
 	mf.CreatedAt = helper.GetTimeNow()
 	mf.Message = string(m)
 	mf.Status = msg.Status
-	mf.Flow = models.DeliverFlow
 	mf.DeliverID = msg.DeliverID
 	mf.SendAt = sendAt
 	mf.Cmd = int(msg.Cmd)
 	mf.Group = msg.Group
-	mf.TaskID = msg.Task.ID
-	mf.TaskName = msg.Task.Name
+	mf.Start = msg.Start
+	mf.StartInput = msg.StartInput
 	mf.Parent = msg.Parent
 	mf.Part = msg.Part
 	mf.BeginPart = true
@@ -1586,7 +1830,6 @@ func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workfl
 	if err != nil {
 		w.conf.Logger.Errorf(fmt.Sprint("[SAVE TASK REQUEST FLOW ERR]", err))
 	}
-
 	mf.ID = id
 
 	data, err := json.Marshal(&mf)
@@ -1606,7 +1849,7 @@ func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workfl
 	err = w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
 
 	if err != nil {
-		fmt.Println("[MONITOR WORKFLOW ERROR] ", err)
+		w.conf.Logger.Error(err)
 	}
 
 }

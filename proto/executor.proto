@@ -6,7 +6,7 @@ option go_package = "github.com/THPTUHA/kairos/server/plugin/proto";
 
 message ExecuteRequest {
     int64 task_id = 1;
-    map<string, string> config = 2;
+    map<string,string > config = 2;
     uint32 status_server = 3;
 }
   
@@ -35,9 +35,23 @@ message StatusInputResponse {
     bytes input = 1;
 }
 
+enum LogType {
+    DEBUG = 0;
+    INFO = 1;
+    ERROR = 2;
+}
+
+message StatusLogRequest {
+    bytes msg = 1;
+    LogType type = 2;
+}
+
+message StatusLogResponse {
+}
 
 service StatusHelper {
     rpc Update(StatusUpdateRequest) returns (StatusUpdateResponse);
     rpc Input(StatusInputRequest) returns (StatusInputResponse);
+    rpc Log(StatusLogRequest) returns (StatusLogResponse);
 }
   

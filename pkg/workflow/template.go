@@ -78,6 +78,11 @@ func NewTemplate(Funcs *goja.Runtime) *Template {
 		},
 	}
 }
+
+func (t *Template) SetFuncs(funcCalls *FuncCall) {
+	t.FuncCalls = funcCalls
+}
+
 func getVarName(v string) string {
 	return strings.TrimPrefix(v, ".")
 }
@@ -213,7 +218,7 @@ func (t *Template) checkValidParam(items []string, varTemps *varTemp) error {
 		}
 
 		if !existIn(varTemps, e) {
-			return errors.New(fmt.Sprintf("%s: stack err, variable = %s has not define", items[0], e))
+			return errors.New(fmt.Sprintf("%s: stack err, variable = %s has not define at %+v", items[0], e, items))
 		}
 	}
 	return nil
@@ -239,10 +244,11 @@ const (
 
 	PARSE_EXP = "parse"
 
-	SEND     = "send"
-	SENDU    = "sendu"
-	SENDSYNC = "sendsync"
-	WAIT_EXP = "wait"
+	SEND      = "send"
+	SENDU     = "sendu"
+	SENDSYNC  = "sendsync"
+	WAIT_EXP  = "wait"
+	WAITE_EXP = "waite"
 
 	EQ_EXP = "eq"
 	NE_EXP = "ne"
@@ -260,7 +266,7 @@ const (
 )
 
 var OPEN_EXP = []string{
-	MERGE_EXP, RANGE_EXP, PUT_EXP, DELETE_EXP, POP_EXP, IF_EXP, GET_EXP, PUSH_EXP, WAIT_EXP,
+	MERGE_EXP, RANGE_EXP, PUT_EXP, DELETE_EXP, POP_EXP, IF_EXP, GET_EXP, PUSH_EXP, WAIT_EXP, WAITE_EXP,
 }
 
 var COMPARE_EXP = []string{
@@ -424,12 +430,16 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 			if err := varTemps.Pop(); err != nil {
 				return nil, -1, err
 			}
-		case WAIT_EXP:
+		case WAIT_EXP, WAITE_EXP:
 			for _, e := range c[1:] {
-				if !includes(t.Input, strings.TrimPrefix(e, ".")) && !strings.HasSuffix(e, SubChannel) {
-					return nil, -1, fmt.Errorf("exp: %s invalid param %s", WAIT_EXP, e)
+				if !includes(t.Input, strings.TrimPrefix(e, ".")) && !strings.HasSuffix(e, SubChannel) && !strings.HasSuffix(e, SubTask) {
+					return nil, -1, fmt.Errorf("exp: %s invalid param %s", c[0], e)
 				}
 			}
+			varTemps.Push(&kv{
+				key: c[1],
+			})
+			varTemps.Append()
 			open++
 		case PRINTF_EXP:
 			if err := isContants(c[1]); err != nil {
@@ -658,10 +668,13 @@ func (t *Template) Parse(str string, input []string, globalVar *Vars, restrict b
 		default:
 			if open-close != 2 && strings.TrimSpace(expStr) != "" {
 				fmt.Printf("open = %d close = %d exp=%s \n", open, close, expStr)
-				return errors.New(fmt.Sprintf("%s invalid { ", expStr))
+				return errors.New(fmt.Sprintf("'%s' invalid { ", expStr))
 			}
 			expStr += string(c)
 		}
+	}
+	if open-close > 0 {
+		return fmt.Errorf("missing }")
 	}
 	if openExp != 0 {
 		return fmt.Errorf("missing end")
@@ -670,6 +683,7 @@ func (t *Template) Parse(str string, input []string, globalVar *Vars, restrict b
 	return nil
 }
 
+// return function not exist here
 func (t *Template) Build(input []string, s string, vars *Vars, restrict bool) error {
 	t.Input = input
 	err := t.Parse(s, input, vars, restrict)
@@ -976,8 +990,7 @@ func (t *TemplateRuntime) Execute() *ExecOutput {
 				break
 			}
 
-			if (len(out) == 1 && (out[0] == "") || err != nil) &&
-				t.indexRun[idx] > 0 {
+			if (len(out) == 1 && (out[0] == "") || err != nil) && t.indexRun[idx] > 0 {
 				fmt.Println("RUN FORWARD ERR", err)
 				fmt.Printf("EXP ERR %+v\n", e)
 				idx = t.indexRun[idx]

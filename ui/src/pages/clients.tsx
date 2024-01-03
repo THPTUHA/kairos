@@ -12,6 +12,9 @@ import Modal from "react-responsive-modal"
 import { useRecoilState } from "recoil"
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom"
 import { ClientActive } from "../models"
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+
 
 const locale = {
     emptyText: <span>Empty client</span>,
@@ -105,6 +108,7 @@ const ClientPage = () => {
         setReload(reload => reload + 1)
         setShowModalForm(false)
     }
+
 
     return (
         <div>

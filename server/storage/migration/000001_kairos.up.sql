@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS message_flows (
     finish_part BOOLEAN DEFAULT FALSE,
     tracking TEXT,
     broker_group VARCHAR(255) DEFAULT '',
+    start_input TEXT DEFAULT '',
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -162,3 +163,25 @@ CREATE TABLE IF NOT EXISTS channel_permissions (
     CONSTRAINT fk_cert FOREIGN KEY(cert_id) REFERENCES certificates(id) ON DELETE CASCADE,
     CONSTRAINT fk_channel FOREIGN KEY(channel_id) REFERENCES channels(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS functions (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT,
+    content TEXT,
+    created_at BIGINT,
+    name VARCHAR(255),
+    CONSTRAINT fk_user FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS triggers (
+    id SERIAL PRIMARY KEY,
+    workflow_id BIGINT,
+    object_id BIGINT,
+    type VARCHAR(255),
+    schedule VARCHAR(255) DEFAULT '',
+    input TEXT DEFAULT '',
+    status INT  DEFAULT 0,
+    trigger_at BIGINT DEFAULT 0,
+    client VARCHAR(255),
+    CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
+)

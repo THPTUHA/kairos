@@ -117,6 +117,7 @@ func (r *Runner) execute(signals chan os.Signal) {
 				TimeoutRetryDeliver:  time.Duration(r.config.Runner.TimeoutRetryDeliver) * time.Second,
 				DeliverTimeout:       time.Duration(r.config.Runner.DeliverTimeout) * time.Second,
 				Logger:               logger.InitLogger("debug", "worker"),
+				NatURL:               r.config.Nats.URL,
 			}, r.sched)
 			worker.status = workflow.Pending
 			worker.workflow.Status = workflow.Pending

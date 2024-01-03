@@ -54,13 +54,17 @@ func (s *Scheduler) ClearCron() {
 	}
 }
 
-func (s *Scheduler) AddTask(task *workflow.Task) error {
+func (s *Scheduler) AddTask(task *workflow.Task) (cron.EntryID, error) {
 	s.logger.Debug(fmt.Sprintf("schedule task name = %s, id =%d", task.Name, task.ID))
 	if _, ok := s.GetEntryTask(task.ID); ok {
 		s.RemoveTask(task.ID)
 	}
 
 	schedule := task.Schedule
+	if schedule == "" {
+		task.Execute(nil)
+		return -1, nil
+	}
 	if task.Timezone != "" &&
 		!strings.HasPrefix(schedule, "@") &&
 		!strings.HasPrefix(schedule, "TZ=") &&
@@ -71,13 +75,12 @@ func (s *Scheduler) AddTask(task *workflow.Task) error {
 		"task":     task.ID,
 		"schedule": task.Schedule,
 	}).Debug("scheduler: Adding task to cron")
-	_, err := s.Cron.AddJob(schedule, task)
+	tjid, err := s.Cron.AddJob(schedule, task)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	s.Cron.Start()
-
-	return nil
+	return tjid, nil
 }
 
 func (s *Scheduler) Start(tasks []*workflow.Task) error {
@@ -90,7 +93,7 @@ func (s *Scheduler) Start(tasks []*workflow.Task) error {
 	s.ClearCron()
 
 	for _, task := range tasks {
-		if err := s.AddTask(task); err != nil {
+		if _, err := s.AddTask(task); err != nil {
 			return err
 		}
 	}

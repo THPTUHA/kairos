@@ -106,9 +106,28 @@ func (ctr *Controller) GetGroupID(c *gin.Context) {
 	})
 }
 
+func (ctr *Controller) GetGroupList(c *gin.Context) {
+	groupID := c.Query("group")
+	limit := c.Query("limit")
+
+	mf, err := storage.GetGroupList(groupID, limit)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "graph",
+		"data":    mf,
+	})
+}
+
 type body struct {
-	Parts   []any `json:"parts"`
-	Parents []any `json:"parents"`
+	Parts      []any  `json:"parts"`
+	Parent     string `json:"parent"`
+	ReceiverID int64  `json:"receiver_id"`
 }
 
 func (ctr *Controller) DetailPoint(c *gin.Context) {
@@ -116,24 +135,23 @@ func (ctr *Controller) DetailPoint(c *gin.Context) {
 	err := c.BindJSON(&ps)
 	inputs := make([]*models.MessageFlow, 0)
 	outputs := make([]*models.MessageFlow, 0)
-	if len(ps.Parts) > 0 {
-		inputs, err = storage.GetMessageFlowsByPart(ps.Parts)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
+	// phần từ đầu vào đến con
+	inputs, err = storage.GetMessageFlowsByParent(ps.Parent, ps.ReceiverID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
 	}
-	if len(ps.Parents) > 0 {
-		outputs, err = storage.GetMessageFlowsByParent(ps.Parents)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"err": err.Error(),
-			})
-			return
-		}
+
+	outputs, err = storage.GetMessageFlowsByParts(ps.Parts)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
 	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "graph",
 		"inputs":  inputs,

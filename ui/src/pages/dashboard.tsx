@@ -171,7 +171,7 @@ const DashBoardPage = () => {
     }, [value])
 
     useEffect(() => {
-        if (wfCmd && wfCmd.cmd == LogMessageFlow && viewType == ViewRealtime) {
+        if (wfCmd && wfCmd.cmd == LogMessageFlow && (viewType == ViewRealtime || viewType == ViewTimeLine)) {
             cnt.current++;
             console.log(cnt.current)
             const entry = {

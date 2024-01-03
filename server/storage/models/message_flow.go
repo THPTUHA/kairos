@@ -3,6 +3,8 @@ package models
 const (
 	DeliverFlow = iota
 	RecieverFlow
+	LogFlow
+	KairosLogFlow
 )
 
 type MessageFlow struct {
@@ -25,6 +27,7 @@ type MessageFlow struct {
 	Cmd          int    `json:"cmd"`
 	WorkflowName string `json:"workflow_name"`
 	Start        bool   `json:"start"`
+	StartInput   string `json:"start_input"`
 	Group        string `json:"group"`
 	TaskID       int64  `json:"task_id"`
 	SendAt       int64  `json:"send_at"`

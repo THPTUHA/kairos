@@ -151,11 +151,10 @@ func (r *ConnectRequest) toProto() *deliverprotocol.ConnectRequest {
 	return req
 }
 
-// Client represents client connection to server.
 type Client struct {
 	mu                sync.RWMutex
-	connectMu         sync.Mutex // allows syncing connect with disconnect.
-	presenceMu        sync.Mutex // allows syncing presence routine with client closing.
+	connectMu         sync.Mutex
+	presenceMu        sync.Mutex
 	ctx               context.Context
 	transport         Transport
 	node              *Node

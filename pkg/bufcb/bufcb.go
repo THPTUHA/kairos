@@ -19,6 +19,10 @@ func NewBuffer(size int, cb func([]byte) error) *Buffer {
 }
 
 func (b *Buffer) Write(buf []byte) (int, error) {
+	if buf == nil {
+		err := b.cb(nil)
+		return 0, err
+	}
 	n := len(buf)
 	if n == 0 {
 		return b.Flush()

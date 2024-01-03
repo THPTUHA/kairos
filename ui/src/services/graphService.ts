@@ -32,6 +32,8 @@ export interface MessageFlow {
     outobject: any;
     broker_group: string;
     tracking: string;
+    value: any;
+    start_input: string;
   }
 
 export const GraphService = {
@@ -65,10 +67,16 @@ export const GraphService = {
             .send()
             .then(res => res.body.data as MessageFlow[]);
     },
-    getParts(parts: string[], parents: string[]){
+    getGroupList(group: string, limit: string) {
+        return requests
+            .get(`apis/v1/service/graph/group/list?group=${group}&limit=${limit}`)
+            .send()
+            .then(res => res.body.data as MessageFlow[]);
+    },
+    getParts(query: any){
         return requests
             .post(`apis/v1/service/graph/part`)
-            .send({parts, parents})
+            .send(query)
             .then(res => (
                 {
                     inputs: res.body.inputs as MessageFlow[],

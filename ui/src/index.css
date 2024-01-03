@@ -18,13 +18,13 @@ code {
 
 @keyframes pulse {
   0%, 100% {
-    fill: rgb(10, 135, 10); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+    fill: rgb(8, 97, 8); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
   }
   25% {
     fill: rgb(9, 183, 9); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
   }
   75% {
-    fill: rgba(0, 200, 0, 1); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+    fill: rgb(4, 232, 4); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
   }
 }
 
@@ -32,4 +32,23 @@ g.active rect,
 g.active ellipse,
 g.active circle {
   animation: pulse 1s infinite; /* Tốc độ chậm hơn */
+}
+
+g.success rect,
+g.success ellipse,
+g.success circle {
+  fill: rgb(9, 183, 9);
+}
+
+g.fault rect,
+g.fault ellipse,
+g.fault circle {
+  fill: rgb(255, 4, 4);
+}
+
+
+g.offline rect,
+g.offline ellipse,
+g.offline circle {
+  fill: rgb(107, 103, 103);
 }

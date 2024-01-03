@@ -368,7 +368,7 @@ func SetClient(client *models.Client) (int64, error) {
 }
 
 type TaskQuery struct {
-	workflowID int64
+	WID int64
 }
 
 func DetailWorkflow(workflowID int64, userID string) (*workflow.Workflow, error) {
@@ -403,7 +403,7 @@ func DetailWorkflow(workflowID int64, userID string) (*workflow.Workflow, error)
 
 	listens := make(map[string]bool)
 
-	taskM, err := GetTasks(&TaskQuery{workflowID: workflowID})
+	taskM, err := GetTasks(&TaskQuery{WID: workflowID})
 	if err != nil {
 		fmt.Println("err 2")
 		return nil, err
@@ -555,7 +555,7 @@ func GetTasks(q *TaskQuery) ([]*models.Task, error) {
 		WHERE workflow_id = $1
 	`
 
-	rows, err := Get().Query(query, q.workflowID)
+	rows, err := Get().Query(query, q.WID)
 	if err != nil {
 		return nil, err
 	}
@@ -752,9 +752,9 @@ func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
 			receiver_type, receiver_name, workflow_id, message, attempt,
 			created_at, flow, deliver_id, request_size, response_size,
 			cmd, start, "group", task_id, send_at, receive_at, task_name,
-			part, parent, begin_part, finish_part, tracking, broker_group
+			part, parent, begin_part, finish_part, tracking, broker_group, start_input
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,$29
 		) RETURNING id
 	`)
 	if err != nil {
@@ -768,7 +768,7 @@ func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
 		mf.ReceiverType, mf.ReceiverName, mf.WorkflowID, mf.Message, mf.Attempt,
 		mf.CreatedAt, mf.Flow, mf.DeliverID, mf.RequestSize, mf.ResponseSize,
 		mf.Cmd, mf.Start, mf.Group, mf.TaskID, mf.SendAt, mf.ReceiveAt, mf.TaskName,
-		mf.Part, mf.Parent, mf.BeginPart, mf.FinishPart, mf.Tracking, mf.BrokerGroup,
+		mf.Part, mf.Parent, mf.BeginPart, mf.FinishPart, mf.Tracking, mf.BrokerGroup, mf.StartInput,
 	).Scan(&mf.ID)
 	if err != nil {
 		return -1, err
@@ -1207,6 +1207,17 @@ func FindFunctionsByUserID(userID int64) ([]*models.Function, error) {
 	return functions, nil
 }
 
+func DeleteFunction(id int64) error {
+	query := `
+		DELETE FROM functions where id = $1
+	`
+	_, err := db.Query(query, id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 type GraphEdge struct {
 	SenderID       int64   `json:"sender_id"`
 	Count          int64   `json:"count"`
@@ -1234,7 +1245,7 @@ func PerformCalculation(wids []int64) ([]*GraphEdge, error) {
 
 func countSenderReceiverPairs(wfIDs string) ([]*GraphEdge, error) {
 	edges := make([]*GraphEdge, 0)
-	query := `SELECT COUNT(*) as count,AVG(elapsed_time) as elapsed_time_avg, SUM(request_size + response_size) as throughput, sender_id, receiver_id, flow, workflow_id,sender_type,receiver_type FROM message_flows 
+	query := `SELECT COUNT(*) as count, SUM(request_size + response_size) as throughput, sender_id, receiver_id, flow, workflow_id,sender_type,receiver_type FROM message_flows 
 			WHERE workflow_id in (%s) GROUP BY sender_id, receiver_id, flow, workflow_id, sender_type, receiver_type `
 	rows, err := Get().Query(fmt.Sprintf(query, wfIDs))
 	if err != nil {
@@ -1255,13 +1266,14 @@ func GetMessageFlowsByUserID(userID int64) ([]*models.MessageFlow, error) {
 			mf.id,  mf.sender_id, mf.sender_type, mf.sender_name,
 			mf.receiver_id, mf.receiver_type, mf.receiver_name, mf.workflow_id,
 			mf.attempt, mf.created_at, mf.flow, mf.deliver_id, mf.cmd, mf.group, w.name,
-			mf.part, mf.parent, mf.begin_part, mf.finish_part
+			mf.part, mf.parent, mf.begin_part, mf.finish_part,mf.start, mf.message
 		FROM
 			message_flows mf
 		JOIN
 			workflows w ON mf.workflow_id = w.id
 		WHERE
 			w.user_id = $1 AND mf.start = true
+		ORDER BY id DESC
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -1277,7 +1289,7 @@ func GetMessageFlowsByUserID(userID int64) ([]*models.MessageFlow, error) {
 			&mf.ReceiverID, &mf.ReceiverType, &mf.ReceiverName, &mf.WorkflowID,
 			&mf.Attempt, &mf.CreatedAt, &mf.Flow, &mf.DeliverID,
 			&mf.Cmd, &mf.Group, &mf.WorkflowName,
-			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart,
+			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart, &mf.Start, &mf.Message,
 		)
 		if err != nil {
 			return nil, err
@@ -1302,7 +1314,7 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 			receiver_type, receiver_name, workflow_id, message, attempt,
 			created_at, flow, deliver_id, request_size, response_size,
 			cmd, start, "group", task_id, send_at, receive_at, task_name,
-			mf.part, mf.parent, mf.begin_part, mf.finish_part
+			mf.part, mf.parent, mf.begin_part, mf.finish_part, mf.broker_group
 		FROM message_flows mf, flow_tops ft
 		WHERE mf.id = ft.id
 		ORDER BY mf.id ASC
@@ -1322,7 +1334,7 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 			&mf.ReceiverType, &mf.ReceiverName, &mf.WorkflowID, &mf.Message, &mf.Attempt,
 			&mf.CreatedAt, &mf.Flow, &mf.DeliverID, &mf.RequestSize, &mf.ResponseSize,
 			&mf.Cmd, &mf.Start, &mf.Group, &mf.TaskID, &mf.SendAt, &mf.ReceiveAt, &mf.TaskName,
-			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart,
+			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart, &mf.BrokerGroup,
 		)
 		if err != nil {
 			return nil, err
@@ -1333,83 +1345,55 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 	return messageFlows, nil
 }
 
-func GetMessageFlowsByPart(parts []any) ([]*models.MessageFlow, error) {
-
-	placeholders := make([]string, len(parts))
-	for i := range parts {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
+func GetMessageFlowsByParent(part string, receiverID int64) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part  = '%s' AND (receiver_id =%d OR task_id = %d) ORDER BY ID DESC LIMIT 20`, part, receiverID, receiverID)
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
 	}
-	partStr := strings.Join(placeholders, ",")
+	defer rows.Close()
+	return exactMessageFlow(rows)
+}
 
-	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part IN (%s) ORDER BY ID DESC LIMIT 20`, partStr)
+func GetMessageFlowsByParts(parts []any) ([]*models.MessageFlow, error) {
+	placeholdersp := make([]string, len(parts))
+
+	for i := range parts {
+		placeholdersp[i] = fmt.Sprintf("$%d", i+1)
+	}
+	parentStr := strings.Join(placeholdersp, ",")
+
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part IN (%s) ORDER BY ID DESC LIMIT 20`, parentStr)
 	rows, err := db.Query(query, parts...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	messageFlows := make([]*models.MessageFlow, 0)
-
-	for rows.Next() {
-		var mf models.MessageFlow
-		err := rows.Scan(
-			&mf.ID,
-			&mf.Status,
-			&mf.SenderID,
-			&mf.SenderType,
-			&mf.SenderName,
-			&mf.ReceiverID,
-			&mf.ReceiverType,
-			&mf.ReceiverName,
-			&mf.WorkflowID,
-			&mf.Message,
-			&mf.Attempt,
-			&mf.CreatedAt,
-			&mf.Flow,
-			&mf.DeliverID,
-			&mf.RequestSize,
-			&mf.ResponseSize,
-			&mf.Cmd,
-			&mf.Start,
-			&mf.Group,
-			&mf.TaskID,
-			&mf.SendAt,
-			&mf.ReceiveAt,
-			&mf.TaskName,
-			&mf.Part,
-			&mf.Parent,
-			&mf.BeginPart,
-			&mf.FinishPart,
-			&mf.Tracking,
-			&mf.BrokerGroup,
-		)
-		if err != nil {
-			return nil, err
-		}
-		messageFlows = append(messageFlows, &mf)
-	}
-
-	return messageFlows, nil
+	return exactMessageFlow(rows)
 }
 
-func GetMessageFlowsByParent(parents []any) ([]*models.MessageFlow, error) {
-
-	placeholdersp := make([]string, len(parents))
-
-	for i := range parents {
-		placeholdersp[i] = fmt.Sprintf("$%d", i+1)
-	}
-	parentStr := strings.Join(placeholdersp, ",")
-
-	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE parent IN (%s) ORDER BY ID DESC LIMIT 20`, parentStr)
-	rows, err := db.Query(query, parents...)
+func GetGroupList(group string, limit string) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE "group" = '%s' ORDER BY ID ASC LIMIT %s`, group, limit)
+	fmt.Println("QQQQQ", query)
+	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	return exactMessageFlow(rows)
+}
 
+func GetMessageFlowRoot(part string) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE parent = '%s' AND part ='%s'`, part, part)
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	return exactMessageFlow(rows)
+}
+
+func exactMessageFlow(rows *sql.Rows) ([]*models.MessageFlow, error) {
 	messageFlows := make([]*models.MessageFlow, 0)
-
 	for rows.Next() {
 		var mf models.MessageFlow
 		err := rows.Scan(
@@ -1442,6 +1426,7 @@ func GetMessageFlowsByParent(parents []any) ([]*models.MessageFlow, error) {
 			&mf.FinishPart,
 			&mf.Tracking,
 			&mf.BrokerGroup,
+			&mf.StartInput,
 		)
 		if err != nil {
 			return nil, err
@@ -1682,6 +1667,64 @@ func SetWfRecovered(id int64) error {
 		return err
 	}
 	return nil
+}
+
+func InsertTrigger(trigger *models.Trigger) (int64, error) {
+	var triggerID int64
+
+	query := `INSERT INTO triggers (workflow_id, schedule, input, status, trigger_at, object_id, type, client) 
+			  VALUES ($1, $2, $3, $4, $5,$6, $7, $8) RETURNING id`
+
+	err := Get().QueryRow(query, trigger.WorkflowID, trigger.Schedule,
+		trigger.Input, trigger.Status, trigger.TriggerAt,
+		trigger.ObjectID, trigger.Type, trigger.Client,
+	).Scan(&triggerID)
+	if err != nil {
+		return 0, err
+	}
+
+	return triggerID, nil
+}
+
+func DeleteTriggerByID(triggerID string) error {
+	query := "DELETE FROM triggers WHERE id = $1"
+
+	_, err := Get().Exec(query, triggerID)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetTriggersByCriteria(workflowID, objectID int64, triggerType string) ([]*models.Trigger, error) {
+	var triggers []*models.Trigger
+
+	query := `SELECT * FROM triggers WHERE workflow_id = $1 AND object_id = $2 AND type = $3`
+
+	rows, err := Get().Query(query, workflowID, objectID, triggerType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var trigger models.Trigger
+		err := rows.Scan(&trigger.ID, &trigger.WorkflowID, &trigger.ObjectID, &trigger.Type, &trigger.Schedule,
+			&trigger.Input, &trigger.Status, &trigger.TriggerAt, &trigger.Client)
+		if err != nil {
+			return nil, err
+		}
+		triggers = append(triggers, &trigger)
+	}
+
+	return triggers, nil
+}
+
+func UpdateStatusByID(triggerID int64, newStatus int) error {
+	query := "UPDATE triggers SET status = $1 WHERE id = $2"
+	_, err := Get().Exec(query, newStatus, triggerID)
+	return err
 }
 
 type Storage interface {

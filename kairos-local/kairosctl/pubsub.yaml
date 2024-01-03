@@ -1,0 +1,13 @@
+version: '1'
+name: test_pubsub
+tasks: 
+  pubsub:
+    schedule: "@every 5s"
+    timezone: "Asia/Ho_Chi_Minh"
+    executor: pubsub
+    clients: []
+    payload: |
+      {
+        "data": "hello baby",
+        "sub": "listen_channel"
+      }

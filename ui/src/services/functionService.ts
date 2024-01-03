@@ -1,6 +1,14 @@
 import requests from "./requests";
 import { Function } from "../models/function"
 
+export type DebugPayload = {
+    flows: string,
+    input: {
+        name: string,
+        value: {[key:string]:any}
+    }[]
+}
+
 export const FunctionSerive = {
     create(func: any) {
         return requests
@@ -16,5 +24,17 @@ export const FunctionSerive = {
                 item.key = item.id + ""
                 return item
             }));
+    },
+    delete(id: number) {
+        return requests
+            .get(`apis/v1/service/functions/delete?fid=${id}`)
+            .send()
+            .then();
+    },
+    debug(p: DebugPayload) {
+        return requests
+            .post(`apis/v1/service/functions/debug`)
+            .send(p)
+            .then(res => res.body);
     },
 }

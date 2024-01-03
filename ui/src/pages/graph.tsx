@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ForceGraph from "../libs/ForceGraph"
 import { useAsync } from "react-use";
 import { services } from "../services";
@@ -7,8 +7,19 @@ import { CheckboxValueType } from "antd/es/checkbox/Group";
 import { BrokerPoint, ChannelPoint, ClientPoint, ColorGreen, ColorRed, TaskPoint } from "../conts";
 import { Utils } from "../helper/utils";
 import { formatDate } from "../helper/date";
-import { FaChevronDown, FaChevronUp } from "react-icons/fa6";
+import { FaChevronDown, FaChevronUp, FaDeleteLeft, FaRegClock } from "react-icons/fa6";
 import ReactJson from "react-json-view";
+import { parseBrokerFlows, reset } from "../helper/base";
+import Modal from "react-responsive-modal";
+import { Broker } from "../models/broker";
+import { TiFlowSwitch } from "react-icons/ti";
+import { Task } from "kairos-js";
+import { Channel } from "../models/channel";
+import { Toast } from "../components/Toast";
+import { IoMdAddCircleOutline } from "react-icons/io";
+import Cron from 'react-cron-generator'
+import { GrTrigger } from "react-icons/gr";
+import { Trigger } from "../models/trigger";
 
 interface Edge {
     id: string;
@@ -78,12 +89,13 @@ const GraphPage = () => {
     });
     const [tasks, setTasks] = useState<any[]>([])
     const [clients, setClients] = useState<any[]>([])
+    const [channels, setChannels] = useState<any[]>([])
     const [brokers, setBrokers] = useState<any[]>([])
 
     const [graphType, setGraphType] = useState(1)
-    const [wfIDs, setWfIDs] = useState<string[]>([])
+    const [wfIDs, setWfIDs] = useState<any[]>([])
     const [error, setError] = useState<Error>();
-
+    const [object, setObject] = useState<any>(null)
 
     const events = {
         select: ({ nodes, edges }: { nodes: string[], edges: string[] }) => {
@@ -100,7 +112,6 @@ const GraphPage = () => {
             }
         }
         const node = selectedNodes[0].split("-")
-        console.log(node)
         const node_id = node[0]
         const node_type = node[1]
         if (node_type === "client") {
@@ -133,7 +144,7 @@ const GraphPage = () => {
             const result = await services.records
                 .getBrokerRecord(parseInt(node_id))
                 .catch(setError)
-            console.log({result})
+            console.log({ result })
             for (const r of result.broker_records) {
                 r.type = "broker"
                 for (const broker of brokers) {
@@ -144,7 +155,7 @@ const GraphPage = () => {
                 }
             }
 
-           
+
             return {
                 records: result.broker_records as [],
                 obj: result.broker,
@@ -176,6 +187,53 @@ const GraphPage = () => {
 
     }, [selectedNodes])
 
+    useEffect(() => {
+        if (selectedNodes.length) {
+            const sn = selectedNodes[0]
+            const items = sn.split("-")
+            const type = items[items.length - 1]
+            const oid = items[0]
+            let client = ""
+            if (items.length == 3) {
+                client = items[1]
+            }
+            if (type == "task") {
+                for (const t of tasks) {
+                    if (t.id == oid) {
+                        setObject({
+                            type: type,
+                            obj: t,
+                            client
+                        })
+                        break;
+                    }
+                }
+            } else if (type == "broker") {
+                for (const b of brokers) {
+                    if (b.id == oid) {
+                        setObject({
+                            type: type,
+                            obj: b,
+                            client
+                        })
+                        break;
+                    }
+                }
+            } else if (type == "channel") {
+                for (const c of channels) {
+                    if (c.id == oid) {
+                        setObject({
+                            type: type,
+                            obj: c,
+                            client
+                        })
+                        break;
+                    }
+                }
+            }
+        }
+    }, [selectedNodes])
+
     const wfs = useAsync(async () => {
         const wfs = await services.workflows
             .list()
@@ -201,34 +259,34 @@ const GraphPage = () => {
             })
             .catch(setError)
 
-        const graphData = await services.graphs
-            .data({
-                workflow_ids: wfIDs.map(id => parseInt(id))
-            })
-            .catch(setError)
+        // const graphData = await services.graphs
+        //     .data({
+        //         workflow_ids: wfIDs.map(id => parseInt(id))
+        //     })
+        //     .catch(setError)
         const tasks = []
         const brokers = []
-        const clients = []
+        // const clients = []
         if (Array.isArray(graph)) {
             var nodes: Node[] = []
             var edges: Edge[] = []
             for (const g of graph) {
-                if (g.clients) {
-                    for (const client of g.clients) {
-                        clients.push(client)
-                        let exist = false
-                        for (const n of nodes) {
-                            if (n.id === `${client.id}-client`) {
-                                exist = true
-                            }
-                        }
-                        if (!exist) {
-                            nodes.push({
-                                id: `${client.id}-client`, label: client.name, group: g.id, value: 10, color: "blue"
-                            })
-                        }
-                    }
-                }
+                // if (g.clients) {
+                //     for (const client of g.clients) {
+                //         clients.push(client)
+                //         let exist = false
+                //         for (const n of nodes) {
+                //             if (n.id === `${client.id}-client`) {
+                //                 exist = true
+                //             }
+                //         }
+                //         if (!exist) {
+                //             nodes.push({
+                //                 id: `${client.id}-client`, label: client.name, group: g.id, value: 10, color: "blue"
+                //             })
+                //         }
+                //     }
+                // }
                 if (g.channels) {
                     for (const channel of g.channels) {
                         let exist = false
@@ -250,21 +308,26 @@ const GraphPage = () => {
                     for (const key of keys) {
                         const task = g.tasks[key]
                         tasks.push(task)
-                        nodes.push({
-                            id: `${task.id}-task`, label: `${task.name}-${g.name}`, group: g.id, value: 10, color: "pink"
-                        })
+
                         if (task.clients) {
                             for (const c of task.clients) {
-                                if (g.clients) {
-                                    for (const client of g.clients) {
-                                        if (client.name === c) {
-                                            edges.push({
-                                                id: `${task.id}-task#${client.id}-client`, from: `${task.id}-task`, to: `${client.id}-client`, value: 10, count: 10, cumulative: 123, label: "run", filter: "", proto: ""
-                                            })
-                                        }
-                                    }
-                                }
+                                // if (g.clients) {
+                                //     for (const client of g.clients) {
+                                //         if (client.name === c) {
+                                //             edges.push({
+                                //                 id: `${task.id}-task#${client.id}-client`, from: `${task.id}-task`, to: `${client.id}-client`, value: 10, count: 10, cumulative: 123, label: "run", filter: "", proto: "",
+                                //             })
+                                //         }
+                                //     }
+                                // }
+                                nodes.push({
+                                    id: `${task.id}-${c}-task`, label: `${task.name}-${c}`, group: g.id, value: 10, color: "pink"
+                                })
                             }
+                        } else {
+                            nodes.push({
+                                id: `${task.id}-task`, label: `${task.name}`, group: g.id, value: 10, color: "pink"
+                            })
                         }
                     }
                 }
@@ -274,26 +337,67 @@ const GraphPage = () => {
                     for (const key of keys) {
                         const broker = g.brokers[key]
                         brokers.push(broker)
-                        nodes.push({
-                            id: `${broker.id}-broker`, label: `${broker.name}-${g.name}`, group: g.id, value: 10, color: "#FFA500"
-                        })
-                        for (const l of broker.listens) {
-                            for (const client of g.clients) {
-                                if (l == `${client.name}_client`) {
-                                    edges.push({
-                                        id: `${client.id}-client#${broker.id}-broker`, from: `${client.id}-client`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "listen", filter: "", proto: ""
-                                    })
+                        try {
+                            const arrs = reset(broker.flows)
+                            // console.log("???",arrs)
+                            const sends: string[] = []
+                            for (const a of arrs) {
+                                for (const e of a) {
+                                    if (e.hasSend) {
+                                        const eles = e.value.split(",")
+                                        for (const x of eles) {
+                                            if ((x.endsWith("_task") || x.endsWith("_channel")) && !sends.includes(x)) {
+                                                sends.push(x.startsWith(".") ? x.slice(1) : x)
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                            broker.sends = sends
+                        } catch (error) {
+                            console.error(error)
+                        }
+
+                        if (broker.clients) {
+                            for (const c of broker.clients) {
+                                nodes.push({
+                                    id: `${broker.id}-${c}-broker`, label: `${broker.name}-${c}`, group: g.id, value: 10, color: "#FFA500",
+                                })
+                            }
+                        } else {
+                            nodes.push({
+                                id: `${broker.id}-broker`, label: `${broker.name}`, group: g.id, value: 10, color: "#FFA500",
+                            })
+                        }
+
+                        for (const l of broker.listens) {
+                            // for (const client of g.clients) {
+                            //     if (l == `${client.name}_client`) {
+                            //         edges.push({
+                            //             id: `${client.id}-client#${broker.id}-broker`, from: `${client.id}-client`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "listen", filter: "", proto: "", color: "#FFA500"
+                            //         })
+                            //     }
+                            // }
 
                             if (g.tasks) {
                                 const keys = Object.keys(g.tasks)
                                 for (const key of keys) {
                                     const task = g.tasks[key]
                                     if (l == `${task.name}_task`) {
-                                        edges.push({
-                                            id: `${task.id}-task#${broker.id}-broker`, from: `${task.id}-task`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "listen", filter: "", proto: ""
-                                        })
+                                        if (broker.clients) {
+                                            for (const c of broker.clients) {
+                                                edges.push({
+                                                    id: `${task.id}-${c}-task#${broker.id}-${c}-broker`, from: `${task.id}-${c}-task`, to: `${broker.id}-${c}-broker`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "green"
+                                                })
+                                            }
+                                        }
+                                        if (!broker.client) {
+                                            for (const c of task.clients) {
+                                                edges.push({
+                                                    id: `${task.id}-${c}-task#${broker.id}-broker`, from: `${task.id}-${c}-task`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "green"
+                                                })
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -301,7 +405,40 @@ const GraphPage = () => {
                             for (const channel of g.channels) {
                                 if (l == `${channel.name}_channel`) {
                                     edges.push({
-                                        id: `${channel.id}-channel#${broker.id}-broker`, from: `${channel.id}-channel`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "listen", filter: "", proto: ""
+                                        id: `${channel.id}-channel#${broker.id}-broker`, from: `${channel.id}-channel`, to: `${broker.id}-broker`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "green"
+                                    })
+                                }
+                            }
+                        }
+
+                        for (const s of broker.sends) {
+                            if (g.tasks) {
+                                const keys = Object.keys(g.tasks)
+                                for (const key of keys) {
+                                    const task = g.tasks[key]
+                                    if (s == `${task.name}_task`) {
+                                        if (broker.clients) {
+                                            for (const c of broker.clients) {
+                                                edges.push({
+                                                    id: `${broker.id}-${c}-broker#${task.id}-${c}-task`, from: `${broker.id}-${c}-broker`, to: `${task.id}-${c}-task`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "blue"
+                                                })
+                                            }
+                                        }
+                                        if (!broker.client) {
+                                            for (const c of task.clients) {
+                                                edges.push({
+                                                    id: `${broker.id}-broker#${task.id}-${c}-task`, from: `${broker.id}-broker`, to: `${task.id}-${c}-task`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "blue"
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            for (const channel of g.channels) {
+                                if (s == `${channel.name}_channel`) {
+                                    edges.push({
+                                        id: `${broker.id}-broker#${channel.id}-channel`, from: `${broker.id}-broker`, to: `${channel.id}-channel`, value: 10, count: 10, cumulative: 123, label: "", filter: "", proto: "", color: "blue"
                                     })
                                 }
                             }
@@ -311,32 +448,33 @@ const GraphPage = () => {
             }
             console.log({ edges, nodes })
             const edgesNew: Edge[] = []
-            for (const data of graphData) {
-                var send_type = getTypeUser(data.sender_type)
-                var receiver_type = getTypeUser(data.receiver_type)
-                var value = 10
-                var label = "listen"
-                switch (graphType) {
-                    case 2:
-                        value = data.count
-                        label = `${value}`
-                        break;
-                    case 3:
-                        value = Math.round(data.elapsed_time_avg)
-                        label = `${value} ms`
-                        break;
-                    case 4:
-                        value = Math.round(data.throughput)
-                        label = `${Utils.humanReadableBytes(value)}`
-                        break;
-                }
-                edgesNew.push({
-                    id: `${data.sender_id}-${send_type}#${data.receiver_id}-${receiver_type}@${data.workflow_id}`, from: `${data.sender_id}-${send_type}`, to: `${data.receiver_id}-${receiver_type}`, value: value, count: 10, cumulative: 123, label: label, filter: "", proto: ""
-                })
-            }
+            // for (const data of graphData) {
+            //     var send_type = getTypeUser(data.sender_type)
+            //     var receiver_type = getTypeUser(data.receiver_type)
+            //     var value = 10
+            //     var label = "listen"
+            //     switch (graphType) {
+            //         case 2:
+            //             value = data.count
+            //             label = `${value}`
+            //             break;
+            //         case 3:
+            //             value = Math.round(data.elapsed_time_avg)
+            //             label = `${value} ms`
+            //             break;
+            //         case 4:
+            //             value = Math.round(data.throughput)
+            //             label = `${Utils.humanReadableBytes(value)}`
+            //             break;
+            //     }
+            //     edgesNew.push({
+            //         id: `${data.sender_id}-${send_type}#${data.receiver_id}-${receiver_type}@${data.workflow_id}`, from: `${data.sender_id}-${send_type}`, to: `${data.receiver_id}-${receiver_type}`, value: value, count: 10, cumulative: 123, label: label, filter: "", proto: ""
+            //     })
+            // }
             setTasks(tasks)
             setClients(clients)
             setBrokers(brokers)
+            setChannels(channels)
             setGraphData({
                 nodes: nodes,
                 edges: graphType === 1 ? edges : edgesNew,
@@ -347,13 +485,13 @@ const GraphPage = () => {
         return []
     }, [wfIDs, graphType])
 
-    function onSelectWorkflow(selects: CheckboxValueType[]) {
-        setWfIDs(selects.map(item => item.toString()))
+    function onSelectWorkflow(e: RadioChangeEvent) {
+        setWfIDs([e.target.value])
     }
 
-    function onChangeTypeGraph(e: RadioChangeEvent) {
-        setGraphType(e.target.value)
-    }
+    // function onChangeTypeGraph(e: RadioChangeEvent) {
+    //     setGraphType(e.target.value)
+    // }
 
 
     return (
@@ -361,18 +499,18 @@ const GraphPage = () => {
             <div className="w-1/3  absolute">
                 <div>Workflow</div>
                 {
-                    wfs.loading ? <div>Loading</div> :
-                        <Checkbox.Group options={wfs.value && wfs.value.map(item => ({
-                            label: item.name, value: item.id
-                        }))} onChange={onSelectWorkflow} />
+                    wfs.loading ? <div>Loading</div> : (
+                        <Radio.Group onChange={onSelectWorkflow} value={wfIDs[0]}>
+                            {
+                                wfs.value && wfs.value.map(item => (
+                                    <Radio value={item.id} key={item.id}>{item.name}</Radio>
+                                ))
+                            }
+                        </Radio.Group>
+                    )
                 }
-                <div>Type</div>
-                <Radio.Group onChange={onChangeTypeGraph} value={graphType}>
-                    <Radio value={1}>Connect</Radio>
-                    <Radio value={2}>Deliver count</Radio>
-                    <Radio value={3}>Avg Elapsed Time</Radio>
-                    <Radio value={4}>Throughput</Radio>
-                </Radio.Group>
+                {/* <div>Type</div> */}
+
             </div>
             <div ref={modalRef} style={{ width: "100%", height: "100vh" }}>
                 <ForceGraph
@@ -388,7 +526,27 @@ const GraphPage = () => {
                     }}
                 />
             </div>
-            <Drawer title="Record" placement="right" onClose={onCloseDetail} open={selectedNodes.length > 0 || selectedEdges.length > 0}>
+            <Modal
+                open={object}
+                onClose={() => { setObject(null); setSelectedNodes([]) }}
+                center
+            >
+                {
+                    object && <div className="min-w-[800px]">
+                        {
+                            object.type == "task" ?
+                                <TaskDetail task={object.obj} client={object.client} wid={wfIDs[0]} />
+                                : object.type == "broker" ?
+                                    <BrokerDetail broker={object.obj} client={object.client} wid={wfIDs[0]} />
+                                    : object.type == "channel" ?
+                                        <ChannelDetail channel={object.obj} wid={wfIDs[0]} />
+                                        : ''
+                        }
+                    </div>
+                }
+            </Modal>
+
+            {/* <Drawer title="Record" placement="right" onClose={onCloseDetail} open={selectedNodes.length > 0 || selectedEdges.length > 0}>
                 {
                     pointRecord.loading ? <div>Loading</div> :
                         <div>
@@ -399,27 +557,342 @@ const GraphPage = () => {
                                 }
                             </div>
                             {
-                                pointRecord.value && 
+                                pointRecord.value &&
                                 pointRecord.value.records.map((item: any) => (
                                     <div key={item.id}>
-                                       {
+                                        {
                                             item.type === "client" || item.type === "task" ?
-                                            <ClientRecordItem record={item} />
-                                            :item.type === "broker" ?
-                                            <BrokerRecordItem record={item}/>
-                                            :<></>
-                                       }
+                                                <ClientRecordItem record={item} />
+                                                : item.type === "broker" ?
+                                                    <BrokerRecordItem record={item} />
+                                                    : <></>
+                                        }
                                     </div>
                                 ))
                             }
                         </div>
                 }
-            </Drawer>
+            </Drawer> */}
         </div>
     )
 }
 
 export default GraphPage
+
+const BrokerDetail = ({ broker, client, wid }: { broker: Broker, client: string, wid: number }) => {
+    return (
+        <div>
+            <div className="font-bold text-2xl">{broker.name}</div>
+            <TriggerFrom object={broker} type="broker" client={client} wid={wid} />
+            {
+                broker.flows ?
+                    <div>
+                        <div className="flex items-center">
+                            <div className="font-bold ">Flows</div>
+                            <TiFlowSwitch className="ml-2" />
+                        </div>
+                        {parseBrokerFlows(broker.flows).map((exp: any, idx: any) => (
+                            <span key={idx}>
+                                {
+                                    exp.map((e: any, edx: any) => (
+                                        <span key={edx} className={`${e.className} whitespace-pre`}>{e.value}</span>
+                                    ))
+                                }
+                            </span>
+                        ))}
+                    </div>
+                    : <div></div>
+            }
+        </div>
+    )
+}
+
+const TaskDetail = ({ task, client, wid }: { task: Task, client: string, wid: number }) => {
+
+    return (
+        <div>
+            <div className="font-bold text-2xl">{task.name}</div>
+            <TriggerFrom object={task} type="task" client={client} wid={wid} />
+            <div className="flex items-center my-2">
+                <div className="font-bold mr-2">Executor</div>
+                <div>{task.executor}</div>
+            </div>
+            <div className="">
+                <div className="flex">
+                    <div className="font-bold">Payload</div>
+                </div>
+                <div className="">
+                    <ReactJson src={task && task.payload ? JSON.parse(task.payload) : {}} name={false} />
+                </div>
+            </div>
+        </div>
+    )
+}
+
+
+const ChannelDetail = ({ channel, wid }: { channel: Channel, wid: number }) => {
+    return (
+        <div>
+            <div className="font-bold text-2xl">{channel.name}</div>
+            <TriggerFrom object={channel} type="channel" client="" wid={wid} />
+        </div>
+    )
+}
+
+
+const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string, client: string, wid: number }) => {
+    const [input, setInput] = useState<any>(type == "task" ? [{ name: "", value: {} }] : [])
+    const [inputType, setInputType] = useState(1)
+    const [inName, setInName] = useState("")
+    const [openInput, setOpenInput] = useState(false)
+    const [openSchedule, setOpenSchedule] = useState(false)
+    const [schedule, setSchedule] = useState("")
+    const [reload, setReload] = useState(0)
+    const [err, setError] = useState("")
+    const [openTrigger, setOpenTrigger] = useState<any>(null);
+
+    const triggers = useAsync(async () => {
+        console.log(wid, object.id, type)
+        const ts = await services.workflows
+            .getTrigger(wid, object.id, type)
+            .catch(setError)
+        if (Array.isArray(ts)) {
+            for (const t of ts) {
+                if (t.input) {
+                    t.input = JSON.parse(t.input)
+                }
+            }
+            return ts
+        }
+        return []
+    }, [reload])
+
+    const saveTrigger = async () => {
+        let value = ""
+        if(type == "broker"){
+            let v :any= {}
+            for(const i of input){
+               v[i.name] = i.value 
+            }
+            value = JSON.stringify(v)
+        }else if(type == "task" || type == "channel"){
+            let o = input[0]
+            if(o){
+                value = JSON.stringify(o.value)
+            }
+        }
+
+        const trigger: Trigger = {
+            id: 0,
+            trigger_at: 0,
+            schedule,
+            input: value,
+            object_id: object.id,
+            type: type,
+            client: client,
+            workflow_id: wid,
+            status: 0,
+        }
+        await services.workflows
+            .saveTrigger(trigger)
+            .catch(setError)
+
+        setInput([])
+        setSchedule("")
+        setReload(reload => reload + 1)
+    }
+
+    const deleteTrigger = async (id: any) => {
+        await services.workflows
+            .deleteTrigger(id)
+            .catch(setError)
+        setReload(reload => reload + 1)
+    }
+
+    return (
+        <div>
+            <div className="flex items-center ">
+                <div>Trigger</div>
+                <div className="cursor-pointer" onClick={saveTrigger}>
+                    <GrTrigger />
+                </div>
+            </div>
+            <div>
+                Default: {(type=="channel" || type == "broker")? "On Input" : "" }
+            </div>
+            <div className="flex items-center my-2">
+                <div className="mr-2">Schedule</div>
+                <div>{schedule}</div>
+                <button className="mx-2" onClick={() => setOpenSchedule(true)}><IoMdAddCircleOutline /></button>
+            </div>
+            <div className="flex items-center my-2">
+                <div>Input</div>
+                {
+                    type == "broker" && <button className="mx-2" onClick={() => setOpenInput(true)}><IoMdAddCircleOutline /></button>
+                }
+            </div>
+            {
+                triggers.value && triggers.value.map(tri => (
+                    <div key={tri.id}
+                        className="flex cursor-pointer w-32">
+                        <div onClick={() => { setOpenTrigger(tri) }}>
+                            {tri.schedule ? tri.schedule : "Immediately"}
+                        </div>
+                        <FaDeleteLeft onClick={()=>{deleteTrigger(tri.id)}}
+                            className="cursor-pointer"
+                        />
+                    </div>
+                ))
+            }
+            {
+                input.map((item: any, idx: number) => (
+                    <div key={item.name} className="flex items-center">
+                        <div>{item.name}</div>
+                        <ReactJson
+                            src={item.value}
+                            name={false}
+                            enableClipboard={false}
+                            onAdd={(e) => {
+                                setInput((input: any) => {
+                                    if (e.updated_src) {
+                                        const newInput = [...input]
+                                        newInput[idx].value = e.updated_src
+                                        return newInput
+                                    }
+                                    return input
+                                })
+                            }}
+                            onDelete={(e) => {
+                                setInput((input: any) => {
+                                    if (e.updated_src) {
+                                        const newInput = [...input]
+                                        newInput[idx].value = e.updated_src
+                                        console.log("NEW INPU==", newInput)
+                                        return newInput
+                                    }
+                                    return input
+                                })
+                            }}
+                            onEdit={(e) => {
+                                console.log(e)
+                                setInput((input: any) => {
+                                    if (e.updated_src) {
+                                        const newInput = [...input]
+                                        newInput[idx].value = e.updated_src
+                                        console.log("NEW INPU==", newInput)
+                                        return newInput
+                                    }
+                                    return input
+                                })
+                            }}
+                        />
+                        <FaDeleteLeft onClick={() => {
+                            const newI = input.filter((i: any) => i.name !== item.name)
+                            setInput([...newI])
+                        }}
+                            className="cursor-pointer"
+                        />
+                    </div>
+                ))
+            }
+            <Modal
+                open={openInput}
+                onClose={() => { setOpenInput(false); setInName("") }}
+                center
+            >
+                {
+                    type == "broker" && (
+                        <Radio.Group onChange={(e) => { setInputType(e.target.value) }} value={inputType}>
+                            <Radio value={1}>Task</Radio>
+                            <Radio value={2}>Channel</Radio>
+                        </Radio.Group>
+                    )
+                }
+
+                <div className="mx-2">{inName}{type == "broker" ? (inputType == 1 ? '_task' : '_channel') : ""}</div>
+                <input placeholder="name"
+                    autoFocus={true}
+                    className="border-rounded mx-2 my-2 px-2 py-2"
+                    onKeyDown={(e) => {
+                        if (e.key == "Enter") {
+                            setInput((input: any[]) => {
+                                for (const i of input) {
+                                    if (i.name == inName) {
+                                        Toast.error(`var ${inName} existed`)
+                                        return input
+                                    }
+                                }
+                                let value: any = {
+                                    result: {
+                                        output: "",
+                                        success: false,
+                                        finish: false,
+                                    }
+                                }
+                                if (inputType == 2) {
+                                    value = {
+                                        content: {}
+                                    }
+                                }
+                                const root = `${inName}${type == "broker" ? (inputType == 1 ? '_task' : '_channel') : ""}`
+                                return [...input, { name: root, value }]
+
+                            })
+                            setOpenInput(false); setInName("")
+                        }
+                    }}
+                    onChange={(e) => { setInName(e.target.value) }} />
+
+            </Modal>
+
+            <Modal
+                open={openSchedule}
+                onClose={() => { setOpenSchedule(false) }}
+                center
+            >
+                <div className="flex items-center mx-2 my-2" onClick={() => { setOpenSchedule(false) }}>
+                    <button className="cursor-pointer bg-blue-500 text-white flex items-center px-2 rounded py-2">
+                        <FaRegClock className="mr-2" />  Schedule
+                    </button>
+                    <div className="ml-2">{schedule}</div>
+                </div>
+                <div className="min-w-[600px]">
+                    <Cron
+                        onChange={(e) => { setSchedule(e) }}
+                        value={schedule}
+                        showResultText={true}
+                        showResultCron={true}
+
+                    />
+                </div>
+            </Modal>
+
+            <Modal
+                open={openTrigger}
+                onClose={() => { setOpenTrigger(null) }}
+                center
+            >
+                {
+                    openTrigger && (
+                        <>
+                            <div>{openTrigger.schedule}</div>
+                            {
+                                Array.isArray(openTrigger.input) ? (
+                                    openTrigger.input.map((item: any) => (
+                                        <div key={item.name}>
+                                            <div>{item.name}</div>
+                                            <ReactJson src={item.value} />
+                                        </div>
+                                    ))
+                                ) : <ReactJson src={openTrigger.input ? openTrigger.input : {}} />
+                            }
+                        </>
+                    )
+                }
+            </Modal>
+        </div>
+    )
+}
 
 const BrokerRecordItem = ({ record }: { record: any }) => {
     const [detail, setDetail] = useState(false)
@@ -503,8 +976,8 @@ const ServiceMapOptions = {
         shape: 'dot',
         chosen: true,
         font: {
-            color: '#343434',
-            size: 14, // px
+            color: 'white',
+            size: 8, // px
             face: 'arial',
             background: 'none',
             strokeWidth: 0, // px
@@ -546,7 +1019,7 @@ const ServiceMapOptions = {
         },
         font: {
             color: '#343434',
-            size: 12, // px
+            size: 8, // px
             face: 'arial',
             background: 'rgba(255,255,255,0.7)',
             strokeWidth: 2, // px

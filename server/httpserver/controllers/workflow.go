@@ -14,6 +14,7 @@ import (
 	"github.com/THPTUHA/kairos/server/httpserver/events"
 	"github.com/THPTUHA/kairos/server/messaging"
 	"github.com/THPTUHA/kairos/server/storage"
+	"github.com/THPTUHA/kairos/server/storage/models"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
 )
@@ -404,6 +405,37 @@ func (ctr *Controller) DetailWorkflow(c *gin.Context) {
 	})
 }
 
+func (ctr *Controller) GetObjectOnWorkflow(c *gin.Context) {
+	wid, ok := c.Params.Get("id")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": fmt.Errorf("empty params workflow id"),
+		})
+		return
+	}
+	id, _ := strconv.ParseInt(wid, 10, 64)
+	tasks, err := storage.GetTasks(&storage.TaskQuery{
+		WID: id,
+	})
+
+	brokers, err := storage.GetBrokers(&storage.BrokerQuery{
+		WorkflowID: id,
+	})
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"tasks":   tasks,
+		"brokers": brokers,
+	})
+
+}
+
 type Request struct {
 	Cmd     int         `json:"cmd"`
 	RunOn   string      `json:"run_on"`
@@ -500,4 +532,81 @@ func (ctr *Controller) RecoverWorkflow(c *gin.Context) {
 		Workflow: &wf,
 	}
 	ctr.publishRunner(&e)
+}
+
+func (ctr *Controller) TriggerWorkflow(c *gin.Context) {
+	var trigger models.Trigger
+	if err := c.BindJSON(&trigger); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	id, err := storage.InsertTrigger(&trigger)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	trigger.ID = id
+	data, err := json.Marshal(trigger)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	err = ctr.nats.Publish(fmt.Sprintf("%s-%d", messaging.TRIGGER, trigger.WorkflowID), data)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Add trigger",
+		"trigger_id": id,
+	})
+}
+
+func (ctr *Controller) DeleteTriggerWorkflow(c *gin.Context) {
+	tid := c.Query("id")
+	err := storage.DeleteTriggerByID(tid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Delete trigger",
+		"trigger_id": tid,
+	})
+}
+
+func (ctr *Controller) ListTrigger(c *gin.Context) {
+	var trigger models.Trigger
+	if err := c.BindJSON(&trigger); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	triggers, err := storage.GetTriggersByCriteria(trigger.WorkflowID, trigger.ObjectID, trigger.Type)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "List trigger",
+		"triggers": triggers,
+	})
 }

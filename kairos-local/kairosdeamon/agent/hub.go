@@ -45,12 +45,27 @@ func (hub *Hub) AddEventTask(ch chan *workflow.CmdTask) {
 }
 
 func (hub *Hub) Publish(cmd *workflow.CmdReplyTask) {
-	cmd.RunOn = fmt.Sprintf("%s%s", hub.clientName, workflow.SubClient)
+	cmd.RunOn = hub.RunOn()
 	cmd.SendAt = helper.GetTimeNow()
 	data, err := json.Marshal(cmd)
 	fmt.Printf("[HUB PUBLISH REPLY] %+v\n", cmd)
 	if err != nil {
 		hub.logger.WithField("hub", "publish").Error(err)
+	}
+	hub.Client.Publish(hub.channel, data)
+}
+
+func (hub *Hub) RunOn() string {
+	return fmt.Sprintf("%s%s", hub.clientName, workflow.SubClient)
+}
+
+func (hub *Hub) PublishLog(log *workflow.LogDaemon) {
+	log.RunOn = hub.RunOn()
+	log.SendAt = helper.GetTimeNow()
+	data, err := json.Marshal(log)
+	fmt.Printf("[HUB PUBLISH LOG REPLY] %+v\n", log)
+	if err != nil {
+		hub.logger.WithField("hub", "publishlog").Error(err)
 	}
 	hub.Client.Publish(hub.channel, data)
 }

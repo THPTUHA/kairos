@@ -10,7 +10,7 @@ import focusedContextAtom from "../recoil/focusedContext/atom";
 import queryAtom from "../recoil/query/atom";
 import queryBuildAtom from "../recoil/queryBuild/atom";
 import queryBackgroundColorAtom from "../recoil/queryBackgroundColor/atom";
-import { BrokerPoint, BrokerPointColor, ChannelPoint, ChannelPointColor, ClientPoint, ClientPointColor, ColorYellow, KairosPointColor, SuccessCode, TaskPoint, TaskPointColor, ViewHistory, ViewRealtime } from "../conts";
+import { BrokerPoint, BrokerPointColor, ChannelPoint, ChannelPointColor, ClientPoint, ClientPointColor, ColorYellow, KairosPoint, KairosPointColor, LogMessageFlow, ObjectStatusWorkflow, SuccessCode, TaskPoint, TaskPointColor, ViewHistory, ViewRealtime } from "../conts";
 import TrafficViewerStyles from "../styles/TrafficViewer.module.sass";
 import { EntriesList } from "./entry/EntriesList";
 import styles from '../styles/EntriesList.module.sass';
@@ -28,9 +28,27 @@ import { MessageFlow } from "../services/graphService";
 import { Table } from "antd";
 import { IoMdSend } from "react-icons/io";
 import { MdInput, MdOutlineOutput } from "react-icons/md";
+import ReactJson from "react-json-view";
+import { FaArrowRightLong } from "react-icons/fa6";
+import { FaLongArrowAltDown } from "react-icons/fa";
+import { Task } from "kairos-js";
+import { Broker } from "../models/broker";
+import { parseBrokerFlows } from "../helper/base";
+import { TiFlowSwitch } from "react-icons/ti";
+import { RiAddLine } from "react-icons/ri";
+import { Client } from "../models/client";
 
 const useLayoutStyles = makeStyles(() => ({
   details: {
+    flex: "0 0 50%",
+    width: "45vw",
+    padding: "12px 24px",
+    borderRadius: 4,
+    marginTop: 15,
+    background: variables.headerBackgroundColor,
+  },
+
+  timelineDetails: {
     flex: "0 0 50%",
     width: "45vw",
     padding: "12px 24px",
@@ -72,31 +90,110 @@ type TreeNode = {
   children: TreeNode[]
 }
 
+const Running = 1
+const Finish = 2
+const Fault = 3
+
 const getNameFromType = (type: number) => {
   if (type == ChannelPoint) {
-    return "channel"
+    return "Channel"
   } else if (type == TaskPoint) {
-    return "task"
+    return "Task"
   } else if (type == BrokerPoint) {
-    return "broker"
+    return "Broker"
   } else if (type == ClientPoint) {
-    return "client"
+    return "Client"
   }
   return "??"
 }
 
-function buildTree(mfs: MessageFlow[]) {
+function mergeTree(a: TreeNode, b: TreeNode) {
+  console.log(a.name, b.name, JSON.stringify(a.children), JSON.stringify(b.children))
+  if (a.owner_id == b.owner_id && a.owner_type == b.owner_type) {
+    a.finish = b.finish
+    a.attributes = b.attributes
+    a.status = b.status
+    a.part = b.part
+    const newChild = []
+    if (Array.isArray(a.children)) {
+      for (const c1 of a.children) {
+        let exist = false
+        if (Array.isArray(b.children)) {
+          for (const c2 of b.children) {
+            if (c1.owner_id == c2.owner_id && c1.owner_type == c2.owner_type) {
+              exist = true
+              mergeTree(c1, c2)
+            }
+          }
+        }
+        if (!exist) {
+          newChild.push(c1)
+        }
+      }
+    }
+
+
+    if (Array.isArray(b.children)) {
+      for (const c1 of b.children) {
+        let exist = false
+        if (Array.isArray(a.children)) {
+          for (const c2 of a.children) {
+            if (c1.owner_id == c2.owner_id && c1.owner_type == c2.owner_type) {
+              exist = true
+            }
+          }
+        }
+        if (!exist) {
+          newChild.push(c1)
+        }
+      }
+    }
+    // console.log("NEW CHILD", newChild)
+    a.children = newChild
+    b.children = newChild
+  }
+}
+
+function getClient(cl: string, clients: Client[]) {
+  for (const c of clients) {
+    if (c.name == cl) {
+      console.log(cl, clients, "?/")
+      return c
+    }
+  }
+  return {} as any
+}
+
+function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers: Broker[]) {
   const map = new Map<string, TreeNode>();
   const bidrect = new Map<string, MessageFlow>();
   let tree: TreeNode | {} = {};
+  let selfroot: any = {}
+  let parent: any = {}
+  let root_cnt = 0
+  console.log("MFS", mfs)
   mfs = mfs.filter(item => {
+    // if (item.flow === 3) {
+    //   return false 
+    // }
+    if (item.parent == item.part) {
+      selfroot = item
+      root_cnt++
+      return false
+    }
+    if (!item.parent && item.part != parent.part) {
+      parent = item
+      root_cnt++
+    }
     const key = `${item.parent}-${item.part}`
     const mf = bidrect.get(key)
     if (mf) {
-      if (!item.flow) {
+      // từ broker luồng gửi
+      if (!item.flow || item.sender_type == BrokerPoint) {
         bidrect.set(key, item)
         return true
-      } else {
+      } else if (item.flow == 1) {
+        // luồng nhận
         mf.status = item.status
         mf.finish_part = item.finish_part
       }
@@ -106,48 +203,103 @@ function buildTree(mfs: MessageFlow[]) {
     return true
   })
 
+  console.log("MFS", mfs)
+  if (root_cnt == 2 && selfroot.part != parent.part) {
+    console.error("invalid root", root_cnt, selfroot.part, parent.part)
+    return {}
+
+  } else if (root_cnt != 1 && root_cnt != 2) {
+    console.error("invalid root", root_cnt)
+    return {}
+  }
+
+  if (selfroot && !mfs.length) {
+    tree = {
+      name: selfroot.task_name,
+      id: selfroot.task_id,
+      type: TaskPoint,
+      attributes: {
+        id: selfroot.task_id,
+        type: TaskPoint,
+        client: selfroot.sender_name,
+        finish: selfroot.finish_part,
+        active: getClient(selfroot.sender_name, clients).status,
+      },
+      status: selfroot.status,
+      part: selfroot.part,
+      owner_id: selfroot.sender_id,
+      owner_type: selfroot.sender_type,
+      children: []
+    }
+  }
+
+  console.log("selfroot", selfroot)
+
   mfs.forEach(item => {
     var c: any, p: any
-    if (item.receiver_id == ClientPoint) {
+    if (item.receiver_type == ClientPoint) {
+      const msg = JSON.parse(item.message)
+      let success = false
+      if (msg.success == undefined || msg.success) {
+        success = true
+      }
       c = {
         name: item.task_name,
         id: item.task_id,
         type: TaskPoint,
         attributes: {
+          id: item.task_id,
           type: TaskPoint,
-          client: item.receiver_name
+          client: item.receiver_name,
+          success: success,
+          active: getClient(item.receiver_name, clients).status,
         },
         part: item.part,
+        parent: item.part,
         owner_id: item.receiver_id,
         owner_type: item.receiver_type,
       }
-    } else {
+    } else if (item.receiver_type != KairosPoint) {
       c = {
         name: item.receiver_name,
         id: item.receiver_id,
         type: item.receiver_type,
         attributes: {
+          id: selfroot.receiver_id,
           type: item.receiver_type,
         },
         part: item.part,
+        parent: item.part,
         owner_id: item.receiver_id,
         owner_type: item.receiver_type,
         children: []
       }
     }
 
-    if (item.sender_id == ClientPoint) {
+    if (item.sender_type == ClientPoint) {
+      if (!item.message) {
+        console.error("empty message", item)
+        return
+      }
+      const msg = JSON.parse(item.message)
+      let success = false
+      if (msg.success == undefined || msg.success) {
+        success = true
+      }
       p = {
         name: item.task_name,
         id: item.task_id,
         type: TaskPoint,
         attributes: {
+          id: item.task_id,
           type: TaskPoint,
           client: item.sender_name,
           finish: item.finish_part,
+          success: success,
         },
         status: item.status,
         part: item.part,
+        parent: item.parent,
         owner_id: item.sender_id,
         owner_type: item.sender_type,
         children: []
@@ -160,19 +312,33 @@ function buildTree(mfs: MessageFlow[]) {
         type: item.sender_type,
         status: item.status,
         owner_id: item.sender_id,
+        parent: item.parent,
         owner_type: item.sender_type,
         attributes: {
+          id: item.sender_id,
           type: item.sender_type,
           finish: item.finish_part,
         }
       }
+
     }
+
+    const children = []
+    if (c) {
+      children.push(c)
+    }
+
     map.set(item.part, {
-      children: [c],
       ...p,
+      children: children,
     });
   });
 
+  map.forEach((value, key) => {
+    const cp = JSON.stringify(value)
+    console.log(key, JSON.parse(cp))
+  })
+  const parents = []
   mfs.forEach(item => {
     const parent = map.get(item.parent);
     if (parent) {
@@ -183,24 +349,50 @@ function buildTree(mfs: MessageFlow[]) {
           const c = parent.children[i]
           if (c.owner_id == item.sender_id && c.owner_type == item.sender_type) {
             exist = true
-            parent.children[i] = e
+            // parent.children[i] = e
+            mergeTree(parent.children[i], e)
           }
         }
         if (!exist) {
-          parent.children.push(e);
+          // console.log(JSON.stringify(e), )
+          // console.log(JSON.stringify(parent), parent.children)
+          if (parent.owner_id == e.owner_id && parent.owner_type == e.owner_type && parent.name == e.name) {
+            parents.push(e.part)
+          } else {
+
+            parent.children.push(e);
+            console.log("RUN HERE", JSON.stringify(parent.children))
+          }
+
         }
       } else {
 
       }
-    } else {
-      const t = map.get(item.part)
-      if (t) {
-        tree = t
-      }
     }
   });
 
-  return tree;
+  if (selfroot.id) {
+    parents.push(selfroot.part)
+  } else if (parent.id) {
+    parents.push(parent.part)
+  }
+
+  let p = map.get(parents[0])
+  for (let i = 1; i < parents.length; i++) {
+    if (p) {
+      const c = map.get(parents[i])
+      if (c) {
+        p.children.push(...c.children)
+      }
+    }
+  }
+  // console.log("PARENT", p, parents)
+  return p;
+}
+
+type TimeLineSelected = {
+  group: string,
+  workflow_id: number,
 }
 
 export const TrafficViewer: React.FC<TrafficViewerProps> = ({
@@ -219,7 +411,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   const [isSnappedToBottom, setIsSnappedToBottom] = useState(true);
   const [wsReadyState, setWsReadyState] = useState(0);
   const [searchParams] = useSearchParams();
-  const [timeLineID, setTimeLine] = useState("");
+  const [timeline, setTimeline] = useState<TimeLineSelected | null>(null);
   const entriesBuffer = useRef([] as Entry[]);
 
   const scrollableRef = useRef<any>(null);
@@ -325,48 +517,6 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
             src={playIcon}
             onClick={toggleConnection} /> */}
           {/* <Switch defaultChecked onChange={changeSwitchView} /> */}
-          <div className="flex">
-            <Queryable
-              query={`src.name == "kairos"`}
-              displayIconOnMouseOver={true}
-              flipped={true}
-              iconStyle={{ marginRight: "10px" }}
-            >
-              <div className={`${KairosPointColor} mx-3`}>Kairos</div>
-            </Queryable>
-            <Queryable
-              query={`src.name == "broker"`}
-              displayIconOnMouseOver={true}
-              flipped={true}
-              iconStyle={{ marginRight: "10px" }}
-            >
-              <div className={`${BrokerPointColor}  mx-3`}>Broker</div>
-            </Queryable>
-            <Queryable
-              query={`src.name == "client"`}
-              displayIconOnMouseOver={true}
-              flipped={true}
-              iconStyle={{ marginRight: "10px" }}
-            >
-              <div className={`${ClientPointColor}  mx-3`}>Client</div>
-            </Queryable>
-            <Queryable
-              query={`src.name == "channel"`}
-              displayIconOnMouseOver={true}
-              flipped={true}
-              iconStyle={{ marginRight: "10px" }}
-            >
-              <div className={`${ChannelPointColor} mx-3`}>Channel</div>
-            </Queryable>
-            <Queryable
-              query={`src.name == "task"`}
-              displayIconOnMouseOver={true}
-              flipped={true}
-              iconStyle={{ marginRight: "10px" }}
-            >
-              <div className={`${TaskPointColor} mx-3`}>Task</div>
-            </Queryable>
-          </div>
         </div>
         {actionButtons}
       </div>
@@ -391,39 +541,54 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
                 />
               </div>
             ) : (
-              <TimeLineView setTimeLine={setTimeLine} />
+              <><TimeLineView setTimeline={setTimeline} timeline={timeline} /></>
             )
           }
         </div>
-        <div className={classes.details} id="rightSideContainer">
-          {
-            (viewType == ViewRealtime || viewType == ViewHistory) ? (
+        {
+          (viewType == ViewRealtime || viewType == ViewHistory) ? (
+            <div className={classes.details} id="rightSideContainer">
               <EntryDetailed />
-            ) : (
-              <TimeLineDetail groupID={timeLineID} />
-            )
-          }
-        </div>
+            </div>
+
+          ) : (
+            <div className={classes.timelineDetails}>
+              {timeline && <TimeLineDetail timeline={timeline} />}
+            </div>
+          )
+        }
       </div>}
     </div>
   );
 };
 
-const EntryTime = ({ mf }: { mf: MessageFlow }) => {
+const EntryTime = ({ mf, setTimeline }: { mf: MessageFlow, setTimeline: any }) => {
   return (
-    <div className={`flex justify-between h-12 bg-blue-800 items-center px-2 mx-2 my-2 rounded`}>
-      <div className="">
+    <div
+      onClick={() => { setTimeline({ group: mf.group, workflow_id: mf.workflow_id }) }}
+      className={`flex justify-between h-12 items-center`}>
+      <div
+        className="">
         <LuActivity />
       </div>
-      <div>{mf.workflow_name}</div>
+      <Queryable
+        query={`src.workflow == "${mf.workflow_name}"`}
+        displayIconOnMouseOver={true}
+        flipped={true}
+        iconStyle={{ marginRight: "10px" }}
+      >
+        <div>{mf.workflow_name}</div>
+      </Queryable>
       <div>{mf.sender_name}</div>
       <div>{formatDate(mf.created_at)}</div>
     </div>
   )
 }
 
-const TimeLineView = ({ setTimeLine }: { setTimeLine: any }) => {
+const TimeLineView = ({ setTimeline, timeline }: { setTimeline: any, timeline: TimeLineSelected | null }) => {
   const [error, setError] = useState<Error>();
+  const wfCmd = useRecoilValue(workflowMonitorAtom)
+  const [reload, setReload] = useState(1)
 
   const mfs = useAsync(async () => {
     const mfs = await services.graphs
@@ -433,7 +598,16 @@ const TimeLineView = ({ setTimeLine }: { setTimeLine: any }) => {
       return mfs
     }
     return []
-  }, [])
+  }, [reload])
+
+  useEffect(() => {
+    if (wfCmd && wfCmd.cmd == LogMessageFlow) {
+      const newMF = wfCmd.data
+      if (newMF.start) {
+        setReload(e => e + 1)
+      }
+    }
+  }, [wfCmd])
 
   return (
     <div className="">
@@ -443,9 +617,9 @@ const TimeLineView = ({ setTimeLine }: { setTimeLine: any }) => {
             : <div>
               {
                 mfs.value?.map(e => (
-                  <div key={e.id} onClick={() => { setTimeLine(e.group) }}
-                    className="cursor-pointer">
-                    <EntryTime mf={e} />
+                  <div key={e.id}
+                    className={`cursor-pointer  px-2 mx-2 my-2 rounded  ${timeline && e.group === timeline.group ? "border-green-500 border-2 border-dashed bg-gray-500" : "bg-gray-500"}`}>
+                    <EntryTime mf={e} setTimeline={setTimeline} />
                   </div>
                 ))
               }
@@ -489,75 +663,171 @@ type NodeSelected = {
   inputs: MessageFlow[],
   outputs: MessageFlow[],
   type: number,
+  id: number,
   name: string,
 }
 
-const TimeLineDetail = ({ groupID }: { groupID: string }) => {
+const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
   const modalRef = useRef(null);
   const wfCmd = useRecoilValue(workflowMonitorAtom)
   const [nodeSelected, setNodeSelected] = useState<NodeSelected | null>();
   const [error, setError] = useState<Error>();
-
-
+  const mfsCur = useRef<MessageFlow[]>([])
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [brokers, setBrokers] = useState<Broker[]>([])
+  const [delta, setDelta] = useState(0)
   const [treeData, setTreeData] = useState<any>({});
-
-  const onNodeClick = (nodeData: any) => {
-    // Handle node click event, e.g., display a popup
-    alert(nodeData.attributes.popupContent);
-  };
+  const [clients, setClients] = useState<Client[]>([])
 
   const graphS = useAsync(async () => {
-    if (groupID) {
+    if (timeline.group && timeline.workflow_id) {
+      setDelta(delta => 1 - delta)
       const mfs = await services.graphs
-        .getGroupID(groupID)
+        .getGroupID(timeline.group)
         .catch(setError)
 
-      const data: any = {}
+      const cl = await services.clients
+        .list()
+        .catch(setError)
+
+      if (Array.isArray(cl)) {
+        setClients(cl)
+      }
+      // const mfs = await services.graphs
+      // .getGroupList(timeline.group, "100")
+      // .catch(setError)
+      // //@ts-ignore
+      // for(const newMF of mfs){
+      //   let exist = false
+      //   for (let i = 0; i < mfsCur.current.length; i++) {
+      //     const mf = mfsCur.current[i]
+      //     if (mf.part == newMF.part && mf.parent == newMF.parent
+      //       && mf.receiver_id == newMF.receiver_id && mf.receiver_type == newMF.receiver_type) {
+      //       mfsCur.current[i] = newMF
+      //       exist = true
+      //     }
+      //   }
+      //   if (!exist) {
+      //     mfsCur.current.push(newMF)
+      //   }
+      // }
+
+
+      const object = await services.workflows.getObjects(timeline.workflow_id)
+      for (const t of object.tasks) {
+        if (t.clients) {
+          // @ts-ignore
+          t.clients = JSON.parse(t.clients)
+        }
+      }
+
+      for (const b of object.brokers) {
+        if (b.clients && typeof b.clients == "string") {
+          b.clients = JSON.parse(b.clients)
+        }
+      }
+
+      setTasks(object.tasks)
+      setBrokers(object.brokers)
+
       if (Array.isArray(mfs)) {
         const gs = mfs.filter(e =>
           e.sender_type == ChannelPoint || e.receiver_type == ChannelPoint || e.task_id
         )
         if (mfs.length) {
-          const tr = buildTree(mfs)
+          mfsCur.current = mfs
+          const tr = buildTree(mfsCur.current, clients, tasks, brokers)
           console.log("DATA", tr)
-          setTreeData(tr)
+          if (tr) {
+            setTreeData(tr)
+          }
         }
         return gs
       }
     }
     return []
-  }, [groupID])
-
+  }, [timeline])
 
 
   useEffect(() => {
-    // console.log("???", wfCmd)
+    if (wfCmd && wfCmd.cmd == LogMessageFlow && timeline.group == wfCmd.data.group) {
+      const newMF = wfCmd.data
+      let exist = false
+      for (let i = 0; i < mfsCur.current.length; i++) {
+        const mf = mfsCur.current[i]
+        if (mf.part == newMF.part && mf.parent == newMF.parent
+          && mf.receiver_id == newMF.receiver_id && mf.receiver_type == newMF.receiver_type) {
+          mfsCur.current[i] = { ...newMF }
+          exist = true
+        }
+      }
+      if (!exist) {
+        mfsCur.current.push({ ...newMF })
+      }
+      setTreeData(() => buildTree(mfsCur.current, clients, tasks, brokers))
+    }
+
+    if (wfCmd && wfCmd.cmd == ObjectStatusWorkflow) {
+      setClients((clients) => {
+        for (let i = 0; i < clients.length; i++) {
+          const c = clients[i]
+          if (wfCmd.object_id == c.id) {
+            const newC = [...clients]
+            newC[i] = {
+              ...c,
+              status: wfCmd.status
+            }
+            setTreeData(() => buildTree(mfsCur.current, newC, tasks, brokers))
+            return newC
+          }
+        }
+        return clients
+      })
+    }
+
   }, [wfCmd])
 
-  useEffect(() => {
-    if (groupID) {
-      // todo add time line
-    }
-  }, [groupID])
+  // useEffect(() => {
+  //   if (groupID) {
+  //     // todo add time line
+  //   }
+  // }, [groupID])
 
   async function handleClick(hierarchyPointNode: any) {
-    const parts = []
+    // const parts = []
+    // const parents = []
+    const query: any = {}
     console.log("hierarchyPointNode", hierarchyPointNode)
-    if (hierarchyPointNode.parent) {
-      if (hierarchyPointNode.parent.data.part) {
-        parts.push(hierarchyPointNode.parent.data.part)
-      }
+    if (hierarchyPointNode.data.type == TaskPoint) {
+      query.parent = hierarchyPointNode.data.parent
     }
-    // if(hierarchyPointNode.children){
-    //   for(const c of hierarchyPointNode.children){
-    //     if(c.data.part){
-    //       parts.push(c.data.part)
-    //     }
-    //   }
-    // }
-    console.log("PART---", parts)
+
+    if (hierarchyPointNode.parent) {
+      if (hierarchyPointNode.data.type != TaskPoint) {
+        if (hierarchyPointNode.parent.data.part) {
+          query.parent = hierarchyPointNode.parent.data.part
+        }
+      }
+      // if (hierarchyPointNode.data.type == TaskPoint && !hierarchyPointNode.data.children.length) {
+      //   parents.push(hierarchyPointNode.data.part)
+      // }
+    }
+    if (hierarchyPointNode.data.type == BrokerPoint) {
+      const parts = []
+      if (hierarchyPointNode.data.children) {
+        for (const c of hierarchyPointNode.data.children) {
+          parts.push(c.parent)
+        }
+      }
+      query.parts = parts
+    } else if (hierarchyPointNode.data.part) {
+      query.parts = [hierarchyPointNode.data.part]
+    }
+
+    query.receiver_id = hierarchyPointNode.data.id
+
     const paths = await services.graphs
-      .getParts(parts, parts)
+      .getParts(query)
       .catch(setError)
 
     if (paths) {
@@ -566,10 +836,47 @@ const TimeLineDetail = ({ groupID }: { groupID: string }) => {
         inputs: paths.inputs.reverse(),
         outputs: paths.outputs.reverse(),
         name: hierarchyPointNode.data.name,
+        id: hierarchyPointNode.data.id
       })
     }
     console.log("PARTS---", paths)
   }
+
+  const statusNode = (attributes: any) => {
+    if (attributes.finish) {
+      if (attributes.type == TaskPoint) {
+        if (attributes.success) {
+          return "success"
+        }
+        return "fault"
+      }
+      return "success"
+    }
+    if (attributes.type == TaskPoint) {
+      const task = tasks.filter(t => t.id == attributes.id)[0]
+      if (task && attributes.client) {
+        const client = clients.filter(c => c.name == attributes.client)[0]
+        if (client && !client.status) {
+          return "offline"
+        }
+      }
+    }
+
+    // if(attributes.type == BrokerPoint){
+    //   const task =  tasks.filter(t=>t.id == attributes.id)[0]
+    //   if(task && attributes.client ){
+    //     const client = clients.filter(c => c.name == attributes.client)[0]
+    //     if(client && !client.status){
+    //       return "offline"
+    //     }
+    //   }
+    // }
+    // if (!attributes.active) {
+    //   return "offline"
+    // }
+    return "active"
+  }
+
 
   return (
     <>
@@ -578,23 +885,37 @@ const TimeLineDetail = ({ groupID }: { groupID: string }) => {
         onClose={() => { setNodeSelected(null) }}
         center
       >
-        <div className="min-w-[400px]" >
+        <div className="min-w-[600px]" >
           {
             nodeSelected && <div>
-              <div>{getNameFromType(nodeSelected.type)} : { }</div>
+              <div className="flex py-2">
+                <div className="font-bold">{getNameFromType(nodeSelected.type)} : { }</div>
+                <div className="ml-2">{nodeSelected.name}</div>
+              </div>
               <div>
                 {
                   nodeSelected.type === BrokerPoint ?
-                    <BorkerDetail
+                    <BrokerDetail
                       inputs={nodeSelected.inputs}
                       outputs={nodeSelected.outputs}
+                      broker={brokers.filter(b => b.id == nodeSelected.id)[0]}
+                      clients={clients}
                     /> :
                     nodeSelected.type === TaskPoint ?
                       <TaskDetail
                         inputs={nodeSelected.inputs}
                         outputs={nodeSelected.outputs}
+                        task={tasks.filter(t => t.id == nodeSelected.id)[0]}
+                        clients={clients}
                       /> :
-                      <></>
+                      nodeSelected.type === ChannelPoint ?
+                        <ChannelDetail
+                          inputs={nodeSelected.inputs}
+                          outputs={nodeSelected.outputs}
+                          id={nodeSelected.id}
+                          type={nodeSelected.type}
+                        /> :
+                        <></>
                 }
               </div>
             </div>
@@ -604,6 +925,10 @@ const TimeLineDetail = ({ groupID }: { groupID: string }) => {
       <Tree
         data={treeData}
         orientation="vertical"
+        translate={{
+          x: window.innerWidth * 20 / 100 + delta,
+          y: 30,
+        }}
         renderCustomNodeElement={({ nodeDatum, toggleNode, hierarchyPointNode }) => {
           return (
             <>
@@ -616,40 +941,30 @@ const TimeLineDetail = ({ groupID }: { groupID: string }) => {
                     <text fill="black" strokeWidth="1" x="30" y="10">
                       {nodeDatum.name}
                     </text>
-                    {nodeDatum.attributes?.point && (
-                      <text fill="black" x="20" dy="20" strokeWidth="1">
-                        Point: {nodeDatum.attributes?.point}
-                        {nodeDatum.attributes?.client ? "Client: " + nodeDatum.attributes?.client : ""}
-                      </text>
-                    )}
+                    <text fill="blue" x="20" dy="30" strokeWidth="1">
+                      {"(Channel)"}
+                    </text>
                   </g>
-                  : nodeDatum.attributes?.type == TaskPoint ? <g className={`${nodeDatum.attributes.finish ? "" : "active"}`}>
+                  : nodeDatum.attributes?.type == TaskPoint ? <g className={`${statusNode(nodeDatum.attributes,)}`}>
                     <circle r="20" onClick={() => { handleClick(hierarchyPointNode) }} />
                     <text fill="black" strokeWidth="1" x="30" y="10">
                       {nodeDatum.name}
                     </text>
-                    {nodeDatum.attributes?.point && (
-                      <text fill="black" x="20" dy="20" strokeWidth="1">
-                        Point: {nodeDatum.attributes?.point}
-                        {nodeDatum.attributes?.client ? "Client: " + nodeDatum.attributes?.client : ""}
-                      </text>
-                    )}
+                    <text fill="black" x="30" dy="30" strokeWidth="1">
+                      {"(Task)"}
+                    </text>
                   </g>
-                    : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${nodeDatum.attributes.finish ? "" : "active"}`}>
+                    : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${statusNode(nodeDatum.attributes)}`}>
                       <ellipse rx="25" ry="15" fill="green" onClick={() => { handleClick(hierarchyPointNode) }} />
                       <text fill="black" strokeWidth="1" x="30" y="10">
                         {nodeDatum.name}
                       </text>
-                      {nodeDatum.attributes?.point && (
-                        <text fill="black" x="20" dy="20" strokeWidth="1">
-                          Point: {nodeDatum.attributes?.point}
-                          {nodeDatum.attributes?.client ? "Client: " + nodeDatum.attributes?.client : ""}
-                        </text>
-                      )}
+                      <text fill="black" x="30" dy="30" strokeWidth="1">
+                        {"(Broker)"}
+                      </text>
                     </g> : ""
               }
             </>
-
           )
         }}
       />
@@ -658,68 +973,195 @@ const TimeLineDetail = ({ groupID }: { groupID: string }) => {
 }
 
 type ItemChart = {
-  request: MessageFlow,
-  response?: MessageFlow,
-  input: MessageFlow
+  input: any
+  flows: {
+    request: MessageFlow,
+    response?: MessageFlow,
+  }[]
 }
 
-const BorkerDetail = ({ outputs, inputs }: { outputs: MessageFlow[], inputs: MessageFlow[] }) => {
-  var itemCharts: ItemChart[] = []
-  for (let i = 0; i < outputs.length; i++) {
-    if (!outputs[i].flow) {
-      let request = outputs[i]
-      let response, input: any
-      for (let j = 0; j < outputs.length; j++) {
-        if (outputs[i].part == outputs[j].part && outputs[i].parent == outputs[j].parent && outputs[j].flow) {
-          response = outputs[j]
-          break
-        }
-      }
+const validateInput = (input: any) => {
+  delete input["run_coun"]
+  delete input["offset"]
+  delete input["startd_at"]
+  delete input["finished_at"]
+  return input
+}
 
-      for (const e of inputs) {
-        if (e.part == request.parent && e.broker_group == request.broker_group) {
-          input = e
-          break
-        }
-      }
-      itemCharts.push({
-        request: request,
-        response: response,
-        input: input
-      })
+const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFlow[], inputs: MessageFlow[], broker: Broker, clients: Client[] }) => {
+  var itemCharts: ItemChart = {
+    input: {},
+    flows: []
+  }
+
+  for (const o of outputs) {
+    if (o.start_input) {
+      itemCharts.input = o
+      itemCharts.input.value = JSON.parse(o.start_input)
+      break
     }
   }
 
-  console.log(",,,,", itemCharts)
+  if (!itemCharts.input.id) {
+    for (let i = 0; i < outputs.length; i++) {
+      if (!outputs[i].flow || outputs[i].flow == 2) {
+        let request = outputs[i]
+        if (request.sender_name == broker.name) {
+
+        }
+        let response, input: any
+        for (let j = i + 1; j < outputs.length; j++) {
+          let res = outputs[j]
+          if (request.part == res.part && request.parent == res.parent && res.flow == 1
+            && request.sender_id == res.receiver_id
+            && request.sender_type == res.receiver_type && res.task_id == request.task_id) {
+            response = outputs[j]
+            break;
+          }
+        }
+
+        for (const e of inputs) {
+          if (e.deliver_id == -2) {
+            input = inputs[inputs.length - 1]
+            break
+          } else if (e.part == request.parent && e.broker_group == request.broker_group) {
+            input = e
+            break
+          }
+        }
+
+        const msg = JSON.parse(request.message)
+        if (request.receiver_type == ChannelPoint) {
+          request.value = validateInput(msg)
+        } else if (msg && msg.input) {
+          if (typeof msg.input == "string") {
+            request.value = validateInput(JSON.parse(msg.input))
+          }
+        }
+
+        itemCharts.flows.push({
+          request: request,
+          response: response,
+        })
+
+        const mi = JSON.parse(input.message)
+        if (mi) {
+          input.value = validateInput(mi)
+          itemCharts.input = input
+        }
+      }
+      console.log(itemCharts)
+    }
+  } else {
+    for (const o of outputs) {
+      if (!o.start_input) {
+        itemCharts.flows.push({
+          request: o
+        })
+      }
+    }
+  }
+
+
   return (
     <div>
-      {
-        itemCharts.map((e, idx) => (
-          <div key={idx}>
-            <div><MdInput />Input</div>
+      <div className="border-2 border-dashed border-blue-500 px-2 py-2">
+        <div className="flex items-center">
+          <div className="font-bold">Recieve</div>
+          <div className="ml-2">
+            {
+              itemCharts.input.start_input ? (
+                <div className="font-bold text-blue-500">Start by trigger</div>
+              ) : itemCharts.input.sender_type == ClientPoint ? (
+                <div>{itemCharts.input.task_name}{`(task run on ${itemCharts.input.sender_name})`}</div>
+              ) : (
+                <div>{itemCharts.input.sender_name}{`(${getNameFromType(itemCharts.input.sender_type)})`}</div>
+              )
+            }
+          </div>
+          <FaArrowRightLong className="ml-2" />
+        </div>
+        <div>
+          <ReactJson src={itemCharts.input.value ? itemCharts.input.value : {}} name={'result'} />
+        </div>
+      </div>
+      <div className="w-full flex justify-center my-3"><FaLongArrowAltDown className="w-6 h-auto" /></div>
+      <div className="border-2 border-dashed border-blue-500 px-2 py-2 ">
+        {
+          broker.flows ?
             <div>
-              <div>Sender</div>
-              <div>{e.input.sender_name}{`(${getNameFromType(e.input.sender_type)})`}</div>
-              <div>Value: {e.input.message}</div>
+              <div className="flex items-center">
+                <div className="font-bold ">Flows</div>
+                <TiFlowSwitch className="ml-2" />
+              </div>
+              {parseBrokerFlows(broker.flows).map((exp: any, idx: any) => (
+                <span key={idx}>
+                  {
+                    exp.map((e: any, edx: any) => (
+                      <span key={edx} className={`${e.className} whitespace-pre`}>{e.value}</span>
+                    ))
+                  }
+                </span>
+              ))}
             </div>
-            <div><MdOutlineOutput />Ouput:</div>
-            <div>
-              <div>
-                <div>Receiver</div>
-                <div>{e.request.receiver_name}{`(${getNameFromType(e.request.receiver_type)})`}</div>
-                <div>Value: {e.request.message}</div>
+            : <div></div>
+        }
+      </div>
+
+      <div className="w-full flex justify-center my-3"><FaLongArrowAltDown className="w-6 h-auto" /></div>
+      {
+        itemCharts.flows.map((e, idx) => (
+          <div key={idx} className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} mb-8 px-2 py-2 `}>
+            <div className="border-2 border-dashed border-blue-500 px-2 py-2">
+              <div className="flex items-center">
+                <div className="font-bold">Send</div>
+                <FaArrowRightLong className="mx-2" />
+                <div>
+                  {
+                    // daemon
+                    itemCharts.input.flow == 2 ? (
+                      <div>
+                        <div>{e.request.task_name}{`(Run on ${e.request.receiver_name})`}</div>
+                      </div>
+                    ) : (
+                      <div>
+                        {
+                          e.request.receiver_type == ClientPoint ? (
+                            <div>{e.request.task_name}{`(Run on ${e.request.receiver_name})`}</div>
+                          ) : (
+                            <div>{e.request.receiver_name}{`(${getNameFromType(e.request.receiver_type)})`}</div>
+                          )
+                        }
+                      </div>
+                    )
+                  }
+                </div>
+              </div>
+
+              <div className="">
+                <ReactJson src={e.request.value ? e.request.value : {}} name={false} />
               </div>
             </div>
-            <div>Response</div>
-            <div>
-              {
-                e.response ? <div>
-                  <div>{e.response.receiver_name}{`(${getNameFromType(e.response.receiver_type)})`}</div>
-                  <div>Value: {e.response.message}</div>
+
+            <div className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} px-2 py-2 mt-6`}>
+              <div className="flex items-center">
+                {/* <div className="font-bold">Reply</div>
+                <FaArrowRightLong className="mx-2" /> */}
+                <div >
+                  {
+                    itemCharts.input.flow == 2 ? <div className="text-green-500">Replied</div> : (
+                      <div>
+                        {
+                          e.response ? <div className="text-green-500">Replied</div>
+                            : <div className="text-red-500">No reply</div>
+                        }
+                      </div>
+                    )
+                  }
                 </div>
-                  : <div>No response</div>
-              }
+              </div>
             </div>
+
           </div>
         ))
       }
@@ -727,31 +1169,224 @@ const BorkerDetail = ({ outputs, inputs }: { outputs: MessageFlow[], inputs: Mes
   )
 }
 
-const TaskDetail = ({ outputs, inputs }: { outputs: MessageFlow[], inputs: MessageFlow[] }) => {
-  const input = inputs.filter(e => !e.flow)[0]
-  const value = JSON.parse(input.message).input;
-  const outs = outputs.map(e => {
-    e.outobject = JSON.parse(e.message)
+const mergeInput = (response: any, task: Task) => {
+  let payload = {}
+  if (task.payload) {
+    payload = JSON.parse(task.payload)
+  }
+  return {
+    ...payload,
+    ...validateInput(response)
+  }
+}
+
+const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[], inputs: MessageFlow[], task: Task, clients: Client[] }) => {
+  let input = inputs.filter(e => !e.flow)[0]
+  if (inputs.length == 1 && !input) {
+    input = inputs[0]
+  }
+  let value: any = ""
+  if (input && input.message) {
+    try {
+      value = JSON.parse(input.message)
+    } catch (error) {
+      value = input.message
+    }
+    if (value.input) {
+      try {
+        value = JSON.parse(value.input)
+      } catch (error) {
+        value = value.input
+      }
+    } else {
+      try {
+        value = JSON.parse(input.message)
+      } catch (error) {
+        value = input.message
+      }
+    }
+  }
+  console.log({ input })
+
+  const outs = outputs.filter(e => e.parent != e.part).map(e => {
+    try {
+      e.outobject = JSON.parse(e.message)
+    } catch (error) {
+      e.outobject = {
+        success: true,
+        output: e.message
+      }
+    }
     return e
   })
+
   return (
     <div>
-      <div>Input</div>
-      <div>Sender</div>
-      <div>{input.sender_name}{`(${getNameFromType(input.sender_type)})`}</div>
-      <div>Value: {value}</div>
-
-      <div>Output</div>
-      <div>
-        {
-          outs.map(e => (
-            <div key={e.id} className="flex justify-between">
-              <div>{e.receive_at}</div>
-              <div>{e.outobject.success ? "success" : "fault"}</div>
-              <div>{e.outobject.output}</div>
+      <div className="border-blue-500 border-dashed border-2 px-2 py-2">
+        <div className="flex">
+          <div className="font-bold">Payload</div>
+        </div>
+        <div className="">
+          <ReactJson src={task && task.payload ? JSON.parse(task.payload) : {}} name={false} />
+        </div>
+      </div>
+      {
+        input && input.sender_type == BrokerPoint && (
+          <div>
+            <div className="flex justify-center py-4"><RiAddLine className="w-6 h-auto font-bold" /></div>
+            <div className="border-blue-500 border-dashed border-2 px-2 py-2">
+              <div className="flex">
+                <div className="font-bold">Response</div>
+                <div className="ml-2">
+                  <div className="flex items-center">
+                    {input.sender_name}{`(${getNameFromType(input.sender_type)})`}
+                    <div className="ml-3"><FaArrowRightLong /></div>
+                  </div>
+                </div>
+              </div>
+              <div className="">
+                {
+                  typeof value == "string" ? value :
+                    <ReactJson src={value ? validateInput(value) : {}} name={false} />
+                }
+              </div>
             </div>
+          </div>
+        )
+      }
+      <div className="my-2 w-full flex justify-center"><FaLongArrowAltDown className="w-8 h-8" /></div>
+      {
+        input && input.sender_type == ClientPoint ? (
+          <div className="border-green-500 border-dashed border-2 px-2 py-2">
+            <div className="flex">
+              <div className="font-bold">Input</div>
+              <div className="ml-2">
+                <div className="flex items-center">
+                  {input.sender_name}{`(${getNameFromType(input.sender_type)})`}
+                  <div className="ml-3"><FaArrowRightLong /></div>
+                </div>
+              </div>
+            </div>
+            <div className="">
+              {
+                typeof value == "string" ? value :
+                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}} name={false} />
+              }
+            </div>
+          </div>
+        ) : input && input.sender_type == BrokerPoint && (
+          <div className="border-green-500 border-dashed border-2 px-2 py-2">
+            <div className="flex">
+              <div className="font-bold">Input</div>
+              <div className="ml-2">
+                <div className="flex items-center">
+                  {input.sender_name}{`(${getNameFromType(input.sender_type)})`}
+                  <div className="ml-3"><FaArrowRightLong /></div>
+                </div>
+              </div>
+            </div>
+            <div className="">
+              {
+                typeof value == "string" ? value :
+                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}} name={false} />
+              }
+            </div>
+          </div>
+        )
+      }
 
-          ))
+      <div className="border-dashed border-2 border-green-500 mt-6 px-2 py-2">
+        <div className="font-bold">Output</div>
+        <div>
+          {
+            outs.map(e => (
+              <div key={e.id} className="flex">
+                <div className="w-24">{formatDate(e.receive_at)}</div>
+                {/* <div>{e.outobject.success ? "success" : "fault"}</div> */}
+                <div className={`ml-20 text-wrap text-balance ${e.outobject.success ? "" : "text-red-500"}`}>
+                  {e.outobject.output}
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], inputs: MessageFlow[], id: number, type: number }) => {
+  let input = inputs.filter(e => e.receiver_id == id && e.receiver_type == type)[0]
+  let output = outputs.filter(e => e.sender_id == id && e.sender_type == type)[0]
+  if (inputs.length == 1 && !input) {
+    input = inputs[0]
+  }
+
+  let value: any = ""
+  if (input && input.message && typeof input.message == "string") {
+    try {
+      value = JSON.parse(input.message)
+    } catch (error) {
+      value = input.message
+    }
+    if (value && value.input && typeof value.input == "string") {
+      try {
+        value = JSON.parse(value.input)
+      } catch (error) {
+        value = value.input
+      }
+    }
+  }
+
+  console.log({ input, output })
+  return (
+    <div>
+      {
+        input && (
+          <div className="border-blue-500 border-dashed border-2 px-2 py-2">
+            {
+              input.sender_type == BrokerPoint || input.sender_type == TaskPoint ?
+                <div className="flex">
+                  <div className="font-bold">Recieve</div>
+                  <div className="ml-2">
+                    <div className="flex items-center">
+                      {input.sender_name}{`(${getNameFromType(input.sender_type)})`}
+                      <div className="ml-3"><FaArrowRightLong /></div>
+                    </div>
+                  </div>
+                </div>
+                : <div></div>
+            }
+
+            {
+              input.sender_type == ClientPoint ?
+                <div className="flex">
+                  <div className="font-bold">Send</div>
+                  <div className="ml-2">
+                    <div className="flex items-center">
+                      {input.sender_name}{`(${getNameFromType(input.sender_type)})`}
+                      <div className="ml-3"><FaArrowRightLong /></div>
+                    </div>
+                  </div>
+                </div>
+                : <div></div>
+            }
+
+            <div className="">
+              {
+                typeof value == "string" ? value :
+                  <ReactJson src={value ? validateInput(value) : {}} name={false} />
+              }
+            </div>
+          </div>
+        )
+      }
+
+      <div className={`border-dashed border-2 mt-6 px-2 py-2 ${output.status == -99 ? 'border-red-500' : 'border-green-500'}`}>
+
+        {
+          output.status == -99 ? <div className="text-red-500">No Reply</div> :
+            <div className="font-bold text-wrap text-balance">Reply</div>
         }
       </div>
     </div>

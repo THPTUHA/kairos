@@ -9,6 +9,7 @@ import 'react-responsive-modal/styles.css';
 import { ToastContainer } from 'react-toastify';
 import { RecoilRoot } from 'recoil';
 
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

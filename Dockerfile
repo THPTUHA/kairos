@@ -1,6 +1,6 @@
 FROM golang:1.21.1
 
-EXPOSE 8080 8003
+EXPOSE 8001 8002 8003 8005
 
 RUN mkdir -p /app
 WORKDIR /app

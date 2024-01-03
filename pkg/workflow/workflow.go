@@ -11,6 +11,7 @@ import (
 	"github.com/Masterminds/semver/v3"
 	"github.com/THPTUHA/kairos/pkg/orderedmap"
 	"github.com/dop251/goja"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,7 +64,7 @@ type Task struct {
 	WorkflowID int64             `json:"workflow_id"`
 
 	UserDefineVars map[string]string `json:"user_define_vars,omitempty"`
-	Execute        func()            `json:"-"`
+	Execute        func(ct *CmdTask) `json:"-"`
 	Wait           string            `json:"wait"`
 }
 
@@ -81,8 +82,10 @@ type BrokerFlowsUn struct {
 	Condition string
 }
 type Broker struct {
-	ID   int64  `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
+	ID       int64  `json:"id,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+	Input    string `json:"input,omitempty"`
 	// Nơi mà Broker sẽ lắng nghe nhận dữ liệu đầu vào
 	Listens []string `yaml:"listens" json:"listens"`
 	// Các điều kiện điều hướng task
@@ -92,6 +95,9 @@ type Broker struct {
 	Template    *Template                `json:"template,omitempty"`
 	DynamicVars map[string]*CmdReplyTask `json:"dynamic_vars,omitempty"`
 	WorkflowID  int64                    `json:"workflow_id"`
+
+	Log    *logrus.Entry    `json:"-"`
+	Output chan *ExecOutput `json:"-"`
 }
 
 func (b *Broker) IsListen(name string) bool {
@@ -101,6 +107,20 @@ func (b *Broker) IsListen(name string) bool {
 		}
 	}
 	return false
+}
+
+func (b *Broker) Run() {
+	replies := make(map[string]ReplyData)
+	if b.Input != "" {
+		err := json.Unmarshal([]byte(b.Input), &replies)
+		if err != nil {
+			b.Log.Error(err)
+		}
+	}
+	tr := b.Template.NewRutime(replies)
+	exo := tr.Execute()
+	b.Output <- exo
+	b.Log.Logger.Warnf("REPlIES %+v, input=%s", replies, b.Input)
 }
 
 func validateVarListen(dv string, clients []*Client, channels []*Channel, tasks *Tasks) bool {
@@ -381,7 +401,7 @@ func (t *Task) Compile(userVars map[string]string, assign bool) error {
 
 func (t *Task) Run() {
 	if t.Execute != nil {
-		t.Execute()
+		t.Execute(nil)
 	}
 }
 
@@ -515,7 +535,7 @@ func (b *BrokerFlows) MarshalJSON() ([]byte, error) {
 	if b.Condition != "" {
 		return json.Marshal(b.Condition)
 	}
-	if len(b.Endpoints) != 0 {
+	if b.Endpoints != nil {
 		return json.Marshal(b.Endpoints)
 	}
 
@@ -637,6 +657,7 @@ const (
 	RequestTaskRunSyncCmd
 	SetBrokerCmd
 	RequestDestroyWf
+	TriggerCmd
 )
 
 type ResponseActionTask int
@@ -652,13 +673,15 @@ const (
 	ReplyRequestTaskSyncCmd
 	ReplySetBrokerCmd
 	ReplyDestroyWf
+	ReplyLogWfCmd
+	ReplyTriggerCmd
 )
 
 const (
 	PendingDeliver = iota
 	SuccessSetTask
 	FaultSetTask
-	ScuccessTriggerTask
+	SuccessTriggerTask
 	FaultTriggerTask
 	SuccessReceiveInputTaskCmd
 	SuccessReceiveOutputTaskCmd
@@ -668,6 +691,8 @@ const (
 	FaultSetBroker
 	SuccessDestroyWorkflow
 	FaultDestroyWorkflow
+	SuccessTrigger
+	FaultTrigger
 )
 
 type Result struct {
@@ -680,12 +705,19 @@ type Result struct {
 	RunCount   int64  `json:"run_coun,omitemptyt"`
 }
 
+type ResultDebug struct {
+	Success bool   `json:"success"`
+	Output  string `json:"output"`
+	Finish  bool   `json:"finish"`
+}
+
 type Content interface{}
 type CmdReplyTask struct {
 	Cmd        ResponseActionTask `json:"cmd"`
 	TaskID     int64              `json:"task_id,omitempty"`
 	TaskName   string             `json:"task_name,omitempty"`
 	BrokerID   int64              `json:"broker_id,omitempty"`
+	BrokerName string             `json:"broker_name,omitempty"`
 	DeliverID  int64              `json:"deliver_id,omitempty"`
 	RunOn      string             `json:"run_on,omitempty"`
 	Status     int                `json:"status"`
@@ -694,32 +726,50 @@ type CmdReplyTask struct {
 	Message    string             `json:"message,omitempty"`
 	Content    *Content           `json:"content,omitempty"`
 	Result     *Result            `json:"result,omitempty"`
+	Input      string             `json:"input,omitempty"`
 	SendAt     int64              `json:"send_at"`
 	RunCount   int64              `json:"run_coun,omitempty"`
 	Group      string             `json:"group,omitempty"`
+	StartInput string             `json:"start_input,omitempty"`
 	Start      bool               `json:"start,omitempty"`
 	Parent     string             `json:"parent,omitempty"`
 	Part       string             `json:"part,omitempty"`
 	BeginPart  bool               `json:"begin_part,omitempty"`
 	FinishPart bool               `json:"finish_part,omitempty"`
+	TaskInput  string             `json:"task_input,omitempty"`
 }
 
 type CmdTask struct {
-	Cmd        RequestActionTask `json:"cmd"`
-	Task       *Task             `json:"task,omitempty"`
-	Message    interface{}       `json:"message,omitempty"`
-	DeliverID  int64             `json:"deliver_id"`
-	WorkflowID int64             `json:"workflow_id,omitempty"`
-	Channel    string            `json:"channel"`
-	Status     int               `json:"status"`
-	From       string            `json:"from,omitempty"`
-	SendAt     int64             `json:"send_at"`
-	Offset     int               `json:"offset,omitempty"`
-	RunCount   int64             `json:"run_coun,omitemptyt"`
-	Broker     *Broker           `json:"broker,omitempty"`
-	Group      string            `json:"group,omitempty"`
-	Parent     string            `json:"parent,omitempty"`
-	Part       string            `json:"part,omitempty"`
+	Cmd         RequestActionTask `json:"cmd"`
+	Task        *Task             `json:"task,omitempty"`
+	Message     interface{}       `json:"message,omitempty"`
+	DeliverID   int64             `json:"deliver_id"`
+	WorkflowID  int64             `json:"workflow_id,omitempty"`
+	Channel     string            `json:"channel"`
+	Status      int               `json:"status"`
+	From        string            `json:"from,omitempty"`
+	SendAt      int64             `json:"send_at"`
+	Offset      int               `json:"offset,omitempty"`
+	RunCount    int64             `json:"run_coun,omitemptyt"`
+	Broker      *Broker           `json:"broker,omitempty"`
+	ChannelDest *Channel          `json:"channel_dest,omitempty"`
+	Group       string            `json:"group,omitempty"`
+	Parent      string            `json:"parent,omitempty"`
+	Part        string            `json:"part,omitempty"`
+	Start       bool              `json:"start,omitempty"`
+	StartInput  string            `json:"start_input,omitempty"`
+}
+
+type LogDaemon struct {
+	Cmd         ResponseActionTask `json:"cmd"`
+	Reply       *CmdReplyTask      `json:"reply,omitempty"`
+	Request     *CmdTask           `json:"request,omitempty"`
+	RunOn       string             `json:"run_on"`
+	SendAt      int64              `json:"send_at"`
+	WorkflowID  int64              `json:"workflow_id,omitempty"`
+	Tracking    string             `json:"tracking,omitempty"`
+	BrokerName  string             `json:"broker_name,omitempty"`
+	BrokerGroup string             `json:"broker_group,omitempty"`
 }
 
 const (
@@ -727,6 +777,7 @@ const (
 	LogMessageFlow
 	DestroyWorkflow
 	RecoverWorkflow
+	ObjectStatusWorkflow
 )
 
 const (

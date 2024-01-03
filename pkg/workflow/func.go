@@ -49,9 +49,22 @@ type ValueMap struct {
 	tempvarTemp *varTemp
 }
 
+func getValueSymbolSpecial(symbol string) (interface{}, error) {
+	switch symbol {
+	case "_ping":
+		return make(map[string]interface{}), nil
+	default:
+		return nil, fmt.Errorf("symbol %s not exist", symbol)
+	}
+}
+
 func setValue(vm *ValueMap) (map[string]interface{}, error) {
 	mp := make(map[string]interface{})
 	for _, p := range vm.params {
+		if v, err := getValueSymbolSpecial(p); err == nil {
+			mp[p] = v
+			continue
+		}
 		if isContants(p) == nil {
 			v := getConstVar(p)
 			if strings.HasPrefix(v, `"`) {
@@ -95,6 +108,9 @@ func convertInterfaceToReply(s interface{}) (*ReplyData, error) {
 	var input ReplyData
 	data, _ := json.Marshal(s)
 	err := json.Unmarshal(data, &input)
+	if err != nil {
+		return nil, fmt.Errorf("err: %s , value: %+v", err.Error(), s)
+	}
 	return &input, err
 }
 
@@ -296,6 +312,43 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 		if e != nil {
 			return nil, e
 		}
+	case WAITE_EXP:
+		vm.params = exp.Params
+		mp, e := setValue(&vm)
+		if e != nil {
+			return nil, e
+		}
+		if v, ok := mp[exp.Params[0]].(ReplyData); ok {
+			result := v["result"]
+			if result == nil {
+				return nil, fmt.Errorf("invalid reply data, nil result")
+			}
+			if result, ok := result.(*Result); ok {
+				if result.FinishedAt == 0 {
+					return nil, fmt.Errorf("unfinished")
+				}
+				return nil, nil
+			}
+
+			if result, ok := result.(map[string]interface{}); ok {
+				if f, ok := result["finish"].(bool); !ok {
+					if fs, ok := result["finish"].(string); !ok {
+						if fs != "true" {
+							return nil, fmt.Errorf("unfinished")
+						}
+					}
+				} else if !f {
+					return nil, fmt.Errorf("unfinished")
+				}
+				return nil, nil
+			} else {
+				return nil, fmt.Errorf("invalid result")
+			}
+
+		} else {
+			return nil, fmt.Errorf("can't convert to reply")
+		}
+
 	case PARSE_EXP:
 		vm.params = exp.Params
 		mp, err := setValue(&vm)

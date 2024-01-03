@@ -48,6 +48,7 @@ type Task struct {
 	ExpiresAt      ntime.NullableTime          `json:"expires_at"`
 	UserDefineVars map[string]string           `json:"user_define_vars,omitempty"`
 	Wait           string                      `json:"wait"`
+	Input          string                      `json:"input"`
 
 	logger *logrus.Entry
 }
@@ -70,6 +71,7 @@ func (t *Task) Setup(wt *workflow.Task) error {
 	t.ExecutorConfig = ec
 	t.UserDefineVars = wt.UserDefineVars
 	t.Wait = wt.Wait
+	t.Input = wt.Input
 	return nil
 }
 
@@ -152,7 +154,7 @@ func (t *Task) Run() {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID, t.GetGroup())
+		ex := NewExecution(t.ID, t.Agent.getGroup(t.WorkflowID))
 
 		if err := t.Agent.Run(t, ex, nil); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -206,7 +208,7 @@ func (t *Task) RunSync(re *workflow.CmdTask) (*workflow.Result, error) {
 
 		cronInspect.Set(t.ID, t)
 
-		ex := NewExecution(t.ID, t.GetGroup())
+		ex := NewExecution(t.ID, t.Agent.getGroup(t.WorkflowID))
 
 		if result, err := t.Agent.RunSync(t, ex, re); err != nil {
 			t.logger.WithError(err).Error("task: Error running task")
@@ -263,12 +265,4 @@ func (t *Task) String() string {
 func (t *Task) GetTimeLocation() *time.Location {
 	loc, _ := time.LoadLocation(t.Timezone)
 	return loc
-}
-
-func (t *Task) GetGroup() string {
-	return fmt.Sprintf("deamon-%d-%d", t.WorkflowID, time.Now().UnixNano())
-}
-
-func (t *Task) GetPart() string {
-	return fmt.Sprintf("deamonpart-%d-%d", t.WorkflowID, time.Now().UnixNano())
 }

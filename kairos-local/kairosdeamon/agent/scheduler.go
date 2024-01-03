@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/THPTUHA/kairos/pkg/extcron"
+	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
@@ -26,19 +27,26 @@ type EntryTask struct {
 	task  *Task
 }
 
+type BrokerTask struct {
+	entry  *cron.Entry
+	broker *workflow.Broker
+}
+
 type Scheduler struct {
-	mu      sync.RWMutex
-	Cron    *cron.Cron
-	started bool
-	logger  *logrus.Entry
+	mu         sync.RWMutex
+	Cron       *cron.Cron
+	BrokerCron *cron.Cron
+	started    bool
+	logger     *logrus.Entry
 }
 
 func NewScheduler(logger *logrus.Entry) *Scheduler {
 	schedulerStarted.Set(0)
 	return &Scheduler{
-		Cron:    cron.New(cron.WithParser(extcron.NewParser())),
-		started: false,
-		logger:  logger,
+		Cron:       cron.New(cron.WithParser(extcron.NewParser())),
+		BrokerCron: cron.New(cron.WithParser(extcron.NewParser())),
+		started:    false,
+		logger:     logger,
 	}
 }
 
@@ -51,6 +59,23 @@ func (s *Scheduler) ClearCron() {
 			s.RemoveTask(t.ID)
 		}
 	}
+}
+
+func (s *Scheduler) AddBroker(broker *workflow.Broker) error {
+	if broker.Schedule == "" {
+		broker.Run()
+		return nil
+	}
+	if _, ok := s.GetEntryBroker(fmt.Sprint(broker.ID)); ok {
+		s.RemoveBroker(fmt.Sprint(broker.ID))
+	}
+	_, err := s.Cron.AddJob(broker.Schedule, broker)
+	if err != nil {
+		return err
+	}
+	s.Cron.Start()
+	// cronInspect.Set(bro, broker)
+	return nil
 }
 
 func (s *Scheduler) AddTask(task *Task) error {
@@ -143,6 +168,22 @@ func (s *Scheduler) GetEntryTask(taskID string) (EntryTask, bool) {
 	return EntryTask{}, false
 }
 
+func (s *Scheduler) GetEntryBroker(brokerID string) (BrokerTask, bool) {
+	for _, e := range s.BrokerCron.Entries() {
+		if j, ok := e.Job.(*workflow.Broker); !ok {
+			s.logger.Errorf("scheduler: Failed to cast task to *Task found type %T", e.Job)
+		} else {
+			if fmt.Sprint(j.ID) == brokerID {
+				return BrokerTask{
+					entry:  &e,
+					broker: j,
+				}, true
+			}
+		}
+	}
+	return BrokerTask{}, false
+}
+
 func (s *Scheduler) RemoveTask(taskID string) {
 	s.logger.WithFields(logrus.Fields{
 		"task": taskID,
@@ -151,5 +192,13 @@ func (s *Scheduler) RemoveTask(taskID string) {
 	if ej, ok := s.GetEntryTask(taskID); ok {
 		s.Cron.Remove(ej.entry.ID)
 		cronInspect.Delete(taskID)
+	}
+}
+
+func (s *Scheduler) RemoveBroker(brokerID string) {
+
+	if ej, ok := s.GetEntryBroker(brokerID); ok {
+		s.BrokerCron.Remove(ej.entry.ID)
+		cronInspect.Delete(brokerID)
 	}
 }

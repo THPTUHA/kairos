@@ -1,97 +1,94 @@
 version: '1'
 name: service_1
 vars:
+  log_cmd: 1
+  schedule_cmd: 2
 tasks:
   build_image:
-    executor: script
+    executor: dockerlite
     clients: [client1]
     wait: input
     payload: |
       {
-        "command": "/bin/sh",
-        "commandArgs": "[\"-c\", \" docker build -t nexta2020/shopok /path  \"]"
+        "action": "build",
+        "imageName": "nexta2020/shopok",
+        "contextDir": "/Users/nghiabadao/Code/demo/shopok"
       }
   push_image:
-    executor: script
+    executor: dockerlite
     clients: [client1]
     wait: input
     payload: |
       {
-        "command": "/bin/sh",
-        "commandArgs": "[\"-c\", \"docker push nexta2020/shopok \"]"
+        "action": "push",
+        "imageName": "nexta2020/shopok"
       }
-  notification:
-    executor: mail
-    clients: [client1]
-    payload: |
-      {}
   deploy:
     executor: k8sdeploy
     clients: [client2]
     wait: input
     payload: |
       {
-        "service": "backend-service-cms",
+        "service": "shopok",
         "cmd": "deploy"
       }
-  logs:
-    executor: k8sdeploy
+  notification:
+    executor: mail
     clients: [client2]
+    payload: |
+      {}
+  schedule:
+    executror: scheduler
+    clients: [client1]
     wait: input
     payload: |
       {}
-  trigger:
-    executror: schedule
-    clients: [client1]
-    payload: |
-      {}
 brokers:
-  deploy_process: 
-    listens: [build_image_task,push_image_task, deploy_task]
+  prepare_process:
+    listens: [build_image_task]
+    clients: [client1]
     flows: |
       {{waite .build_image_task}}
-        {{send _ping push_image_task}}
-      {{end}}
-
-      {{waite .push_image_task}}
-        {{send _ping deploy_task}}
-      {{end}}
-
-      {{waite .deploy_task}}
-        {{get .deploy_task ("result") | .result }}
-            {{send .result .notification_task}}
-        {{end}}
-      {{end}}
-
-  log:
-    listens: [listen_channel]
-    flows: |
-      {{get .listen_channel ("content") | get ("msg") | .msg }}
-        {{send .msg .logs_task}}
-      {{end}}
-      
-  show:
-    listens:  [logs_task]
-    flows: |
-      {{get .logs_task ("result") | .result}}
-        {{send .result .listen_channel}}
-      {{end}}
-  
-  broker_trigger:
-    clients: [client1]
-    listens: [trigger_task, listen_channel]
-    flows: |
-      {{wait .trigger_task}}
-        {{get .trigger_task ("result") | .result 
-          | get ("workflow") | .workflow}}
-          {{if eq .workflow ("service_1")}}
-            {{send _ping .build_image_task}}
+        {{get .build_image_task ("result") | .result 
+        | get ("success") | .success}}
+          {{if .success}}
+             {{send _ping .push_image_task}}
+          {{else}}
+             {{send .result notification_task,listen_channel }}
           {{end}}
         {{end}}
       {{end}}
 
-      {{wait .listen_channel}}
-        {{get .listen_channel ("content") | get ("msg") | .msg }}
-          {{send .msg .trigger_task}}
+
+  deploy_process:
+    listens: [push_image_task, deploy_task]
+    flows: |
+      {{waite .push_image_task}}
+         {{get .push_image_task ("result") 
+         | .result | get ("success") | .success}}
+          {{if .success}}
+            {{send _ping .deploy_task}}
+          {{else}}
+            {{send .result notification_task,listen_channel}}
+          {{end}}
         {{end}}
       {{end}}
+
+      {{waite .deploy_task}}
+        {{get .deploy_task ("result") | .result}}
+          {{send .result notification_task,listen_channel}}
+        {{end}}
+      {{end}}
+
+  schedule:
+    listens: [listen_channel]
+    flows: |
+      {{get .listen_channel ("content") | get ("msg") | .msg  }}
+        {{send .msg .schedule_task}}
+      {{end}}
+    
+  broker_trigger:
+    clients: [client1]
+    listens: [schedule_task]
+    flows: |
+      {{send _ping .build_image_task}}

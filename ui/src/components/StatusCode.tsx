@@ -1,10 +1,10 @@
 import Queryable from "./Queryable";
 import { MdDone, MdOutlineDisabledByDefault } from "react-icons/md";
 import { FaEquals } from "react-icons/fa6";
-import { FaultInputTask, FaultSetTask, FaultTriggerTask, PendingDeliver, ScuccessTriggerTask, SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd, SuccessSetTask } from "../conts";
+import { FaultInputTask, FaultSetTask, FaultTriggerTask, PendingDeliver, SuccessTriggerTask, SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd, SuccessSetTask } from "../conts";
 
 const Neutral = [PendingDeliver]
-const SuccessCode = [SuccessSetTask, ScuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
+const SuccessCode = [SuccessSetTask, SuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
 const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask]
 
 export enum StatusCodeClassification {

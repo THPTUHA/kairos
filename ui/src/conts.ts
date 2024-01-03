@@ -20,11 +20,12 @@ const SetStatusWorkflow = 0
 const LogMessageFlow = 1
 const DestroyWorkflow = 2
 const RecoverWorkflow = 3
+const ObjectStatusWorkflow = 4
 
 const PendingDeliver = 0
 const SuccessSetTask = 1
 const FaultSetTask = 2
-const ScuccessTriggerTask = 3
+const SuccessTriggerTask = 3
 const FaultTriggerTask = 4
 const SuccessReceiveInputTaskCmd = 5
 const SuccessReceiveOutputTaskCmd = 6
@@ -54,7 +55,7 @@ const ViewRealtime= 1;
 const ViewHistory = 2;
 const ViewTimeLine = 3;
 
-const SuccessCode = [SuccessSetTask, ScuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
+const SuccessCode = [SuccessSetTask, SuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
 const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask]
 
 export {
@@ -78,11 +79,12 @@ export {
   LogMessageFlow,
   DestroyWorkflow,
   RecoverWorkflow,
+  ObjectStatusWorkflow,
 
   PendingDeliver,
   SuccessSetTask,
   FaultSetTask,
-  ScuccessTriggerTask,
+  SuccessTriggerTask,
   FaultTriggerTask,
   SuccessReceiveInputTaskCmd,
   SuccessReceiveOutputTaskCmd,

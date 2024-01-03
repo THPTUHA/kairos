@@ -10,8 +10,10 @@ import (
 
 	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
@@ -38,7 +40,6 @@ func (s *K8sDeploy) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
@@ -50,12 +51,16 @@ func (s *K8sDeploy) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	}
 
 	serviceName := args.Config["service"]
-
+	namespace := args.Config["namespace"]
+	if namespace == "" {
+		namespace = "default"
+	}
 	switch cmd {
 	case "deploy":
-		return s.deploy(clientset, serviceName)
+		return s.deploy(clientset, namespace, serviceName)
+		// return []byte("success"), nil
 	case "log":
-		return s.log(clientset, &PodQuery{
+		return s.log(clientset, namespace, &PodQuery{
 			Name: serviceName,
 		})
 	default:
@@ -63,13 +68,13 @@ func (s *K8sDeploy) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	}
 }
 
-func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, serviceName string) ([]byte, error) {
+func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, namespace, serviceName string) ([]byte, error) {
 	if serviceName == "" {
 		return nil, fmt.Errorf("empty service name")
 	}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		deployment, err := clientset.AppsV1().Deployments("default").Get(context.TODO(), serviceName, metav1.GetOptions{})
+		deployment, err := clientset.AppsV1().Deployments(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
@@ -81,7 +86,7 @@ func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, serviceName string) 
 			},
 		)
 
-		_, err = clientset.AppsV1().Deployments("default").Update(context.TODO(), deployment, metav1.UpdateOptions{})
+		_, err = clientset.AppsV1().Deployments(namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 		return err
 	})
 
@@ -89,21 +94,27 @@ func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, serviceName string) 
 		return nil, err
 	}
 
-	return []byte("success"), nil
+	err = s.waitForPodReady(clientset, namespace, serviceName)
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(fmt.Sprintf("restart deployment %s namespace %s success", serviceName, namespace)), nil
 }
 
 type PodStatus struct {
-	Name      string       `json:"name"`
-	Status    string       `json:"status"`
-	StartTime *metav1.Time `json:"start_time"`
+	Name              string                   `json:"name"`
+	Status            string                   `json:"status"`
+	StartTime         *metav1.Time             `json:"start_time"`
+	ContainerStatuses []corev1.ContainerStatus `json:"container_statues"`
 }
 
 type PodQuery struct {
 	Name string `json:"name"`
 }
 
-func (s *K8sDeploy) log(clientset *kubernetes.Clientset, podName *PodQuery) ([]byte, error) {
-	pods, err := clientset.CoreV1().Pods("default").List(context.TODO(), metav1.ListOptions{})
+func (s *K8sDeploy) log(clientset *kubernetes.Clientset, namespace string, podName *PodQuery) ([]byte, error) {
+	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -113,16 +124,18 @@ func (s *K8sDeploy) log(clientset *kubernetes.Clientset, podName *PodQuery) ([]b
 		if podName.Name != "" {
 			if strings.HasPrefix(pod.GetName(), podName.Name) {
 				ps = append(ps, &PodStatus{
-					Name:      pod.GetName(),
-					Status:    string(pod.Status.Phase),
-					StartTime: pod.Status.StartTime,
+					Name:              pod.GetName(),
+					Status:            string(pod.Status.Phase),
+					StartTime:         pod.Status.StartTime,
+					ContainerStatuses: pod.Status.ContainerStatuses,
 				})
 			}
 		} else {
 			ps = append(ps, &PodStatus{
-				Name:      pod.GetName(),
-				Status:    string(pod.Status.Phase),
-				StartTime: pod.Status.StartTime,
+				Name:              pod.GetName(),
+				Status:            string(pod.Status.Phase),
+				StartTime:         pod.Status.StartTime,
+				ContainerStatuses: pod.Status.ContainerStatuses,
 			})
 		}
 	}
@@ -132,4 +145,24 @@ func (s *K8sDeploy) log(clientset *kubernetes.Clientset, podName *PodQuery) ([]b
 		return nil, err
 	}
 	return pj, nil
+}
+
+func (s *K8sDeploy) waitForPodReady(clientset *kubernetes.Clientset, namespace, deploymentName string) error {
+	deploymentsClient := clientset.AppsV1().Deployments(namespace)
+
+	return wait.PollImmediate(time.Second, time.Minute*5, func() (bool, error) {
+		deployment, err := deploymentsClient.Get(context.TODO(), deploymentName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		conditions := deployment.Status.Conditions
+		for _, condition := range conditions {
+			if condition.Type == appsv1.DeploymentAvailable && condition.Status == "True" {
+				return true, nil
+			}
+		}
+
+		return false, nil
+	})
 }

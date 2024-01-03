@@ -29,12 +29,9 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
   private _token: string;
   private _data: any | null;
   private _getData: null | ((ctx: SubscriptionDataContext) => Promise<any>);
-  private _recoverable: boolean;
-  private _positioned: boolean;
   private _joinLeave: boolean;
   private _inflight: boolean;
 
-  /** Subscription constructor should not be used directly, create subscriptions using Client method. */
   constructor(kairos: Kairos, channel: string, options?: Partial<SubscriptionOptions>) {
     super();
     this.channel = channel;
@@ -47,8 +44,6 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     this._recover = false;
     this._offset = null;
     this._epoch = null;
-    this._recoverable = false;
-    this._positioned = false;
     this._joinLeave = false;
     this._minResubscribeDelay = 500;
     this._maxResubscribeDelay = 20000;
@@ -192,7 +187,7 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     }
 
     this._setState(SubscriptionState.Subscribed);
-    // @ts-ignore – we are hiding some methods from public API autocompletion.
+    // @ts-ignore
     const ctx = this._kairos._getSubscribeContext(this.channel, result);
     this.emit('subscribed', ctx);
     this._resolvePromises();
@@ -308,10 +303,6 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
       req.data = this._data;
     }
 
-    if (this._recoverable) {
-      req.recoverable = true;
-    }
-
     if (this._joinLeave) {
       req.join_leave = true;
     }
@@ -331,16 +322,16 @@ export class Subscription extends (EventEmitter as new () => TypedEventEmitter<S
     const cmd = { subscribe: req };
 
 
-    // @ts-ignore – we are hiding some symbols from public API autocompletion.
+    // @ts-ignore 
     this._kairos._call(cmd, skipSending).then(resolveCtx => {
-      // @ts-ignore - improve later.
+      // @ts-ignore 
       const result = resolveCtx.reply.subscribe;
       this._handleSubscribeResponse(
         result
       );
-      // @ts-ignore - improve later.
+      // @ts-ignore
       if (resolveCtx.next) {
-        // @ts-ignore - improve later.
+        // @ts-ignore
         resolveCtx.next();
       }
     }, rejectCtx => {
