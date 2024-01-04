@@ -29,11 +29,13 @@ type File struct {
 
 func (s *File) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 	out, err := s.ExecuteImpl(args, cb)
-	resp := &proto.ExecuteResponse{Output: out}
+	resp := &proto.ExecuteResponse{
+		Output: out,
+	}
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (s *File) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([]byte, error) {

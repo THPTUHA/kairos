@@ -13,6 +13,7 @@ interface EntriesListProps {
     isSnappedToBottom: boolean;
     setIsSnappedToBottom: (state: boolean) => void;
     scrollableRef: React.MutableRefObject<ScrollableFeedVirtualized>;
+    setOffset: any
 }
 
 export const EntriesList: React.FC<EntriesListProps> = ({
@@ -20,8 +21,8 @@ export const EntriesList: React.FC<EntriesListProps> = ({
     listEntryREF,
     onSnapBrokenEvent,
     scrollableRef,
+    setOffset
 }) => {
-
     const [timeNow, setTimeNow] = useState(new Date());
 
     useInterval(async () => {
@@ -52,9 +53,24 @@ export const EntriesList: React.FC<EntriesListProps> = ({
             </div>
 
             <div className={styles.footer}>
-                <div>Showing <b id="item-count">{entries.length}</b> items 
+                <div>Showing <b id="item-count">{entries.length}</b> items
                 </div>
+                <div onClick={() => {
+                    setOffset((o: any) => {
+                        if (o) {
+                            return o - 1
+                        }
+                        return o
+                    })
+                }}>{"<< Pre"}</div>
+                <div onClick={() => {
+                    if (entries.length > 0) {
+                        setOffset((o: any) => o + 1)
+                    }
+                }}>{"Next >>"}</div>
+
             </div>
+            <div className="mx-2"></div>
         </div>
     </React.Fragment>;
 };

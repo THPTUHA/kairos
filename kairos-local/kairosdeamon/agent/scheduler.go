@@ -100,6 +100,10 @@ func (s *Scheduler) AddTask(task *Task) error {
 		"schedule": task.Schedule,
 	}).Debug("scheduler: Adding task to cron")
 	task.logger = s.logger
+	if task.Schedule == "" && task.Input != "" {
+		task.Run()
+		return nil
+	}
 	_, err := s.Cron.AddJob(schedule, task)
 	if err != nil {
 		return err

@@ -95,6 +95,7 @@ type Broker struct {
 	Template    *Template                `json:"template,omitempty"`
 	DynamicVars map[string]*CmdReplyTask `json:"dynamic_vars,omitempty"`
 	WorkflowID  int64                    `json:"workflow_id"`
+	TriggerID   int64                    `json:"trigger_id"`
 
 	Log    *logrus.Entry    `json:"-"`
 	Output chan *ExecOutput `json:"-"`

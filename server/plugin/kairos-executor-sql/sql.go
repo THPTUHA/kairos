@@ -48,7 +48,7 @@ func (s *Sql) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*prot
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func initDB(args *proto.ExecuteRequest) (*sql.DB, error) {

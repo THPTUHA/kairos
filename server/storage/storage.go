@@ -1521,29 +1521,29 @@ func GetBrokerRecords(brokerID int64, limit int) ([]*models.BrokerRecord, error)
 	return records, nil
 }
 
-func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, error) {
+func GetMessageFlows(userID int64, workflowName string, limit string, offset string) ([]*models.MessageFlow, error) {
 	var query string
 	var args []interface{}
 
 	if userID != 0 && workflowName != "" {
 		query = `SELECT mf.id, mf.status, sender_id, sender_type, receiver_id, 
-				receiver_type, workflow_id, message, attemp, mf.created_at, flow, 
-				deliver_id, request_size, response_size, 
-				sender_name, receiver_name,cmd. w.name as workflow_name
+				receiver_type, workflow_id, message, attempt, mf.created_at, flow, 
+				deliver_id, request_size, response_size,  
+				sender_name, receiver_name,cmd. w.name as workflow_name,start_input
 				FROM message_flows mf 
 				JOIN workflows w ON mf.workflow_id = w.id 
 				WHERE w.user_id = $1 AND w.name = $2 
-				ORDER BY mf.id DESC LIMIT 10`
-		args = []interface{}{userID, workflowName}
+				ORDER BY mf.id DESC OFFSET $3 LIMIT $4  `
+		args = []interface{}{userID, workflowName, offset, limit}
 	} else if userID != 0 {
 		query = `SELECT mf.id, mf.status, sender_id, sender_type, receiver_id, 
-				receiver_type, workflow_id, message, attemp, mf.created_at, flow, 
-				deliver_id, request_size, response_size,
-				sender_name, receiver_name,cmd, w.name as workflow_name
+				receiver_type, workflow_id, message, attempt, mf.created_at, flow, 
+				deliver_id, request_size, response_size, 
+				sender_name, receiver_name,cmd, w.name as workflow_name,start_input
 				FROM message_flows mf 
 				JOIN workflows w ON mf.workflow_id = w.id  
-				WHERE w.user_id = $1 ORDER BY id DESC LIMIT 10`
-		args = []interface{}{userID}
+				WHERE w.user_id = $1 ORDER BY id DESC OFFSET $2 LIMIT $3  `
+		args = []interface{}{userID, offset, limit}
 	} else {
 		return nil, fmt.Errorf("empty query")
 	}
@@ -1576,6 +1576,7 @@ func GetMessageFlows(userID int64, workflowName string) ([]*models.MessageFlow, 
 			&flow.ReceiverName,
 			&flow.Cmd,
 			&flow.WorkflowName,
+			&flow.StartInput,
 		)
 		if err != nil {
 			return nil, err

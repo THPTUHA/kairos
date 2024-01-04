@@ -52,3 +52,21 @@ g.offline ellipse,
 g.offline circle {
   fill: rgb(107, 103, 103);
 }
+
+@keyframes pulse2 {
+  0%, 100% {
+    fill: rgb(246, 195, 12); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+  25% {
+    fill: rgb(247, 231, 11); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+  75% {
+    fill: rgb(240, 169, 15); /* Màu xanh lá cây tươi tắn hơn, opacity = 1 */
+  }
+}
+
+g.waring rect,
+g.waring ellipse,
+g.waring circle {
+  animation: pulse2 1s infinite; 
+}

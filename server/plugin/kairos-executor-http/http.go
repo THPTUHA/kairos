@@ -30,11 +30,14 @@ type HTTP struct {
 
 func (s *HTTP) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 	out, err := s.ExecuteImpl(args)
-	resp := &proto.ExecuteResponse{Output: out}
+	resp := &proto.ExecuteResponse{
+		Output: out,
+		Error:  err.Error(),
+	}
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (s *HTTP) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {

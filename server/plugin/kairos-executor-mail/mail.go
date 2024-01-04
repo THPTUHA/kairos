@@ -14,7 +14,7 @@ func (n *Notification) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelpe
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (n *Notification) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {

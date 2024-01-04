@@ -1,5 +1,5 @@
 version: '1'
-name: service_3
+name: service_4
 vars:
 tasks:
   build_image:
@@ -79,7 +79,7 @@ brokers:
       {{waite .build_image_task}}
         {{get .build_image_task ("result") | .result 
         | get ("success") | .success}}
-          {{if not .success}}
+          {{if ne .success}}
              {{send .result notification_task,listen_channel}}
           {{end}}
         {{end}}
@@ -88,7 +88,7 @@ brokers:
       {{waite .push_image_task}}
         {{get .push_image_task ("result") | .result 
         | get ("success") | .success}}
-          {{if not .success}}
+          {{if ne .success}}
              {{send .result notification_task,listen_channel}}
           {{end}}
         {{end}}

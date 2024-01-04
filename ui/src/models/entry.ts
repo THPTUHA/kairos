@@ -22,7 +22,6 @@ export interface Entry {
         id: number,
     };
     cmd: number;
-    request: string;
-    response: string;
+    payload: any;
     reply: boolean;
 }

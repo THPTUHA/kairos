@@ -165,6 +165,19 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			} else {
 				return []interface{}{false}, nil
 			}
+		} else if len(exp.Params) == 2 {
+			vm.params = exp.Params[:1]
+			mp, e := setValue(&vm)
+			if e != nil {
+				return nil, e
+			}
+			if exp.Params[0] == "ne" {
+				if mp[exp.Params[1]] != "" && mp[exp.Params[1]] != false && mp[exp.Params[1]] != "false" {
+					return []interface{}{false}, nil
+				} else {
+					return []interface{}{true}, nil
+				}
+			}
 		}
 
 		if exp.Func == IF_EXP {

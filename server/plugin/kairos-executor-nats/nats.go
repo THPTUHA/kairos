@@ -34,7 +34,7 @@ func (s *Nats) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*pro
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (s *Nats) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {

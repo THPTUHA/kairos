@@ -14,11 +14,14 @@ type Script struct {
 func (s *Script) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 
 	out, err := s.ExecuteImpl(args, cb)
-	resp := &proto.ExecuteResponse{Output: out}
+	resp := &proto.ExecuteResponse{
+		Output: out,
+		Error:  err.Error(),
+	}
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (s *Script) ExecuteImpl(args *proto.ExecuteRequest, cb plugin.StatusHelper) ([]byte, error) {

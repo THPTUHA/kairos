@@ -71,6 +71,7 @@ interface TrafficViewerProps {
   entries: Entry[];
   actionButtons?: JSX.Element,
   viewType: number,
+  setOffset: any,
 }
 
 const DEFAULT_QUERY = "";
@@ -108,7 +109,7 @@ const getNameFromType = (type: number) => {
 }
 
 function mergeTree(a: TreeNode, b: TreeNode) {
-  console.log(a.name, b.name, JSON.stringify(a.children), JSON.stringify(b.children))
+  // console.log(a.name, b.name, JSON.stringify(a.children), JSON.stringify(b.children))
   if (a.owner_id == b.owner_id && a.owner_type == b.owner_type) {
     a.finish = b.finish
     a.attributes = b.attributes
@@ -182,6 +183,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
       return false
     }
     if (!item.parent && item.part != parent.part) {
+      console.log("PARENT---", item)
       parent = item
       root_cnt++
     }
@@ -223,6 +225,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
         type: TaskPoint,
         client: selfroot.sender_name,
         finish: selfroot.finish_part,
+        status: selfroot.status,
         active: getClient(selfroot.sender_name, clients).status,
       },
       status: selfroot.status,
@@ -252,8 +255,10 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
           type: TaskPoint,
           client: item.receiver_name,
           success: success,
+          status: item.status,
           active: getClient(item.receiver_name, clients).status,
         },
+        status: item.status,
         part: item.part,
         parent: item.part,
         owner_id: item.receiver_id,
@@ -267,7 +272,9 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
         attributes: {
           id: selfroot.receiver_id,
           type: item.receiver_type,
+          status: item.status,
         },
+        status: item.status,
         part: item.part,
         parent: item.part,
         owner_id: item.receiver_id,
@@ -296,6 +303,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
           client: item.sender_name,
           finish: item.finish_part,
           success: success,
+          status: item.status,
         },
         status: item.status,
         part: item.part,
@@ -318,6 +326,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
           id: item.sender_id,
           type: item.sender_type,
           finish: item.finish_part,
+          status: item.status,
         }
       }
 
@@ -338,6 +347,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
     const cp = JSON.stringify(value)
     console.log(key, JSON.parse(cp))
   })
+  
   const parents = []
   mfs.forEach(item => {
     const parent = map.get(item.parent);
@@ -361,7 +371,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
           } else {
 
             parent.children.push(e);
-            console.log("RUN HERE", JSON.stringify(parent.children))
+            // console.log("RUN HERE", JSON.stringify(parent.children))
           }
 
         }
@@ -398,7 +408,8 @@ type TimeLineSelected = {
 export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   entries,
   actionButtons,
-  viewType
+  viewType,
+  setOffset
 }) => {
 
   const classes = useLayoutStyles();
@@ -409,7 +420,6 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   const setQueryBuild = useSetRecoilState(queryBuildAtom);
   const setQueryBackgroundColor = useSetRecoilState(queryBackgroundColorAtom);
   const [isSnappedToBottom, setIsSnappedToBottom] = useState(true);
-  const [wsReadyState, setWsReadyState] = useState(0);
   const [searchParams] = useSearchParams();
   const [timeline, setTimeline] = useState<TimeLineSelected | null>(null);
   const entriesBuffer = useRef([] as Entry[]);
@@ -538,6 +548,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
                   isSnappedToBottom={isSnappedToBottom}
                   setIsSnappedToBottom={setIsSnappedToBottom}
                   scrollableRef={scrollableRef}
+                  setOffset={setOffset}
                 />
               </div>
             ) : (
@@ -842,14 +853,21 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
     console.log("PARTS---", paths)
   }
 
-  const statusNode = (attributes: any) => {
+  const statusNode = (attributes: any,status:number) => {
+    if(status == -99){
+      return "waring"
+    }
     if (attributes.finish) {
       if (attributes.type == TaskPoint) {
+        console.log("TASK__-",attributes)
         if (attributes.success) {
           return "success"
         }
         return "fault"
       }
+      // if(attributes.type == BrokerPoint){
+      //   return "success"
+      // }
       return "success"
     }
     if (attributes.type == TaskPoint) {
@@ -934,9 +952,10 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
             <>
               {
                 nodeDatum.attributes?.type == ChannelPoint ?
-                  <g >
+                   //@ts-ignore
+                  <g className={`${statusNode(nodeDatum.attributes,hierarchyPointNode.data.status)}`}>
                     {
-                      <rect width="40" height="40" x="-20" fill="orange" onClick={() => { handleClick(hierarchyPointNode) }} />
+                      <rect width="40" height="40" x="-20" onClick={() => { handleClick(hierarchyPointNode) }} />
                     }
                     <text fill="black" strokeWidth="1" x="30" y="10">
                       {nodeDatum.name}
@@ -945,7 +964,8 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
                       {"(Channel)"}
                     </text>
                   </g>
-                  : nodeDatum.attributes?.type == TaskPoint ? <g className={`${statusNode(nodeDatum.attributes,)}`}>
+                  //@ts-ignore
+                  : nodeDatum.attributes?.type == TaskPoint ? <g className={`${statusNode(nodeDatum.attributes,hierarchyPointNode.data.status)}`}>
                     <circle r="20" onClick={() => { handleClick(hierarchyPointNode) }} />
                     <text fill="black" strokeWidth="1" x="30" y="10">
                       {nodeDatum.name}
@@ -954,7 +974,8 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
                       {"(Task)"}
                     </text>
                   </g>
-                    : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${statusNode(nodeDatum.attributes)}`}>
+                  //@ts-ignore
+                    : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${statusNode(nodeDatum.attributes, hierarchyPointNode.data.status)}`}>
                       <ellipse rx="25" ry="15" fill="green" onClick={() => { handleClick(hierarchyPointNode) }} />
                       <text fill="black" strokeWidth="1" x="30" y="10">
                         {nodeDatum.name}

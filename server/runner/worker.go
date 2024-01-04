@@ -633,6 +633,7 @@ func (w *Worker) reciveMessageSync() error {
 		var cmd workflow.CmdTask
 		cmd.Cmd = workflow.TriggerCmd
 		cmd.Trigger = &trigger
+		cmd.WorkflowID = w.workflow.ID
 		if trigger.Client != "" {
 			from := w.points["kairos"]
 			receiver := w.points[workflow.GetClientName(trigger.Client)]
@@ -1232,40 +1233,42 @@ func (w *Worker) removeRequest(id int64) {
 }
 
 func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTask, cb func(*workflow.CmdReplyTask, error)) error {
-	cmd.Channel = receiver.getChannel()
+	cmdDeliver := *cmd
+	cmdDeliver.Channel = receiver.getChannel()
 
-	cmd.Status = workflow.PendingDeliver
-	cmd.SendAt = time.Now().UnixMilli()
-	fmt.Println("DELIVERID BEFORE-------------------- ", cmd.DeliverID)
-	if cmd.DeliverID == 0 {
-		cmd.DeliverID = w.nextCmdID()
+	cmdDeliver.Status = workflow.PendingDeliver
+	cmdDeliver.SendAt = time.Now().UnixMilli()
+	fmt.Println("DELIVERID BEFORE-------------------- ", cmdDeliver.DeliverID)
+	if cmdDeliver.DeliverID == 0 {
+		cmdDeliver.DeliverID = w.nextCmdID()
 	}
-	fmt.Println("DELIVERID -------------------- ", cmd.DeliverID)
-	w.addRequest(cmd.DeliverID, cb)
+	fmt.Println("DELIVERID -------------------- ", cmdDeliver.DeliverID)
+	w.addRequest(cmdDeliver.DeliverID, cb)
 
-	err := w.deliver(cmd)
+	err := w.deliver(&cmdDeliver)
 	fmt.Println("________________________")
-	fmt.Printf("%+v\n task= %+v \n", cmd, cmd.Task)
+	fmt.Printf("%+v\n task= %+v \n", cmdDeliver, cmdDeliver.Task)
 	fmt.Println("________________________")
 	if err != nil {
 		w.conf.Logger.Error(err)
 		return err
 	}
 	go func() {
-		defer w.removeRequest(cmd.DeliverID)
+		defer w.removeRequest(cmdDeliver.DeliverID)
 		select {
 		case <-time.After(w.conf.DeliverTimeout):
 			w.requestsMu.RLock()
-			req, ok := w.requests[cmd.DeliverID]
+			req, ok := w.requests[cmdDeliver.DeliverID]
 			w.requestsMu.RUnlock()
 			if !ok {
 				return
 			}
 			var reply workflow.CmdReplyTask
 			req.cb(&reply, ErrDeliverTimeout)
+			return
 		case <-w.closeCh:
 			w.requestsMu.RLock()
-			req, ok := w.requests[cmd.DeliverID]
+			req, ok := w.requests[cmdDeliver.DeliverID]
 			w.requestsMu.RUnlock()
 			if !ok {
 				return

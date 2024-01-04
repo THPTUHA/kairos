@@ -16,9 +16,9 @@ export const RecordService = {
             .get(`apis/v1/service/record/broker/${broker_id}`)
             .then(res => res.body as any);
     },
-    getMessageRecord() {
+    getMessageRecord(offset: number) {
         return requests
-            .post(`apis/v1/service/record/message_flows`)
+            .post(`apis/v1/service/record/message_flows?offset=${offset*10}&limit=10`)
             .send({})
             .then(res => res.body.msg_flows as any);
     },

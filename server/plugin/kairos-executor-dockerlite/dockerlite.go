@@ -24,11 +24,14 @@ type DockerLite struct {
 func (d *DockerLite) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 	d.cb = cb
 	out, err := d.ExecuteImpl(args)
-	resp := &proto.ExecuteResponse{Output: out}
+	resp := &proto.ExecuteResponse{
+		Output: out,
+	}
+
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (d *DockerLite) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
@@ -50,17 +53,18 @@ func (d *DockerLite) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 		}
 		err := d.buildImage(path.Join(contextDir, dockerfile), contextDir, imageName, imageTag)
 		if err != nil {
-			return []byte(fmt.Sprintf("Build image %s/%s successful", imageName, imageTag)), err
+			return []byte(err.Error()), err
 		}
+		return []byte(fmt.Sprintf("Build image %s/%s successful", imageName, imageTag)), err
 	case "push":
 		err := d.pushImage(imageName, imageTag)
 		if err != nil {
-			return []byte(fmt.Sprintf("Push image %s/%s successful", imageName, imageTag)), err
+			return []byte(err.Error()), err
 		}
+		return []byte(fmt.Sprintf("Push image %s/%s successful", imageName, imageTag)), err
 	default:
 		return nil, fmt.Errorf("action %s invalid", action)
 	}
-	return nil, nil
 }
 
 func (d *DockerLite) buildImage(dockerfile, contextDir, imageName, imageTag string) error {

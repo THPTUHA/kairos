@@ -49,8 +49,8 @@ type Task struct {
 	UserDefineVars map[string]string           `json:"user_define_vars,omitempty"`
 	Wait           string                      `json:"wait"`
 	Input          string                      `json:"input"`
-
-	logger *logrus.Entry
+	Result         chan *workflow.CmdReplyTask `json:"-"`
+	logger         *logrus.Entry
 }
 
 func (t *Task) Setup(wt *workflow.Task) error {

@@ -413,51 +413,93 @@ func (a *Agent) handleTaskEvent() {
 			re.Cmd = workflow.ReplyTriggerCmd
 			re.Status = workflow.SuccessTrigger
 			re.WorkflowID = te.WorkflowID
-			go a.Trigger(te)
+			if te.Trigger != nil {
+				err := a.Store.SetTrigger(te.Trigger)
+				if err != nil {
+					a.logger.Error(err)
+					re.Status = workflow.FaultTrigger
+				} else {
+					go a.Trigger(te.Trigger)
+				}
+			}
 			go a.hub.Publish(&re)
 		}
 	}
 }
 
-func (a *Agent) Trigger(te *workflow.CmdTask) error {
-	if te.Broker != nil {
-		broker, err := a.Store.GetBroker(fmt.Sprint(te.Broker.ID))
-		if broker.Name == "" {
-			a.logger.Errorf("not found broker id = %d", te.Broker.ID)
-			return fmt.Errorf("not found broker id = %d", te.Broker.ID)
-		}
-		if err != nil {
-			a.logger.Error(err)
-			return err
-		}
-		// a.logger.Error(broker.Template, broker.Name)
-		broker.Log = a.logger
-		broker.Output = make(chan *workflow.ExecOutput)
-		broker.Input = te.Broker.Input
-		if broker == nil {
-			return fmt.Errorf("Not found broker id = %d", te.Broker.ID)
-		}
-		wait := make(chan bool)
-		go func(wait chan bool) {
-			select {
-			case out := <-broker.Output:
-				a.logger.Warnf("OUTPUT = %+v", out)
-				a.handleBrokerDeliver(broker, out, nil)
-			case <-wait:
-
+func (a *Agent) Trigger(tr *workflow.Trigger) error {
+	if tr != nil {
+		if tr.Type == "broker" {
+			broker, err := a.Store.GetBroker(fmt.Sprint(tr.ObjectID))
+			if broker.Name == "" {
+				a.logger.Errorf("not found broker id = %d", tr.ObjectID)
+				return fmt.Errorf("not found broker id = %d", tr.ObjectID)
 			}
-		}(wait)
-		a.sched.AddBroker(broker)
-		close(wait)
-	}
+			if err != nil {
+				a.logger.Error(err)
+				return err
+			}
+			// a.logger.Error(broker.Template, broker.Name)
+			broker.Log = a.logger
+			broker.Output = make(chan *workflow.ExecOutput)
+			broker.Input = tr.Input
+			broker.TriggerID = tr.ID
+			broker.Schedule = tr.Schedule
+			if broker == nil {
+				return fmt.Errorf("Not found broker id = %d", tr.ObjectID)
+			}
+			wait := make(chan bool)
+			go func(wait chan bool) {
+				select {
+				case out := <-broker.Output:
+					a.logger.Warnf("OUTPUT BROKER= %+v", out)
+					a.handleBrokerDeliver(broker, out, nil)
+				case <-wait:
 
-	a.logger.Warn("Finish trigger")
-	if te.Task != nil {
-		var task Task
-		task.Setup(te.Task)
-		if err := a.sched.AddTask(&task); err != nil {
-			return err
+				}
+			}(wait)
+			err = a.sched.AddBroker(broker)
+			if err != nil {
+				a.logger.Error(err)
+				return err
+			}
+			close(wait)
+			a.logger.Warn("Finish trigger")
+			err = a.Store.DeleteTrigger(fmt.Sprint(tr.ID))
+			if err != nil {
+				a.logger.Error(err)
+			}
+		} else if tr.Type == "task" {
+			task, err := a.Store.GetTask(fmt.Sprint(tr.ObjectID), nil)
+			if err != nil {
+				a.logger.Error(err)
+				return err
+			}
+			task.Result = make(chan *workflow.CmdReplyTask)
+			task.Input = tr.Input
+			task.Schedule = tr.Schedule
+			task.Agent = a
+			wait := make(chan bool)
+			go func(wait chan bool) {
+				select {
+				case out := <-task.Result:
+					a.logger.Warnf("OUTPUT TASK= %+v", out)
+					a.Broadcast(out)
+				case <-wait:
+
+				}
+			}(wait)
+
+			if err := a.sched.AddTask(task); err != nil {
+				return err
+			}
+			close(wait)
+			err = a.Store.DeleteTrigger(fmt.Sprint(tr.ID))
+			if err != nil {
+				a.logger.Error(err)
+			}
 		}
+
 	}
 
 	return nil
@@ -1115,8 +1157,14 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 	} else {
 		err := fmt.Errorf("deamon: specified executor is not present")
 		execution.Success = false
+		execution.Status = FaultTask
 		execution.Output = err.Error()
 		execution.FinishedAt = time.Now()
+		execution.Part = agent.getPart(task.WorkflowID, "")
+		if re != nil {
+			execution.Parent = re.Part
+		}
+
 		agent.logger.WithField("executor", jex).Error(err)
 		execution.Offset++
 		err = agent.SaveExecutorResult(execution)
@@ -1129,7 +1177,16 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		t.Cmd = workflow.ReplyOutputTaskCmd
 		t.Result = execution.GetResult()
 		if re != nil {
+			t.Group = re.Group
 			t.RunCount = re.RunCount
+		} else {
+			t.Group = execution.Group
+			if execution.Offset == 1 {
+				t.Start = true
+				t.Parent = execution.Part
+				t.TaskName = task.Name
+				t.TaskInput = string(inputTask)
+			}
 		}
 		go agent.Broadcast(t)
 	}

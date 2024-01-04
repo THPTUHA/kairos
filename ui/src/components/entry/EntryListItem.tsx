@@ -180,7 +180,7 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
           </span>
         </Queryable>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center text-sm">
         {formatDate(entry.timestamp)}
       </div>
     </div>

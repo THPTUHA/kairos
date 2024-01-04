@@ -679,6 +679,8 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             let o = input[0]
             if(o){
                 value = JSON.stringify(o.value)
+            }else{
+                o = {}
             }
         }
 
@@ -693,6 +695,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             workflow_id: wid,
             status: 0,
         }
+
         await services.workflows
             .saveTrigger(trigger)
             .catch(setError)
@@ -816,6 +819,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                     onKeyDown={(e) => {
                         if (e.key == "Enter") {
                             setInput((input: any[]) => {
+                                console.log("INPUT BEFORE", JSON.stringify(input))
                                 for (const i of input) {
                                     if (i.name == inName) {
                                         Toast.error(`var ${inName} existed`)

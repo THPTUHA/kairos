@@ -44,51 +44,6 @@ interface EntryTitleProps {
 
 export const formatSize = (n: number): string => n > 1000 ? `${Math.round(n / 1000)}kB` : `${n}B`;
 const minSizeDisplayRequestSize = 880;
-const EntryTitle: React.FC<EntryTitleProps> = ({ entry }) => {
-    const classes = useStyles();
-    const request = entry.request;
-    const response = entry.response;
-
-    const { width } = useWindowDimensions();
-    const { requestText, responseText, elapsedTimeText } = useRequestTextByWidth(width)
-
-    return <div className={classes.entryTitle}>
-        {(width > minSizeDisplayRequestSize) && <div style={{ right: "30px", position: "absolute", display: "flex" }}>
-            <>
-                {request && <Queryable
-                    query={`requestSize == ${entry.requestSize}`}
-                    style={{ margin: "0 18px" }}
-                    displayIconOnMouseOver={true}
-                >
-                    <div
-                        style={{ opacity: 0.5 }}
-                        id="entryDetailedTitleRequestSize"
-                    >
-                        {`${requestText}${formatSize(entry.requestSize)}`}
-                    </div>
-                </Queryable>}
-                {response && <Queryable
-                    query={`responseSize == ${entry.responseSize}`}
-                    style={{ margin: "0 18px" }}
-                    displayIconOnMouseOver={true}
-                >
-                    <div
-                        style={{ opacity: 0.5 }}
-                        id="entryDetailedTitleResponseSize"
-                    >
-                        {`${responseText}${formatSize(entry.responseSize)}`}
-                    </div>
-                </Queryable>}
-                {response && <div
-                    style={{ opacity: 0.5 }}
-                    id="entryDetailedTitleElapsedTime"
-                >
-                    {`${elapsedTimeText}${Math.round(entry.elapsedTime)}ms`}
-                </div>}
-            </>
-        </div>}
-    </div>;
-};
 
 interface EntrySummaryProps {
     entry: Entry;
@@ -96,11 +51,6 @@ interface EntrySummaryProps {
 
 const EntrySummary: React.FC<EntrySummaryProps> = ({ entry }) => {
     return <div>
-        <div className="flex w-2/3 justify-between">
-            <span>Request: {Utils.humanReadableBytes(entry.requestSize)}</span>
-            <span>Response:{Utils.humanReadableBytes(entry.responseSize)}</span>
-            <span>Elapsed Time: {entry.elapsedTime}ms</span>
-        </div>
         <EntryItem
             key={entry.id}
             entry={entry}
@@ -117,13 +67,12 @@ export const EntryDetailed: React.FC = () => {
     const items: TabsProps['items'] = [
         {
             key: '1',
-            label: 'Request',
-            children:  <ReactJson src={focusedItem?.request ? focusedItem?.request: {} } />,
-        },
-        {
-            key: '2',
-            label: 'Response',
-            children: <ReactJson src={focusedItem?.response ?focusedItem?.response : {}} />,
+            label: 'Payload',
+            children:  <ReactJson 
+                            src={focusedItem?.payload && typeof focusedItem?.payload == "object"
+                            ? focusedItem?.payload: {} } name={false} 
+                            enableClipboard={false}
+                        />,
         },
     ];
 

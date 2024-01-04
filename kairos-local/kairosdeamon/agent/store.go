@@ -38,6 +38,7 @@ var (
 	queueBucket        = []byte("queue")
 	brokerRecordBucket = []byte("broker_record")
 	scriptBucket       = []byte("script")
+	triggerBucket      = []byte("trigger")
 )
 
 var (
@@ -1054,4 +1055,69 @@ func trimDirectoryKey(key []byte) []byte {
 
 func isDirectoryKey(key []byte) bool {
 	return len(key) > 0 && key[len(key)-1] == ':'
+}
+
+func (s *Store) setTrigger(tr *workflow.Trigger) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		trBkt, err := tx.CreateBucketIfNotExists(triggerBucket)
+		if err != nil {
+			return err
+		}
+		trb, err := json.Marshal(tr)
+		if err != nil {
+			return err
+		}
+
+		err = trBkt.Put([]byte(fmt.Sprint(tr.ID)), trb)
+		return err
+	}
+}
+
+func (s *Store) SetTrigger(tr *workflow.Trigger) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.setTrigger(tr)(tx)
+	})
+}
+
+func (s *Store) GetTriggers() ([]*workflow.Trigger, error) {
+	triggers := make([]*workflow.Trigger, 0)
+	tx, err := s.db.Begin(true)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	trBkt, err := tx.CreateBucketIfNotExists(triggerBucket)
+	c := trBkt.Cursor()
+	for k, v := c.First(); k != nil; k, v = c.Next() {
+		var trigger workflow.Trigger
+		err := json.Unmarshal(v, &trigger)
+		if err != nil {
+			return nil, err
+		}
+		triggers = append(triggers, &trigger)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	return triggers, nil
+}
+
+func (s *Store) DeleteTrigger(trid string) error {
+	tx, err := s.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	trBkt, err := tx.CreateBucketIfNotExists(triggerBucket)
+	if err != nil {
+		return err
+	}
+	err = trBkt.Delete([]byte(trid))
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }

@@ -26,11 +26,13 @@ type K8sDeploy struct {
 func (k *K8sDeploy) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
 
 	out, err := k.ExecuteImpl(args)
-	resp := &proto.ExecuteResponse{Output: out}
+	resp := &proto.ExecuteResponse{
+		Output: out,
+	}
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return resp, nil
+	return resp, err
 }
 
 func (s *K8sDeploy) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
@@ -150,7 +152,7 @@ func (s *K8sDeploy) log(clientset *kubernetes.Clientset, namespace string, podNa
 func (s *K8sDeploy) waitForPodReady(clientset *kubernetes.Clientset, namespace, deploymentName string) error {
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 
-	return wait.PollImmediate(time.Second, time.Minute*5, func() (bool, error) {
+	return wait.PollImmediate(time.Second, time.Minute*2, func() (bool, error) {
 		deployment, err := deploymentsClient.Get(context.TODO(), deploymentName, metav1.GetOptions{})
 		if err != nil {
 			return false, err

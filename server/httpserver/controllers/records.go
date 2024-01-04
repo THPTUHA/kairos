@@ -121,6 +121,8 @@ type MessageFlowOptions struct {
 
 func (ctr *Controller) GetMessageFlows(c *gin.Context) {
 	userID, _ := c.Get("userID")
+	limit := c.Query("limit")
+	offset := c.Query("offset")
 	uid, err := strconv.ParseInt(userID.(string), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -138,7 +140,7 @@ func (ctr *Controller) GetMessageFlows(c *gin.Context) {
 		return
 	}
 
-	mfs, err := storage.GetMessageFlows(uid, mfo.WorkflowName)
+	mfs, err := storage.GetMessageFlows(uid, mfo.WorkflowName, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),

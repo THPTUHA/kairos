@@ -29,4 +29,8 @@ type Storage interface {
 	GetScripts() ([]string, error)
 	DeleteScript(name string) error
 	ListScript() ([]string, error)
+
+	SetTrigger(tr *workflow.Trigger) error
+	DeleteTrigger(trid string) error
+	GetTriggers() ([]*workflow.Trigger, error)
 }
