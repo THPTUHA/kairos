@@ -19,24 +19,79 @@ import (
 )
 
 func (ctr *Controller) Login(c *gin.Context) {
-	useCountID := c.Query("user_count_id")
-	if useCountID == "" {
-		c.JSON(http.StatusForbidden, gin.H{
-			"message": "user_count_id not found",
-		})
-		return
-	}
+	userCountID := c.Query("user_count_id")
+	apikey := c.Query("api_key")
+	secretkey := c.Query("secret_key")
 
-	if !strings.HasPrefix(useCountID, config.KairosDeamon) && !strings.HasPrefix(useCountID, config.KairosWeb) {
-		c.JSON(http.StatusForbidden, gin.H{
-			"message": "user_count_id invalid",
+	if apikey != "" || secretkey != "" {
+		name := c.Query("name")
+		if name == "" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"err": "empty name",
+			})
+			return
+		}
+		user, err := auth.ExtractAccessStr(secretkey)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"err": "invalid secret key",
+			})
+			return
+		}
+
+		uid, _ := strconv.ParseInt(user.UserID, 10, 64)
+		clientID, err := storage.SetClient(&models.Client{
+			Name:        name,
+			UserID:      uid,
+			ActiveSince: helper.GetTimeNow(),
+			CreatedAt:   helper.GetTimeNow(),
+		})
+
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		token, err := ctr.TokenService.CreateToken(
+			user.UserID,
+			fmt.Sprint(clientID),
+			fmt.Sprint(models.ClientUser),
+		)
+
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"access_token":  token.AccessToken,
+			"user_count_id": userCountID,
+			"user_id":       user.UserID,
+			"client_id":     fmt.Sprint(clientID),
 		})
 		return
+	} else {
+		if userCountID == "" {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "user_count_id not found",
+			})
+			return
+		}
+		if !strings.HasPrefix(userCountID, config.KairosDeamon) && !strings.HasPrefix(userCountID, config.KairosWeb) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"message": "user_count_id invalid",
+			})
+			return
+		}
+		session := sessions.Default(c)
+		session.Set(auth.StateKey, userCountID)
+		session.Save()
+		c.Writer.Write([]byte(helper.AutoRedirctUrl(auth.GetLoginURL(userCountID))))
 	}
-	session := sessions.Default(c)
-	session.Set(auth.StateKey, useCountID)
-	session.Save()
-	c.Writer.Write([]byte(helper.AutoRedirctUrl(auth.GetLoginURL(useCountID))))
 }
 
 func (ctr *Controller) Auth(ctx *gin.Context) {

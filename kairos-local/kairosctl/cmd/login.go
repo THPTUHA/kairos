@@ -11,6 +11,8 @@ import (
 type LoginConfig struct {
 	NodeName            string
 	DeamonLoginEndpoint string
+	APIKey              string
+	SecretKey           string
 }
 
 var loginConfig LoginConfig
@@ -27,12 +29,19 @@ var loginCmd = &cobra.Command{
 func init() {
 	kairosctlCmd.AddCommand(loginCmd)
 	loginCmd.PersistentFlags().StringVar(&loginConfig.NodeName, "name", "", "Node name")
+	loginCmd.PersistentFlags().StringVar(&loginConfig.APIKey, "api_key", "", "API KEY")
+	loginCmd.PersistentFlags().StringVar(&loginConfig.SecretKey, "secret_key", "", "Secret Key")
 	loginCmd.PersistentFlags().StringVar(&loginConfig.DeamonLoginEndpoint, "endpoint", "http://localhost:3111/apis/login", "Node name")
 }
 
 func loginRun() error {
 	fmt.Println("Start login ....")
-	req, err := http.NewRequest("GET", fmt.Sprintf("%s?name=%s", fmt.Sprintf("%s/", loginConfig.DeamonLoginEndpoint), loginConfig.NodeName), nil)
+	req, err := http.NewRequest("GET", fmt.Sprintf("%s?name=%s&api_key=%s&secret_key=%s",
+		fmt.Sprintf("%s/", loginConfig.DeamonLoginEndpoint),
+		loginConfig.NodeName,
+		loginConfig.APIKey,
+		loginConfig.SecretKey,
+	), nil)
 	if err != nil {
 		return err
 	}

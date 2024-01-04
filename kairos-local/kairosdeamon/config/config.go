@@ -14,7 +14,7 @@ package config
 
 type Configs struct {
 	ServerPort          int    `yaml:"serverPort"`
-	LoginEndpoint       string `yaml:"loginEndpoint"`
+	HttpEndpoint        string `yaml:"httpEndpoint"`
 	ServerPubSubEnpoint string `yaml:"serverPubSubEnpoint"`
 	PubSubEnpoint       string `yaml:"pubSubEnpoint"`
 	LogLevel            string `yaml:"logLevel"`

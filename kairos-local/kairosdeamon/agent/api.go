@@ -28,7 +28,6 @@ type HTTPTransport struct {
 	logger *logrus.Entry
 }
 
-// NewTransport creates an HTTPTransport with a bound agent.
 func NewTransport(a *Agent, log *logrus.Entry) *HTTPTransport {
 	return &HTTPTransport{
 		agent:  a,
@@ -36,7 +35,6 @@ func NewTransport(a *Agent, log *logrus.Entry) *HTTPTransport {
 	}
 }
 
-// TODO
 func (h *HTTPTransport) ServeHTTP() {
 	h.Engine = gin.Default()
 	rootPath := h.Engine.Group("/")
@@ -204,7 +202,7 @@ func (h *HTTPTransport) runTask(c *gin.Context) {
 		h.logger.Error(err)
 		return
 	}
-	fmt.Println("GO TO HERE----")
+
 	t, _ := h.agent.GetTask(fmt.Sprint(cmdtask.Task.ID))
 	fmt.Printf("TASK CALL %+v\n", *t)
 	ex := NewExecution(t.ID, fmt.Sprintf("deamon-%d-%d", cmdtask.Task.WorkflowID, time.Now().UnixNano()))

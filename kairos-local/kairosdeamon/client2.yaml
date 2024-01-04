@@ -1,5 +1,5 @@
 serverPort: 3112
-loginEndpoint: "http://localhost:8001/apis/v1/login"
+httpEndpoint: "http://localhost:8001"
 serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
 pubSubEnpoint: "ws://localhost:8003/pubsub"
 logLevel: "debug"

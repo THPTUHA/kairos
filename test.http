@@ -7,7 +7,7 @@ Content-Type: application/json
 }
 
 ###
-GET http://badaosuotdoi.com/apis/v1/login
+GET http://localhost:8001/apis/v1/login?name=client3&api_key=ca399d0d-2ef2-41f0-994a-5f3f563c93e5&secret_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIxIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.HTwiFg-FhRf9zBsQeoEScu0JONH5j3JVzNhgLHZy0RY
 Content-Type: application/json
 
 ###
