@@ -16,6 +16,7 @@ import { Kairos, SubscriptionState } from "kairos-js";
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
 import { PiFunctionBold } from "react-icons/pi";
 import { FcWorkflow } from "react-icons/fc";
+import { websocketUrl } from "../helper/base";
 
 const MenuItems = [
     { path: "/workflows", title: "workflows", icon: <GoWorkflow /> },
@@ -38,11 +39,11 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
             .get()
             .catch(setError)
         if (u && u.id) {
-            setUserInfo(u)
+            setUserInfo(u) 
             console.log(u)
             try {
                 const channel = `kairosuser-${u.id}`
-                const kairos = new Kairos('ws://localhost:8003/pubsub', "", {
+                const kairos = new Kairos(`${websocketUrl()}/pubsub`, "", {
                     secret_key: localStorage.getItem('accessToken') || "",
                 });
 

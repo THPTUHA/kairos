@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"fmt"
+
 	"github.com/THPTUHA/kairos/server/httpserver/auth"
 	"github.com/THPTUHA/kairos/server/httpserver/config"
 	"github.com/THPTUHA/kairos/server/httpserver/controllers"
@@ -16,7 +18,7 @@ func Auth(ginApp *gin.RouterGroup, ctr *controllers.Controller, cfg *config.Conf
 		"https://www.googleapis.com/auth/userinfo.email",
 	}
 
-	auth.Setup("http://localhost:8001/apis/v1/auth", scopes, secret, cfg)
+	auth.Setup(fmt.Sprintf("%s/apis/v1/auth", cfg.HTTPServer.Domain), scopes, secret, cfg)
 	ginApp.Use(auth.Session(sessionName))
 
 	ginApp.GET("/login", ctr.Login)

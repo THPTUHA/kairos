@@ -80,5 +80,28 @@ webui:
 	cd ./ui && docker buildx build  --platform linux/amd64 -t nexta2020/webui .
 
 image:
-	docker buildx build  --platform linux/amd64 -t nexta2020/kairos .
+	docker buildx build  --platform linux/amd64 -t nexta2020/kairos --load .
 	docker push nexta2020/kairos
+
+seed:
+	psql -h 61.28.230.61 -U kairos -d kairos -f diagram.sql
+
+linux:
+	cd server/plugin/kairos-executor-dockerlite && GOOS=linux GOARCH=amd64 go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-k8sdeploy && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-mail && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-http && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-nats && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-file && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-sql && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd kairos-local/kairosdeamon && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+
+window:
+	cd server/plugin/kairos-executor-dockerlite && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-k8sdeploy && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-mail && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-http && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-nats && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-file && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-sql && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd kairos-local/kairosdeamon && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/winodw

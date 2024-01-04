@@ -17,8 +17,9 @@ type Configs struct {
 		ClientSecret string `yaml:"client_secret"`
 	}
 	HTTPServer struct {
-		Port                  int `yaml:"port"`
-		MaxWorkflowConcurrent int `yaml:"max_worklow_concurrent"`
+		Port                  int    `yaml:"port"`
+		MaxWorkflowConcurrent int    `yaml:"max_worklow_concurrent"`
+		Domain                string `yaml:"domain"`
 	}
 	PubSub struct {
 		Port int `yaml:"port"`

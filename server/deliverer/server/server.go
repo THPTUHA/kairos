@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -285,20 +284,21 @@ func (d *DelivererServer) reply(natChan string, data string) {
 }
 
 func (s *DelivererServer) checkSameHost(r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-	u, err := url.Parse(origin)
-	if err != nil {
-		s.logger.Error(fmt.Errorf("failed to parse Origin header %q: %w", origin, err))
-		return false
-	}
-	if strings.Contains(r.Host, "localhost") && strings.Contains(u.Host, "localhost") {
-		return true
-	}
-	s.logger.Error(fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host))
-	return false
+	return true
+	// origin := r.Header.Get("Origin")
+	// if origin == "" {
+	// 	return true
+	// }
+	// u, err := url.Parse(origin)
+	// if err != nil {
+	// 	s.logger.Error(fmt.Errorf("failed to parse Origin header %q: %w", origin, err))
+	// 	return false
+	// }
+	// if strings.Contains(r.Host, "localhost") && strings.Contains(u.Host, "localhost") {
+	// 	return true
+	// }
+	// s.logger.Error(fmt.Errorf("request Origin %q is not authorized for Host %q", origin, r.Host))
+	// return false
 }
 
 func NewRedisDB(host, port, password string) *redis.Client {

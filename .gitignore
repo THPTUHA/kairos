@@ -1,12 +1,7 @@
 tmp
 cerd.json
 kairos.data
-kairos-executor-http
-kairos-executor-file
-kairos-executor-nats
-kairos-executor-script
 kairos-executor-simple
-kairos-executor-sql
 
 kairos.boltdb
 kairos1.boltdb

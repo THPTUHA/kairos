@@ -739,6 +739,18 @@ type CmdReplyTask struct {
 	TaskInput  string             `json:"task_input,omitempty"`
 }
 
+type Trigger struct {
+	ID         int64  `json:"id"`
+	WorkflowID int64  `json:"workflow_id"`
+	ObjectID   int64  `json:"object_id"`
+	Type       string `json:"type"`
+	Schedule   string `json:"schedule"`
+	Input      string `json:"input"`
+	Status     int    `json:"status"`
+	TriggerAt  int64  `json:"trigger_at"`
+	Client     string `json:"client"`
+}
+
 type CmdTask struct {
 	Cmd         RequestActionTask `json:"cmd"`
 	Task        *Task             `json:"task,omitempty"`
@@ -752,6 +764,7 @@ type CmdTask struct {
 	Offset      int               `json:"offset,omitempty"`
 	RunCount    int64             `json:"run_coun,omitemptyt"`
 	Broker      *Broker           `json:"broker,omitempty"`
+	Trigger     *Trigger          `json:"trigger,omitempty"`
 	ChannelDest *Channel          `json:"channel_dest,omitempty"`
 	Group       string            `json:"group,omitempty"`
 	Parent      string            `json:"parent,omitempty"`

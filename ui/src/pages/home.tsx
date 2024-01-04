@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 import userInfoAtom from '../recoil/userInfo/atom';
 import { LuWorkflow } from "react-icons/lu";
+import { serverUrl } from '../helper/base';
 
 const HomePage = () => {
     const userInfo = useRecoilValue(userInfoAtom)
@@ -18,7 +19,7 @@ const HomePage = () => {
                 {
                     !userInfo ?
                         <div >
-                            <a href='http://localhost:8001/apis/v1/login?user_count_id=kairosweb'
+                            <a href={`${serverUrl()}apis/v1/login?user_count_id=kairosweb`}
                                 className='flex items-center cursor-pointer bg-blue-500 rounded px-1 py-1'>
                                 <Google>Google</Google>
                                 <button className='text-lg'>Login</button>

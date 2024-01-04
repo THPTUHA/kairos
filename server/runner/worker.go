@@ -625,31 +625,14 @@ func (w *Worker) reciveMessageSync() error {
 		return err
 	}
 	_, err = w.natsConn.Subscribe(fmt.Sprintf("%s-%d", messaging.TRIGGER, w.workflow.ID), func(msg *nats.Msg) {
-		var trigger models.Trigger
+		var trigger workflow.Trigger
 		err := json.Unmarshal(msg.Data, &trigger)
 		if err != nil {
 			w.conf.Logger.Error(err)
 		}
 		var cmd workflow.CmdTask
 		cmd.Cmd = workflow.TriggerCmd
-		if trigger.Type == "broker" {
-			cmd.Broker = &workflow.Broker{
-				ID:         trigger.ObjectID,
-				WorkflowID: trigger.WorkflowID,
-				Schedule:   trigger.Schedule,
-				Input:      trigger.Input,
-				Flows: workflow.BrokerFlows{
-					Endpoints: make([]string, 0),
-				},
-			}
-		} else if trigger.Type == "task" {
-			cmd.Task = &workflow.Task{
-				ID:         trigger.ObjectID,
-				WorkflowID: trigger.WorkflowID,
-				Schedule:   trigger.Schedule,
-				Input:      trigger.Input,
-			}
-		}
+		cmd.Trigger = &trigger
 		if trigger.Client != "" {
 			from := w.points["kairos"]
 			receiver := w.points[workflow.GetClientName(trigger.Client)]

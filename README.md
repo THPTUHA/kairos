@@ -136,3 +136,6 @@ psql -h 61.28.230.61 -U kairos -d kairos -f server/storage/migration/000001_kair
 kubectl create configmap httpserver-config --from-file=httpserver.yaml -n kairos
 kubectl create configmap runner-config --from-file=runner.yaml -n kairos
 kubectl create configmap deliverer-config --from-file=deliverer.yaml -n kairos
+psql -h 61.28.230.61 -U kairos -d kairos -f diagram.sql
+
+helm install my-nginx-ingress ingress-nginx/ingress-nginx 

@@ -1,12 +1,16 @@
 import Element from "antd/es/skeleton/Element";
 import { ColorElement, colorElement, hasSpecialCharacter, hasSpecialCharacter2 } from "./element";
 
-function serverUrl(): string {
-    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER : "";
+export function serverUrl(): string {
+    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER+"/" : "";
 }
 
-function baseUrl(): string {
-    return process.env.REACT_APP_BASE_URL ? process.env.REACT_APP_BASE_URL : "";
+export function baseUrl(): string {
+    return process.env.REACT_APP_BASE_URL ? process.env.REACT_APP_BASE_URL+"/" : "";
+}
+
+export function websocketUrl(): string {
+    return process.env.REACT_APP_WEBSOCKET ? process.env.REACT_APP_WEBSOCKET: "";
 }
 
 export function uiUrl(uiPath: string): string {
