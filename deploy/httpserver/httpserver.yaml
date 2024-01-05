@@ -1,7 +1,7 @@
 httpserver:
   port: 8001
   max_worklow_concurrent: 100000
-  domain: http://kairos.badaosuotdoi.com
+  domain: http://nghia.nexta.vn
 pubsub:
   port: 8002
 nats:

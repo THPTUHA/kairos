@@ -57,7 +57,7 @@ metadata:
     nginx.org/websocket-services: deliverer
 spec:
   rules:
-  - host: kairos.badaosuotdoi.com
+  - host: nghia.nexta.vn
     http:
       paths:
       - path: /pubsub
@@ -67,4 +67,13 @@ spec:
             name: deliverer
             port:
               number: 8003
-
+  - host: nghia.nexta.vn
+    http:
+      paths:
+      - path: /pubsub
+        pathType: Prefix
+        backend:
+          service:
+            name: deliverer
+            port:
+              number: 8003

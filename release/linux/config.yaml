@@ -1,7 +1,7 @@
 serverPort: 3111
-httpEndpoint: "http://kairos.badaosuotdoi.com"
-serverPubSubEnpoint: "ws://kairos.badaosuotdoi.com/server/pubsub"
-pubSubEnpoint: "ws://kairos.badaosuotdoi.com/pubsub"
+httpEndpoint: "http://nghia.nexta.vn"
+serverPubSubEnpoint: "ws://nghia.nexta.vn/server/pubsub"
+pubSubEnpoint: "ws://nghia.nexta.vn/pubsub"
 nodeName: "kairosdeamon"
 agentHTTPAddrPort: 8080
 agentDefaultPort: 6868

@@ -22,9 +22,9 @@ spec:
             - name: PORT
               value: "3500"
             - name: REACT_APP_HTTPSERVER
-              value: "http://kairos.badaosuotdoi.com"
+              value: "http://nghia.nexta.vn"
             - name: REACT_APP_BASE_URL
-              value: "http://kairos.badaosuotdoi.com"
+              value: "http://nghia.nexta.vn"
 ---
 apiVersion: v1
 kind: Service

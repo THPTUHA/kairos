@@ -5,6 +5,6 @@ services:
     ports:
       - "3456:3000"
     environment:
-      - REACT_APP_HTTPSERVER=http://kairos.badaosuotdoi.com
+      - REACT_APP_HTTPSERVER=http://nghia.nexta.vn
       - REACT_APP_BASE_URL=http://kairosweb.badaosuotdoi.com
-      - REACT_APP_WEBSOCKET=ws://kairos.badaosuotdoi.com
+      - REACT_APP_WEBSOCKET=ws://nghia.nexta.vn

@@ -8,7 +8,7 @@ Content-Type: application/json
 
 ###
 
-GET http://kairos.badaosuotdoi.com/apis/v1/login?name=client3&api_key=ca399d0d-2ef2-41f0-994a-5f3f563c93e5&secret_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIxIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.HTwiFg-FhRf9zBsQeoEScu0JONH5j3JVzNhgLHZy0RY
+GET http://nghia.nexta.vn/apis/v1/login?name=client3&api_key=ca399d0d-2ef2-41f0-994a-5f3f563c93e5&secret_key=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIxIiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.HTwiFg-FhRf9zBsQeoEScu0JONH5j3JVzNhgLHZy0RY
 Content-Type: application/json
 
 ###
@@ -398,7 +398,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiIwI
   "name": "abc"
 }
 ###
-GET http://kairos.badaosuotdoi.com/apis/v1/service/user/info
+GET http://nghia.nexta.vn/apis/v1/service/user/info
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
 
@@ -503,7 +503,7 @@ Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
 
 ###
-POST http://kairos.badaosuotdoi.com/apis/v1/service/graph/part
+POST http://nghia.nexta.vn/apis/v1/service/graph/part
 Content-Type: application/json
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI2IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.1xkyz267_8y3zdnPAV-D_OuF_9V-lZJW_MLm0tyFz4I
 

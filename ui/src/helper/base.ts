@@ -2,7 +2,7 @@ import Element from "antd/es/skeleton/Element";
 import { ColorElement, colorElement, hasSpecialCharacter, hasSpecialCharacter2 } from "./element";
 
 export function serverUrl(): string {
-    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER+"/" : "http://kairos.badaosuotdoi.com";
+    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER+"/" : "http://nghia.nexta.vn";
 }
 
 export function baseUrl(): string {
@@ -10,7 +10,7 @@ export function baseUrl(): string {
 }
 
 export function websocketUrl(): string {
-    return process.env.REACT_APP_WEBSOCKET ? process.env.REACT_APP_WEBSOCKET: "ws://kairos.badaosuotdoi.com";
+    return process.env.REACT_APP_WEBSOCKET ? process.env.REACT_APP_WEBSOCKET: "ws://nghia.nexta.vn";
 }
 
 export function uiUrl(uiPath: string): string {

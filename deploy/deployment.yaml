@@ -8,7 +8,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "1000m"
 spec:
   rules:
-    - host: kairos.badaosuotdoi.com
+    - host: nghia.nexta.vn
       http:
         paths:
           - path: /kairos

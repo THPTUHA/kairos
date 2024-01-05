@@ -151,3 +151,6 @@ sudo setenforce 0
 
 sudo dscacheutil -flushcache
 sudo killall -HUP mDNSResponder
+
+sudo firewall-cmd --permanent --zone=public --add-icmp-block=echo-request
+sudo firewall-cmd --reload

@@ -61,7 +61,24 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "1000m"
 spec:
   rules:
-    - host: kairos.badaosuotdoi.com
+    - host: nghia.nexta.vn
+      http:
+        paths:
+          - path: /apis/v1/
+            pathType: Prefix
+            backend:
+              service:
+                name: httpserver
+                port:
+                  number: 8001
+          - path: /server/
+            pathType: Prefix
+            backend:
+              service:
+                name: httpserver
+                port:
+                  number: 8002
+    - host: nghia.nexta.vn
       http:
         paths:
           - path: /apis/v1/
