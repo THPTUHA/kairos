@@ -15,7 +15,7 @@ db:
   postgres:
     username: kairos
     password: kairos
-    uri: 61.28.230.61
+    uri: 103.173.254.32
     port: 5432
     databaseName: kairos
     protocol: tcp

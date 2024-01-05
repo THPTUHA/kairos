@@ -6,7 +6,7 @@ var (
 	KairosDeamon = "kairosdeamon"
 	KairosWeb    = "kairosweb"
 	AuthTimeout  = 5 * time.Second
-	KairosWebURL = "http://localhost:3000"
+	KairosWebURL = "http://kairosweb.badaosuotdoi.com"
 )
 
 type Configs struct {
