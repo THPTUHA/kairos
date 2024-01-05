@@ -113,7 +113,7 @@ func (pe *ProcessEndpoint) process_txtout() {
 			pe.output <- &Output{
 				data: trimEOL(buf),
 			}
-			close(pe.output)
+			defer close(pe.output)
 			return
 		}
 		pe.output <- &Output{
@@ -135,7 +135,7 @@ func (pe *ProcessEndpoint) process_binout() {
 			pe.output <- &Output{
 				data: trimEOL(buf),
 			}
-			close(pe.output)
+			defer close(pe.output)
 			return
 		}
 		pe.output <- &Output{
