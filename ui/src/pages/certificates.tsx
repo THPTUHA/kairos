@@ -38,7 +38,7 @@ const CertificatePage = () => {
             render: (value: string) => {
                 return <><FaRegCopy
                     className="cursor-pointer"
-                    onClick={() => { navigator.clipboard.writeText(value) }} />
+                    onClick={() => { navigator.clipboard && navigator.clipboard.writeText(value) }} />
                     {value}</>
             }
         },
@@ -49,7 +49,7 @@ const CertificatePage = () => {
             render: (value: string) => {
                 return <><FaRegCopy
                     className="cursor-pointer"
-                    onClick={() => { navigator.clipboard.writeText(value) }} />
+                    onClick={() => { navigator.clipboard&& navigator.clipboard.writeText(value) }} />
                     {value}</>
             }
         },

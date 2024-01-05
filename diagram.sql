@@ -9,4 +9,6 @@
 --   (1,'client1', 1, 1702577960 , 1702577960),
 --   (2,'client3', 1, 1702577960 , 1702577960),
 --   (4,'client2', 1, 1702577960 , 1702577960);
-select * from users;
+-- select * from users;
+
+select * from certificates

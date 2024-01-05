@@ -1,5 +1,5 @@
 serverPort: 3111
-loginEndpoint: "http://kairos.badaosuotdoi.com/apis/v1/login"
+loginEndpoint: "http://kairos.badaosuotdoi.com"
 serverPubSubEnpoint: "ws://kairos.badaosuotdoi.com/server/pubsub"
 pubSubEnpoint: "ws://kairos.badaosuotdoi.com/pubsub"
 nodeName: "kairosdeamon"
