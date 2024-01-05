@@ -342,7 +342,7 @@ func (t *Template) complieChainExps(items []string, varTemps *varTemp, restrict 
 				return nil, -1, fmt.Errorf("exp: %s empty", c[0])
 			}
 
-			if !includes(COMPARE_EXP, c[1]) && !includes(FUNC_BUILDIN, c[1]) && t.FuncCalls.Funcs != nil {
+			if !includes(COMPARE_EXP, c[1]) && !includes(FUNC_BUILDIN, c[1]) && !strings.HasPrefix(c[1], ".") && t.FuncCalls.Funcs != nil {
 				var f goja.Callable
 				v := t.FuncCalls.Funcs.Get(c[1])
 				if v == nil {
@@ -653,17 +653,17 @@ func (t *Template) Parse(str string, input []string, globalVar *Vars, restrict b
 			if open-close < 0 {
 				return errors.New(fmt.Sprintf("missing sign { "))
 			}
-			if open == close {
+			if open == close && expStr != "" {
 				exp, ope, err := t.compileExp(expStr, input, &varTemps, restrict)
 				if err != nil {
 					return err
 				}
 				t.Exps = append(t.Exps, exp)
-				expStr = ""
 				openExp += ope
 				if openExp < 0 {
-					return fmt.Errorf("redundancy end")
+					return fmt.Errorf("redundancy end %s", expStr)
 				}
+				expStr = ""
 			}
 		default:
 			if open-close != 2 && strings.TrimSpace(expStr) != "" {
