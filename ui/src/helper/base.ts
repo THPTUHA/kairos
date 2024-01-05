@@ -2,15 +2,15 @@ import Element from "antd/es/skeleton/Element";
 import { ColorElement, colorElement, hasSpecialCharacter, hasSpecialCharacter2 } from "./element";
 
 export function serverUrl(): string {
-    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER+"/" : "";
+    return process.env.REACT_APP_HTTPSERVER ? process.env.REACT_APP_HTTPSERVER+"/" : "http://kairos.badaosuotdoi.com";
 }
 
 export function baseUrl(): string {
-    return process.env.REACT_APP_BASE_URL ? process.env.REACT_APP_BASE_URL+"/" : "";
+    return process.env.REACT_APP_BASE_URL ? process.env.REACT_APP_BASE_URL+"/" : "http://kairosweb.badaosuotdoi.com";
 }
 
 export function websocketUrl(): string {
-    return process.env.REACT_APP_WEBSOCKET ? process.env.REACT_APP_WEBSOCKET: "";
+    return process.env.REACT_APP_WEBSOCKET ? process.env.REACT_APP_WEBSOCKET: "ws://kairos.badaosuotdoi.com";
 }
 
 export function uiUrl(uiPath: string): string {
