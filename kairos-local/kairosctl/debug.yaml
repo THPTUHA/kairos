@@ -2,6 +2,15 @@ version: '1'
 name: service_4x
 vars:
 tasks:
+  pull_code:
+    wait: input
+    executor: script
+    clients: [client1]
+    payload: |
+      {
+        "command": "/bin/sh",
+        "commandArgs": "[\"-c\", \"cd /Users/nghiabadao/Code/demo/shopok && git pull  \"]"
+      }
   build_image:
     wait: input
     executor: dockerlite
@@ -40,9 +49,18 @@ tasks:
 
 brokers:
   prepare_process:
-    listens: [build_image_task]
+    listens: [pull_code, build_image_task]
     clients: [client1]
     flows: |
+      {{waite .pull_code}}
+        {{get .pull_code ("result") | .result 
+        | get ("success") | .success}}
+          {{if .success}}
+             {{send _ping .build_image_task}}
+          {{end}}
+        {{end}}
+      {{end}}
+
       {{waite .build_image_task}}
         {{get .build_image_task ("result") | .result 
         | get ("success") | .success}}

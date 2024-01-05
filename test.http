@@ -92,7 +92,7 @@ Content-Type: application/json
 } 
 
 ###Users/nghiabadao/Code/project/backend_cms
-POST http://localhost:8080/v1/tasks
+POST http://localhost:8082/v1/tasks
 Content-Type: application/json
 
 {
@@ -108,7 +108,7 @@ Content-Type: application/json
   "executor": "script",
   "executor_config":  {
     "command": "/bin/sh",
-    "commandArgs": "[\"-c\", \" docker buildx build  --platform linux/amd64 -t nexta2020/shopok /Users/nghiabadao/Code/demo/shopok \"]"
+    "commandArgs": "[\"-c\", \"cd /Users/nghiabadao/Code/demo/shopok && git pull  \"]"
   }
 } 
 

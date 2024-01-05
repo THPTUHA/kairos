@@ -1,18 +1,18 @@
-serverPort: 3111
-httpEndpoint: "http://localhost:8001"
-serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
-pubSubEnpoint: "ws://localhost:8003/pubsub"
-logLevel: "debug"
-nodeName: "kairosdeamon"
-agentHTTPAddrPort: 8080
-agentDefaultPort: 6868
-agentDataDir: "kairos.boltdb"
-
 # serverPort: 3111
-# httpEndpoint: "http://kairos.badaosuotdoi.com"
-# serverPubSubEnpoint: "ws://kairos.badaosuotdoi.com/server/pubsub"
-# pubSubEnpoint: "ws://kairos.badaosuotdoi.com/pubsub"
+# httpEndpoint: "http://localhost:8001"
+# serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
+# pubSubEnpoint: "ws://localhost:8003/pubsub"
+# logLevel: "debug"
 # nodeName: "kairosdeamon"
 # agentHTTPAddrPort: 8080
 # agentDefaultPort: 6868
 # agentDataDir: "kairos.boltdb"
+
+serverPort: 3111
+httpEndpoint: "http://kairos.badaosuotdoi.com"
+serverPubSubEnpoint: "ws://kairos.badaosuotdoi.com/server/pubsub"
+pubSubEnpoint: "ws://kairos.badaosuotdoi.com/pubsub"
+nodeName: "kairosdeamon"
+agentHTTPAddrPort: 8080
+agentDefaultPort: 6868
+agentDataDir: "kairos.boltdb"

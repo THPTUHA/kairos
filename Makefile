@@ -95,6 +95,7 @@ linux:
 	cd server/plugin/kairos-executor-nats && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
 	cd server/plugin/kairos-executor-file && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
 	cd server/plugin/kairos-executor-sql && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
+	cd server/plugin/kairos-executor-script && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
 	cd kairos-local/kairosdeamon && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
 	cd kairos-local/kairosctl && GOOS=linux GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/linux
 
@@ -106,6 +107,7 @@ window:
 	cd server/plugin/kairos-executor-nats && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
 	cd server/plugin/kairos-executor-file && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
 	cd server/plugin/kairos-executor-sql && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
+	cd server/plugin/kairos-executor-script && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
 	cd kairos-local/kairosdeamon && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
 	cd kairos-local/kairosctl && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
 

@@ -1,0 +1,113 @@
+version: '1'
+name: service_4x
+vars:
+tasks:
+  pull_code:
+    wait: input
+    executor: script
+    clients: [client1]
+    payload: |
+      {
+        "command": "/bin/sh",
+        "commandArgs": "[\"-c\", \"cd /root/Code/demo/shopok && git pull  \"]"
+      }
+  build_image:
+    wait: input
+    executor: dockerlite
+    clients: [client1]
+    payload: |
+      {
+        "action": "build",
+        "imageName": "nexta2020/shopok",
+        "contextDir": "/root/Code/demo/shopok"
+      }
+  push_image:
+    executor: dockerlite
+    clients: [client1]
+    wait: input
+    payload: |
+      {
+        "action": "push",
+        "imageName": "nexta2020/shopok"
+      }
+  deploy:
+    executor: k8sdeploy
+    clients: [client2]
+    wait: input
+    payload: |
+      {
+        "service": "shopok",
+        "cmd": "deploy",
+        "namespace": "demo"
+      }
+  notification:
+    executor: mail
+    wait: input
+    clients: [client2]
+    payload: |
+      {}
+
+brokers:
+  prepare_process:
+    listens: [pull_code_task, build_image_task]
+    clients: [client1]
+    flows: |
+      {{waite .pull_code_task}}
+        {{get .pull_code_task ("result") | .result 
+        | get ("success") | .success}}
+          {{if .success}}
+             {{send _ping .build_image_task}}
+          {{end}}
+        {{end}}
+      {{end}}
+
+      {{waite .build_image_task}}
+        {{get .build_image_task ("result") | .result 
+        | get ("success") | .success}}
+          {{if .success}}
+             {{send _ping .push_image_task}}
+          {{end}}
+        {{end}}
+      {{end}}
+
+
+  deploy_process:
+    listens: [push_image_task]
+    flows: |
+      {{waite .push_image_task}}
+         {{get .push_image_task ("result") 
+         | .result | get ("success") | .success}}
+          {{if .success}}
+            {{send _ping deploy_task}}
+          {{else}}
+            {{send .result notification_task,listen_channel}}
+          {{end}}
+        {{end}}
+      {{end}}
+
+  noti:
+    listens: [deploy_task, build_image_task, push_image_task]
+    flows: |
+      {{waite .deploy_task}}
+        {{get .deploy_task ("result") | .result}}
+          {{send .result notification_task,listen_channel}}
+        {{end}}
+      {{end}}
+
+      {{waite .build_image_task}}
+        {{get .build_image_task ("result") | .result 
+        | get ("success") | .success}}
+          {{if ne .success}}
+             {{send .result notification_task,listen_channel}}
+          {{end}}
+        {{end}}
+      {{end}}
+
+      {{waite .push_image_task}}
+        {{get .push_image_task ("result") | .result 
+        | get ("success") | .success}}
+          {{if ne .success}}
+             {{send .result notification_task,listen_channel}}
+          {{end}}
+        {{end}}
+      {{end}}
