@@ -37,6 +37,7 @@ import { parseBrokerFlows } from "../helper/base";
 import { TiFlowSwitch } from "react-icons/ti";
 import { RiAddLine } from "react-icons/ri";
 import { Client } from "../models/client";
+import { CgTrack } from "react-icons/cg";
 
 const useLayoutStyles = makeStyles(() => ({
   details: {
@@ -172,11 +173,13 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
   let selfroot: any = {}
   let parent: any = {}
   let root_cnt = 0
-  console.log("MFS", mfs)
   mfs = mfs.filter(item => {
     // if (item.flow === 3) {
     //   return false 
     // }
+    if (!item.part && !item.start_input) {
+      return false
+    }
     if (item.parent == item.part) {
       selfroot = item
       root_cnt++
@@ -206,14 +209,14 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
   })
 
   console.log("MFS", mfs)
-  if (root_cnt == 2 && selfroot.part != parent.part) {
-    console.error("invalid root", root_cnt, selfroot.part, parent.part)
-    return {}
+  // if (root_cnt == 2 && selfroot.part != parent.part) {
+  //   console.error("invalid root", root_cnt, selfroot.part, parent.part)
+  //   return {}
 
-  } else if (root_cnt != 1 && root_cnt != 2) {
-    console.error("invalid root", root_cnt)
-    return {}
-  }
+  // } else if (root_cnt != 1 && root_cnt != 2) {
+  //   console.error("invalid root", root_cnt)
+  //   return {}
+  // }
 
   if (selfroot && !mfs.length) {
     tree = {
@@ -227,6 +230,8 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
         finish: selfroot.finish_part,
         status: selfroot.status,
         active: getClient(selfroot.sender_name, clients).status,
+        start_input: selfroot.start_input,
+        message: selfroot.message,
       },
       status: selfroot.status,
       part: selfroot.part,
@@ -238,116 +243,134 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
 
   console.log("selfroot", selfroot)
 
-  mfs.forEach(item => {
-    var c: any, p: any
-    if (item.receiver_type == ClientPoint) {
-      const msg = JSON.parse(item.message)
-      let success = false
-      if (msg.success == undefined || msg.success) {
-        success = true
-      }
-      c = {
-        name: item.task_name,
-        id: item.task_id,
-        type: TaskPoint,
-        attributes: {
+  try {
+    mfs.forEach(item => {
+      var c: any, p: any
+      if (item.receiver_type == ClientPoint && item.message) {
+        const msg = JSON.parse(item.message)
+        let success = false
+        if (msg.success == undefined || msg.success) {
+          success = true
+        }
+        c = {
+          name: item.task_name,
           id: item.task_id,
           type: TaskPoint,
-          client: item.receiver_name,
-          success: success,
+          attributes: {
+            id: item.task_id,
+            type: TaskPoint,
+            client: item.receiver_name,
+            success: success,
+            status: item.status,
+            active: getClient(item.receiver_name, clients).status,
+            tracking: item.tracking,
+            start_input: item.start_input,
+            message: item.message,
+          },
           status: item.status,
-          active: getClient(item.receiver_name, clients).status,
-        },
-        status: item.status,
-        part: item.part,
-        parent: item.part,
-        owner_id: item.receiver_id,
-        owner_type: item.receiver_type,
-      }
-    } else if (item.receiver_type != KairosPoint) {
-      c = {
-        name: item.receiver_name,
-        id: item.receiver_id,
-        type: item.receiver_type,
-        attributes: {
-          id: selfroot.receiver_id,
+          part: item.part,
+          parent: item.part,
+          owner_id: item.receiver_id,
+          owner_type: item.receiver_type,
+        }
+      } else if (item.receiver_type != KairosPoint) {
+        c = {
+          name: item.receiver_name,
+          id: item.receiver_id,
           type: item.receiver_type,
+          attributes: {
+            id: selfroot.receiver_id,
+            type: item.receiver_type,
+            status: item.status,
+            tracking: item.tracking,
+            start_input: item.start_input,
+            message: item.message,
+          },
           status: item.status,
-        },
-        status: item.status,
-        part: item.part,
-        parent: item.part,
-        owner_id: item.receiver_id,
-        owner_type: item.receiver_type,
-        children: []
-      }
-    }
-
-    if (item.sender_type == ClientPoint) {
-      if (!item.message) {
-        console.error("empty message", item)
-        return
-      }
-      const msg = JSON.parse(item.message)
-      let success = false
-      if (msg.success == undefined || msg.success) {
-        success = true
-      }
-      p = {
-        name: item.task_name,
-        id: item.task_id,
-        type: TaskPoint,
-        attributes: {
-          id: item.task_id,
-          type: TaskPoint,
-          client: item.sender_name,
-          finish: item.finish_part,
-          success: success,
-          status: item.status,
-        },
-        status: item.status,
-        part: item.part,
-        parent: item.parent,
-        owner_id: item.sender_id,
-        owner_type: item.sender_type,
-        children: []
-      }
-    } else {
-      p = {
-        part: item.part,
-        name: item.sender_name,
-        id: item.sender_id,
-        type: item.sender_type,
-        status: item.status,
-        owner_id: item.sender_id,
-        parent: item.parent,
-        owner_type: item.sender_type,
-        attributes: {
-          id: item.sender_id,
-          type: item.sender_type,
-          finish: item.finish_part,
-          status: item.status,
+          part: item.part,
+          parent: item.part,
+          owner_id: item.receiver_id,
+          owner_type: item.receiver_type,
+          children: []
         }
       }
 
-    }
+      if (item.sender_type == ClientPoint) {
+        if (!item.message) {
+          console.error("empty message", item)
+          return
+        }
+        const msg = JSON.parse(item.message)
+        let success = false
+        if (msg.success == undefined || msg.success) {
+          success = true
+        }
+        p = {
+          name: item.task_name,
+          id: item.task_id,
+          type: TaskPoint,
+          attributes: {
+            id: item.task_id,
+            type: TaskPoint,
+            client: item.sender_name,
+            finish: item.finish_part,
+            success: success,
+            status: item.status,
+            tracking: item.tracking,
+            start_input: item.start_input,
+            message: item.message,
+          },
+          status: item.status,
+          part: item.part,
+          parent: item.parent,
+          owner_id: item.sender_id,
+          owner_type: item.sender_type,
+          children: []
+        }
+      } else {
+        p = {
+          part: item.part,
+          name: item.sender_name,
+          id: item.sender_id,
+          type: item.sender_type,
+          status: item.status,
+          owner_id: item.sender_id,
+          parent: item.parent,
+          owner_type: item.sender_type,
+          attributes: {
+            id: item.sender_id,
+            type: item.sender_type,
+            finish: item.finish_part,
+            status: item.status,
+            tracking: item.tracking,
+            start_input: item.start_input,
+            message: item.message,
+          }
+        }
 
-    const children = []
-    if (c) {
-      children.push(c)
-    }
+      }
 
-    map.set(item.part, {
-      ...p,
-      children: children,
+      const children = []
+      if (c) {
+        if (!(p.id == c.id && p.type == c.type)) {
+          children.push(c)
+        }
+      }
+
+      map.set(item.part, {
+        ...p,
+        children: children,
+      });
     });
-  });
 
+  } catch (error) {
+    console.error(error)
+  }
   map.forEach((value, key) => {
     const cp = JSON.stringify(value)
     console.log(key, JSON.parse(cp))
   })
-  
+
   const parents = []
   mfs.forEach(item => {
     const parent = map.get(item.parent);
@@ -676,6 +699,7 @@ type NodeSelected = {
   type: number,
   id: number,
   name: string,
+  hierarchyPointNode: any
 }
 
 const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
@@ -836,7 +860,7 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
     }
 
     query.receiver_id = hierarchyPointNode.data.id
-
+    query.group = timeline.group
     const paths = await services.graphs
       .getParts(query)
       .catch(setError)
@@ -847,29 +871,41 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
         inputs: paths.inputs.reverse(),
         outputs: paths.outputs.reverse(),
         name: hierarchyPointNode.data.name,
-        id: hierarchyPointNode.data.id
+        id: hierarchyPointNode.data.id,
+        hierarchyPointNode: hierarchyPointNode,
       })
     }
     console.log("PARTS---", paths)
   }
 
-  const statusNode = (attributes: any,status:number) => {
-    if(status == -99){
+  const statusNode = (attributes: any, status: number) => {
+    if (status == -99) {
       return "waring"
     }
     if (attributes.finish) {
       if (attributes.type == TaskPoint) {
-        console.log("TASK__-",attributes)
         if (attributes.success) {
           return "success"
         }
         return "fault"
       }
-      // if(attributes.type == BrokerPoint){
-      //   return "success"
-      // }
       return "success"
     }
+
+    if (attributes.type == BrokerPoint) {
+      if (attributes.tracking) {
+        try {
+          const track = JSON.parse(attributes.tracking)
+          if (!track.deliver_flows) {
+            return "nodeliver"
+          }
+        } catch (error) {
+          console.error(error)
+        }
+      }
+      // return "success"
+    }
+
     if (attributes.type == TaskPoint) {
       const task = tasks.filter(t => t.id == attributes.id)[0]
       if (task && attributes.client) {
@@ -918,6 +954,7 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
                       outputs={nodeSelected.outputs}
                       broker={brokers.filter(b => b.id == nodeSelected.id)[0]}
                       clients={clients}
+                      node={nodeSelected.hierarchyPointNode}
                     /> :
                     nodeSelected.type === TaskPoint ?
                       <TaskDetail
@@ -925,6 +962,7 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
                         outputs={nodeSelected.outputs}
                         task={tasks.filter(t => t.id == nodeSelected.id)[0]}
                         clients={clients}
+                        node={nodeSelected.hierarchyPointNode}
                       /> :
                       nodeSelected.type === ChannelPoint ?
                         <ChannelDetail
@@ -940,55 +978,59 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
           }
         </div>
       </Modal>
-      <Tree
-        data={treeData}
-        orientation="vertical"
-        translate={{
-          x: window.innerWidth * 20 / 100 + delta,
-          y: 30,
-        }}
-        renderCustomNodeElement={({ nodeDatum, toggleNode, hierarchyPointNode }) => {
-          return (
-            <>
-              {
-                nodeDatum.attributes?.type == ChannelPoint ?
-                   //@ts-ignore
-                  <g className={`${statusNode(nodeDatum.attributes,hierarchyPointNode.data.status)}`}>
-                    {
-                      <rect width="40" height="40" x="-20" onClick={() => { handleClick(hierarchyPointNode) }} />
-                    }
-                    <text fill="black" strokeWidth="1" x="30" y="10">
-                      {nodeDatum.name}
-                    </text>
-                    <text fill="blue" x="20" dy="30" strokeWidth="1">
-                      {"(Channel)"}
-                    </text>
-                  </g>
-                  //@ts-ignore
-                  : nodeDatum.attributes?.type == TaskPoint ? <g className={`${statusNode(nodeDatum.attributes,hierarchyPointNode.data.status)}`}>
-                    <circle r="20" onClick={() => { handleClick(hierarchyPointNode) }} />
-                    <text fill="black" strokeWidth="1" x="30" y="10">
-                      {nodeDatum.name}
-                    </text>
-                    <text fill="black" x="30" dy="30" strokeWidth="1">
-                      {"(Task)"}
-                    </text>
-                  </g>
-                  //@ts-ignore
-                    : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${statusNode(nodeDatum.attributes, hierarchyPointNode.data.status)}`}>
-                      <ellipse rx="25" ry="15" fill="green" onClick={() => { handleClick(hierarchyPointNode) }} />
+      {
+        treeData &&
+        <Tree
+          data={treeData}
+          orientation="vertical"
+          translate={{
+            x: window.innerWidth * 20 / 100 + delta,
+            y: 30,
+          }}
+          renderCustomNodeElement={({ nodeDatum, toggleNode, hierarchyPointNode }) => {
+            return (
+              <>
+                {
+                  nodeDatum.attributes?.type == ChannelPoint ?
+                    //@ts-ignore
+                    <g className={`${statusNode(nodeDatum.attributes, hierarchyPointNode.data.status)}`}>
+                      {
+                        <rect width="40" height="40" x="-20" onClick={() => { handleClick(hierarchyPointNode) }} />
+                      }
+                      <text fill="black" strokeWidth="1" x="30" y="10">
+                        {nodeDatum.name}
+                      </text>
+                      <text fill="blue" x="20" dy="30" strokeWidth="1">
+                        {"(Channel)"}
+                      </text>
+                    </g>
+                    //@ts-ignore
+                    : nodeDatum.attributes?.type == TaskPoint ? <g className={`${statusNode(nodeDatum.attributes, hierarchyPointNode.data.status)}`}>
+                      <circle r="20" onClick={() => { handleClick(hierarchyPointNode) }} />
                       <text fill="black" strokeWidth="1" x="30" y="10">
                         {nodeDatum.name}
                       </text>
                       <text fill="black" x="30" dy="30" strokeWidth="1">
-                        {"(Broker)"}
+                        {"(Task)"}
                       </text>
-                    </g> : ""
-              }
-            </>
-          )
-        }}
-      />
+                    </g>
+                      //@ts-ignore
+                      : nodeDatum.attributes?.type == BrokerPoint ? <g className={`${statusNode(nodeDatum.attributes, hierarchyPointNode.data.status)}`}>
+                        <ellipse rx="25" ry="15" fill="green" onClick={() => { handleClick(hierarchyPointNode) }} />
+                        <text fill="black" strokeWidth="1" x="30" y="10">
+                          {nodeDatum.name}
+                        </text>
+                        <text fill="black" x="30" dy="30" strokeWidth="1">
+                          {"(Broker)"}
+                        </text>
+                      </g> : ""
+                }
+              </>
+            )
+          }}
+        />
+      }
+
     </>
   )
 }
@@ -1005,11 +1047,17 @@ const validateInput = (input: any) => {
   delete input["run_coun"]
   delete input["offset"]
   delete input["startd_at"]
+  if (input["finished_at"]) {
+    input["finish"] = true
+  } else if (input["finished_at"] != undefined) {
+    input["finish"] = false
+  }
   delete input["finished_at"]
+
   return input
 }
 
-const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFlow[], inputs: MessageFlow[], broker: Broker, clients: Client[] }) => {
+const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: MessageFlow[], inputs: MessageFlow[], broker: Broker, clients: Client[], node: any }) => {
   var itemCharts: ItemChart = {
     input: {},
     flows: []
@@ -1083,7 +1131,38 @@ const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFl
     }
   }
 
+  if (!itemCharts.input.value) {
 
+  }
+
+  function getRecieve(value: any, node: any) {
+    let v: any = {}
+    if (value) {
+      return value
+    }
+    if (node && node.parent && node.parent.data.attributes.message) {
+
+      try {
+        v = JSON.parse(node.parent.data.attributes.message)
+      } catch (error) {
+        console.error(error)
+        v = node.parent.data.attributes.message
+      }
+    }
+
+    if (node && node.data.attributes.start_input) {
+
+      try {
+        v = JSON.parse(node.data.attributes.start_input)
+      } catch (error) {
+        console.error(error)
+        v = node.data.attributes.start_input
+      }
+    }
+    return v
+  }
+
+  console.log({ node })
   return (
     <div>
       <div className="border-2 border-dashed border-blue-500 px-2 py-2">
@@ -1091,10 +1170,12 @@ const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFl
           <div className="font-bold">Recieve</div>
           <div className="ml-2">
             {
-              itemCharts.input.start_input ? (
+              itemCharts.input.start_input || (node && node.data.attributes.start_input) ? (
                 <div className="font-bold text-blue-500">Start by trigger</div>
               ) : itemCharts.input.sender_type == ClientPoint ? (
                 <div>{itemCharts.input.task_name}{`(task run on ${itemCharts.input.sender_name})`}</div>
+              ) : node && node.parent ? (
+                <div>{node.parent.data.name}{`(${getNameFromType(node.parent.data.type)})`}</div>
               ) : (
                 <div>{itemCharts.input.sender_name}{`(${getNameFromType(itemCharts.input.sender_type)})`}</div>
               )
@@ -1103,7 +1184,20 @@ const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFl
           <FaArrowRightLong className="ml-2" />
         </div>
         <div>
-          <ReactJson src={itemCharts.input.value ? itemCharts.input.value : {}} name={'result'} />
+          {
+            itemCharts.input.sender_type == ClientPoint ? <ReactJson
+              src={validateInput(getRecieve(itemCharts.input.value, node))}
+              name={'result'}
+              enableClipboard={false}
+            /> : (
+              <ReactJson
+                src={validateInput(getRecieve(itemCharts.input.value, node))}
+                name={false}
+                enableClipboard={false}
+              />
+            )
+          }
+
         </div>
       </div>
       <div className="w-full flex justify-center my-3"><FaLongArrowAltDown className="w-6 h-auto" /></div>
@@ -1130,6 +1224,19 @@ const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFl
       </div>
 
       <div className="w-full flex justify-center my-3"><FaLongArrowAltDown className="w-6 h-auto" /></div>
+      {
+        //@ts-ignore
+        node && node.data && node.data.children && node.data.children.length == 0 && node.data.attributes.tracking &&
+        <div className="border-2 border-dashed border-yellow-500 px-2 py-2 ">
+          <div>
+            <div className="flex items-center">
+              <div className="font-bold ">Tracking</div>
+              <CgTrack className="ml-2" />
+            </div>
+            {node.data.attributes.tracking}
+          </div>
+        </div>
+      }
       {
         itemCharts.flows.map((e, idx) => (
           <div key={idx} className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} mb-8 px-2 py-2 `}>
@@ -1160,14 +1267,16 @@ const BrokerDetail = ({ outputs, inputs, broker, clients }: { outputs: MessageFl
               </div>
 
               <div className="">
-                <ReactJson src={e.request.value ? e.request.value : {}} name={false} />
+                <ReactJson
+                  src={e.request.value ? e.request.value : {}}
+                  name={false}
+                  enableClipboard={false}
+                />
               </div>
             </div>
 
             <div className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} px-2 py-2 mt-6`}>
               <div className="flex items-center">
-                {/* <div className="font-bold">Reply</div>
-                <FaArrowRightLong className="mx-2" /> */}
                 <div >
                   {
                     itemCharts.input.flow == 2 ? <div className="text-green-500">Replied</div> : (
@@ -1201,7 +1310,7 @@ const mergeInput = (response: any, task: Task) => {
   }
 }
 
-const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[], inputs: MessageFlow[], task: Task, clients: Client[] }) => {
+const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: MessageFlow[], inputs: MessageFlow[], task: Task, clients: Client[], node: any }) => {
   let input = inputs.filter(e => !e.flow)[0]
   if (inputs.length == 1 && !input) {
     input = inputs[0]
@@ -1227,7 +1336,17 @@ const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[]
       }
     }
   }
-  console.log({ input })
+  if (!input) {
+    input = inputs.filter(e => e.start_input)[0]
+  }
+  if (input && input.start_input) {
+    try {
+      value = JSON.parse(input.start_input)
+    } catch (error) {
+      value = input.start_input
+    }
+  }
+  console.log({ input, value })
 
   const outs = outputs.filter(e => e.parent != e.part).map(e => {
     try {
@@ -1248,9 +1367,48 @@ const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[]
           <div className="font-bold">Payload</div>
         </div>
         <div className="">
-          <ReactJson src={task && task.payload ? JSON.parse(task.payload) : {}} name={false} />
+          <ReactJson
+            src={task && task.payload ? JSON.parse(task.payload) : {}}
+            name={false}
+            enableClipboard={false}
+          />
         </div>
       </div>
+      {/* REQUEST------ */}
+      {
+        input && input.start_input && (
+          <div>
+            <div className="flex justify-center py-4"><RiAddLine className="w-6 h-auto font-bold" /></div>
+            <div className="border-blue-500 border-dashed border-2 px-2 py-2">
+              <div className="font-bold text-blue-500">Start by trigger</div>
+              <div className="">
+                {
+                  typeof value == "string" ? value :
+                    <ReactJson src={value ? value : {}} name={false} />
+                }
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* {
+        node && node.data.attributes && node.data.attributes.start_task && (
+          <div>
+            <div className="flex justify-center py-4"><RiAddLine className="w-6 h-auto font-bold" /></div>
+            <div className="border-blue-500 border-dashed border-2 px-2 py-2">
+              <div className="font-bold text-blue-500">Start by trigger</div>
+              <div className="">
+                {
+                  typeof node.data.attributes.start_task == "string" ? node.data.attributes.start_task :
+                    <ReactJson src={node.data.attributes.start_task ? mergeInput(node.data.attributes.start_task, task) : {}} name={false} />
+                }
+              </div>
+            </div>
+          </div>
+        )
+      } */}
+
       {
         input && input.sender_type == BrokerPoint && (
           <div>
@@ -1268,13 +1426,19 @@ const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[]
               <div className="">
                 {
                   typeof value == "string" ? value :
-                    <ReactJson src={value ? validateInput(value) : {}} name={false} />
+                    <ReactJson
+                      src={value ? validateInput(value) : {}}
+                      name={false}
+                      enableClipboard={false}
+                    />
                 }
               </div>
             </div>
           </div>
         )
       }
+      {/* REQUEST------ */}
+
       <div className="my-2 w-full flex justify-center"><FaLongArrowAltDown className="w-8 h-8" /></div>
       {
         input && input.sender_type == ClientPoint ? (
@@ -1309,24 +1473,27 @@ const TaskDetail = ({ outputs, inputs, task, clients }: { outputs: MessageFlow[]
             <div className="">
               {
                 typeof value == "string" ? value :
-                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}} name={false} />
+                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}}
+                    name={false}
+                    enableClipboard={false}
+                  />
               }
             </div>
           </div>
         )
       }
 
-      <div className="border-dashed border-2 border-green-500 mt-6 px-2 py-2">
+      <div className={`border-dashed border-2 border-green-500 mt-6 px-2 py-2 ${outs.filter(e => !e.outobject.success)[0] ? "border-red-500" : "border-green-500"}`}>
         <div className="font-bold">Output</div>
         <div>
           {
             outs.map(e => (
-              <div key={e.id} className="flex">
-                <div className="w-24">{formatDate(e.receive_at)}</div>
+              <div key={e.id} className="flex items-center">
+                <div className="min-w-[22px] text-[10px] mr-2">{formatDate(e.receive_at)}</div>
                 {/* <div>{e.outobject.success ? "success" : "fault"}</div> */}
-                <div className={`ml-20 text-wrap text-balance ${e.outobject.success ? "" : "text-red-500"}`}>
+                <p className={`  break-all ${e.outobject.success ? "" : "text-red-500"}`}>
                   {e.outobject.output}
-                </div>
+                </p>
               </div>
             ))
           }
@@ -1396,7 +1563,11 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
             <div className="">
               {
                 typeof value == "string" ? value :
-                  <ReactJson src={value ? validateInput(value) : {}} name={false} />
+                  <ReactJson
+                    src={value ? validateInput(value) : {}}
+                    name={false}
+                    enableClipboard={false}
+                  />
               }
             </div>
           </div>

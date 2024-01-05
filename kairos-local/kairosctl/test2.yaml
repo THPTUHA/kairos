@@ -1,0 +1,27 @@
+version: '1'
+name: debug
+vars:
+tasks:
+  sql:
+    executor: sql
+    clients: [client1]
+    wait: input
+    payload: |
+      {
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "port": "3306",
+        "user": "nghia",
+        "password": "root",
+        "dbname": "workflow"
+      }
+
+brokers:
+  brok:
+    listens: [listen_channel]
+    flows: |
+      {{get .listen_channel ("content") | get ("msg") | .msg }}
+          {{sendsync .msg  .sql_task | .result }}
+          {{send .result .listen_channel}}
+          {{return .result}}
+      {{end}}

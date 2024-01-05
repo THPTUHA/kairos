@@ -128,6 +128,7 @@ type body struct {
 	Parts      []any  `json:"parts"`
 	Parent     string `json:"parent"`
 	ReceiverID int64  `json:"receiver_id"`
+	Group      string `json:"group"`
 }
 
 func (ctr *Controller) DetailPoint(c *gin.Context) {
@@ -136,7 +137,7 @@ func (ctr *Controller) DetailPoint(c *gin.Context) {
 	inputs := make([]*models.MessageFlow, 0)
 	outputs := make([]*models.MessageFlow, 0)
 	// phần từ đầu vào đến con
-	inputs, err = storage.GetMessageFlowsByParent(ps.Parent, ps.ReceiverID)
+	inputs, err = storage.GetMessageFlowsByParent(ps.Parent, ps.ReceiverID, ps.Group)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
@@ -144,12 +145,14 @@ func (ctr *Controller) DetailPoint(c *gin.Context) {
 		return
 	}
 
-	outputs, err = storage.GetMessageFlowsByParts(ps.Parts)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"err": err.Error(),
-		})
-		return
+	if len(ps.Parts) != 0 {
+		outputs, err = storage.GetMessageFlowsByParts(ps.Parts, ps.Group)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

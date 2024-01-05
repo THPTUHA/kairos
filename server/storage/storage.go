@@ -1314,7 +1314,7 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 			receiver_type, receiver_name, workflow_id, message, attempt,
 			created_at, flow, deliver_id, request_size, response_size,
 			cmd, start, "group", task_id, send_at, receive_at, task_name,
-			mf.part, mf.parent, mf.begin_part, mf.finish_part, mf.broker_group
+			mf.part, mf.parent, mf.begin_part, mf.finish_part, mf.broker_group, mf.tracking, mf.start_input
 		FROM message_flows mf, flow_tops ft
 		WHERE mf.id = ft.id
 		ORDER BY mf.id ASC
@@ -1334,7 +1334,8 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 			&mf.ReceiverType, &mf.ReceiverName, &mf.WorkflowID, &mf.Message, &mf.Attempt,
 			&mf.CreatedAt, &mf.Flow, &mf.DeliverID, &mf.RequestSize, &mf.ResponseSize,
 			&mf.Cmd, &mf.Start, &mf.Group, &mf.TaskID, &mf.SendAt, &mf.ReceiveAt, &mf.TaskName,
-			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart, &mf.BrokerGroup,
+			&mf.Part, &mf.Parent, &mf.BeginPart, &mf.FinishPart, &mf.BrokerGroup, &mf.Tracking,
+			&mf.StartInput,
 		)
 		if err != nil {
 			return nil, err
@@ -1345,8 +1346,8 @@ func GetMessageFlowsByGroupID(groupID string) ([]*models.MessageFlow, error) {
 	return messageFlows, nil
 }
 
-func GetMessageFlowsByParent(part string, receiverID int64) ([]*models.MessageFlow, error) {
-	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part  = '%s' AND (receiver_id =%d OR task_id = %d) ORDER BY ID DESC LIMIT 20`, part, receiverID, receiverID)
+func GetMessageFlowsByParent(part string, receiverID int64, group string) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part  = '%s' AND (receiver_id =%d OR task_id = %d) AND "group"= '%s' ORDER BY ID DESC LIMIT 20`, part, receiverID, receiverID, group)
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -1355,7 +1356,7 @@ func GetMessageFlowsByParent(part string, receiverID int64) ([]*models.MessageFl
 	return exactMessageFlow(rows)
 }
 
-func GetMessageFlowsByParts(parts []any) ([]*models.MessageFlow, error) {
+func GetMessageFlowsByParts(parts []any, group string) ([]*models.MessageFlow, error) {
 	placeholdersp := make([]string, len(parts))
 
 	for i := range parts {
@@ -1363,7 +1364,7 @@ func GetMessageFlowsByParts(parts []any) ([]*models.MessageFlow, error) {
 	}
 	parentStr := strings.Join(placeholdersp, ",")
 
-	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part IN (%s) ORDER BY ID DESC LIMIT 20`, parentStr)
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE part IN (%s) AND  "group"= '%s' ORDER BY ID DESC LIMIT 20`, parentStr, group)
 	rows, err := db.Query(query, parts...)
 	if err != nil {
 		return nil, err
@@ -1723,8 +1724,8 @@ func GetTriggersByCriteria(workflowID, objectID int64, triggerType string) ([]*m
 }
 
 func UpdateStatusByID(triggerID int64, newStatus int) error {
-	query := "UPDATE triggers SET status = $1 WHERE id = $2"
-	_, err := Get().Exec(query, newStatus, triggerID)
+	query := "UPDATE triggers SET status = $1, trigger_at = $2 WHERE id = $3"
+	_, err := Get().Exec(query, newStatus, helper.GetTimeNow(), triggerID)
 	return err
 }
 

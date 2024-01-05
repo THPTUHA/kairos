@@ -4,8 +4,8 @@ import { FaEquals } from "react-icons/fa6";
 import { FaultInputTask, FaultSetTask, FaultTriggerTask, PendingDeliver, SuccessTriggerTask, SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd, SuccessSetTask } from "../conts";
 
 const Neutral = [PendingDeliver]
-const SuccessCode = [SuccessSetTask, SuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
-const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask]
+const SuccessCode = [SuccessSetTask, SuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd, 0]
+const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask, -99]
 
 export enum StatusCodeClassification {
   SUCCESS = "success",

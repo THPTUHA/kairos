@@ -112,7 +112,7 @@ const WorkflowListPage = () => {
             dataIndex: 'status',
             width: 20,
             render: (value: number) => {
-                return <>{
+                return <>{ 
                     value == Pause
                         ? <div>Pause</div>
                         : value == Delivering
@@ -322,9 +322,8 @@ const WorkflowListPage = () => {
                     {
                         wflog.loading ? <div>Loading </div> :
                             <div >{wflog.value?.map(v => (
-                                <div key={v.id}>
-                                    <div className={`${v.status == 1 ? "bg-green-500" : "bg-red-500"} flex`}>
-                                        <div>{v.status == 1 ? "Success" : "Fault"}</div>
+                                <div key={v.id} className={`border-2 border-dashed px-2 py-2 my-2 ${v.status == 1 ? "border-green-500" : "border-red-500"}`}>
+                                    <div className={`${v.status == 1 ? "text-green-500" : "text-red-500"} flex`}>
                                         <div>{formatDate(v.created_at)}</div>
                                     </div>
                                     <div>{v.record}</div>

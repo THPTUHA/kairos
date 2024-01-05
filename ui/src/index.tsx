@@ -6,6 +6,7 @@ import reportWebVitals from './reportWebVitals';
 import { BrowserRouter } from 'react-router-dom';
 import 'react-toastify/dist/ReactToastify.css';
 import 'react-responsive-modal/styles.css';
+import 'react-js-cron/dist/styles.css'
 import { ToastContainer } from 'react-toastify';
 import { RecoilRoot } from 'recoil';
 

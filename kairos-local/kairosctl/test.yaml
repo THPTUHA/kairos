@@ -1,0 +1,23 @@
+version: '1'
+name: service_5
+vars:
+tasks:
+  build_image:
+    wait: input
+    executor: dockerlite
+    clients: [client1]
+    payload: |
+      {
+        "action": "build",
+        "imageName": "nexta2020/shopok",
+        "contextDir": "/Users/nghiabadao/Code/demo/shopok"
+      }
+
+brokers:
+  debug:
+    listens: [build_image_task]
+    flows: |
+      {{debug .build_image_task | send .listen_channel}}
+
+
+  

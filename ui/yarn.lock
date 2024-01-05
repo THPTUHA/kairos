@@ -4211,11 +4211,6 @@ cosmiconfig@^7.0.0:
     path-type "^4.0.0"
     yaml "^1.10.0"
 
-cronstrue@^2.12.0:
-  version "2.47.0"
-  resolved "https://registry.yarnpkg.com/cronstrue/-/cronstrue-2.47.0.tgz#3cf447c2a3a070d5bad2cedd6383e7cc16f5a308"
-  integrity sha512-fnFwJy7zslTEz6h7O7BkwgHNBvuuPmkhAYKqPDxK5mBQLz2nG08T9afbnjm+yrvcc/wxrd+otaVSnoXT9ulUOw==
-
 cross-fetch@^3.1.5:
   version "3.1.8"
   resolved "https://registry.yarnpkg.com/cross-fetch/-/cross-fetch-3.1.8.tgz#0327eba65fd68a7d119f8fb2bf9334a1a7956f82"
@@ -9723,13 +9718,6 @@ react-copy-to-clipboard@^5.1.0:
     copy-to-clipboard "^3.3.1"
     prop-types "^15.8.1"
 
-react-cron-generator@^2.0.10:
-  version "2.0.10"
-  resolved "https://registry.yarnpkg.com/react-cron-generator/-/react-cron-generator-2.0.10.tgz#001fd233ca85b705fce2f1d309acd21f0a593de7"
-  integrity sha512-N2KaRCcbWWJdgjP/3SkEEMPaAw9LRV8i3UHBL00WXi/uP3ePVU5StkhiCX91L2tJ47kBeTSX6J0HCL10aV1rlw==
-  dependencies:
-    cronstrue "^2.12.0"
-
 react-d3-tree@^3.6.1:
   version "3.6.1"
   resolved "https://registry.yarnpkg.com/react-d3-tree/-/react-d3-tree-3.6.1.tgz#1a4782ac87da0cf87f8e5a8a73a399c3e3ed5c7e"
@@ -9818,6 +9806,11 @@ react-is@^18.0.0, react-is@^18.2.0:
   version "18.2.0"
   resolved "https://registry.yarnpkg.com/react-is/-/react-is-18.2.0.tgz#199431eeaaa2e09f86427efbb4f1473edb47609b"
   integrity sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==
+
+react-js-cron@^5.0.1:
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/react-js-cron/-/react-js-cron-5.0.1.tgz#7228652679c4bf3bb8ecf44c08b7d92f6975741a"
+  integrity sha512-qHUb/qWeMvXklGW6/hLtH9CjboRU7pu2hHxGGErUDTjHDOLn/b6CZHvVsx/e3ak+UObwf4Y0BHSQJzpn1JpvvA==
 
 react-json-view@^1.21.3:
   version "1.21.3"

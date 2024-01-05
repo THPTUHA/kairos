@@ -1,17 +1,13 @@
 import { makeStyles } from "@mui/styles";
 import { Entry } from "../../models/entry";
-import useWindowDimensions, { useRequestTextByWidth } from "../../hooks/WindowDimensionsHook";
-import Queryable from "../Queryable";
 import { EntryItem } from "./EntryListItem";
 import { useRecoilState, useRecoilValue } from "recoil";
 import focusedItemAtom from "../../recoil/focusedItem/atom";
 import focusedContextAtom from "../../recoil/focusedContext/atom";
 import queryAtom from "../../recoil/query/atom";
 import React, { useEffect, useState } from "react";
-import entryDataAtom from "../../recoil/entryData";
 import { LoadingWrapper } from "../LoadingWrapper";
 import { Tabs, TabsProps } from "antd";
-import { Utils } from "../../helper/utils";
 import ReactJson from 'react-json-view'
 
 

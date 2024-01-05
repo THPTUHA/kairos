@@ -78,6 +78,7 @@ clean-cache:
 
 webui:
 	cd ./ui && docker buildx build  --platform linux/amd64 -t nexta2020/webui .
+	docker push nexta2020/webui
 
 image:
 	docker buildx build  --platform linux/amd64 -t nexta2020/kairos --load .
@@ -107,3 +108,5 @@ window:
 	cd server/plugin/kairos-executor-sql && GOOS=windows GOARCH=amd64   go build  -o  ${ROOT_DIR}/release/window
 	cd kairos-local/kairosdeamon && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
 	cd kairos-local/kairosctl && GOOS=windows GOARCH=amd64  go build  -o  ${ROOT_DIR}/release/window
+
+release: linux window

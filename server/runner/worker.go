@@ -17,6 +17,7 @@ import (
 	"github.com/THPTUHA/kairos/server/messaging"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/THPTUHA/kairos/server/storage/models"
+	"github.com/dop251/goja"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
@@ -81,6 +82,7 @@ type Worker struct {
 	points         map[string]*Point
 	taskDelivers   map[int64][]*taskDeliver
 	brokerDelivers map[int64][]*brokerDeliver
+	fc             *workflow.FuncCall
 
 	clientsActive     []*Point
 	CBQueue           *cbqueue.CBQueue
@@ -397,6 +399,19 @@ func (w *Worker) run() {
 	w.conf.Logger.Debugf("finish worker workflow running name = %s, namespace = %s", w.workflow.Name, w.workflow.Namespace)
 }
 
+func (w *Worker) getNameType(t int) string {
+	if t == BrokerPoint {
+		return "broker"
+	}
+	if t == ChannelPoint {
+		return "channel"
+	}
+	if t == TaskPoint {
+		return "task"
+	}
+	return "server"
+}
+
 func (w *Worker) retryDeliver() {
 	for e := range w.deliverErrCh {
 		w.conf.Logger.WithFields(logrus.Fields{
@@ -422,7 +437,7 @@ func (w *Worker) retryDeliver() {
 			case workflow.SetTaskCmd:
 				reply.Cmd = workflow.ReplySetTaskCmd
 				w.logWorkflow(
-					fmt.Sprintf("Task %s can't setup on client %s, msg = %s ",
+					fmt.Sprintf("Task '%s' can't setup on client '%s', msg = %s ",
 						msg.Task.Name,
 						msg.From,
 						reply.Message),
@@ -432,7 +447,7 @@ func (w *Worker) retryDeliver() {
 			case workflow.TriggerStartTaskCmd:
 				reply.Cmd = workflow.ReplyStartTaskCmd
 				w.logWorkflow(
-					fmt.Sprintf("Task %s can't trigger on client %s, msg = %s ",
+					fmt.Sprintf("Task '%s' can't trigger on client '%s', msg = %s ",
 						msg.Task.Name,
 						msg.From,
 						reply.Message),
@@ -443,9 +458,10 @@ func (w *Worker) retryDeliver() {
 				reply.Cmd = workflow.ReplyInputTaskCmd
 				if msg.Task != nil {
 					w.logWorkflow(
-						fmt.Sprintf("Result of task %s can't deliver to %s, msg = %s ",
+						fmt.Sprintf("Result of task '%s' can't deliver to '%s'(%s), msg = %s ",
 							msg.Task.Name,
 							e.Receiver.Name,
+							w.getNameType(e.Receiver.Type),
 							reply.Message),
 						models.WFRecordFault,
 						ne,
@@ -455,7 +471,7 @@ func (w *Worker) retryDeliver() {
 			case workflow.SetBrokerCmd:
 				reply.Cmd = workflow.ReplySetBrokerCmd
 				w.logWorkflow(
-					fmt.Sprintf("Broker %s can't setup on client %s, msg = %s ",
+					fmt.Sprintf("Broker '%s' can't setup on client '%s', msg = %s ",
 						msg.Broker.Name,
 						e.Receiver.Name,
 						reply.Message),
@@ -509,6 +525,42 @@ func (w *Worker) setWfStatus(status int) {
 	}
 }
 
+func (w *Worker) InitFC() (*workflow.FuncCall, error) {
+	funcs, err := storage.GetAllFunctionsByUserID(w.workflow.UserID)
+	if err != nil {
+		return nil, err
+	}
+	vm := goja.New()
+	fc := &workflow.FuncCall{
+		Call:  make(map[string]goja.Callable),
+		Funcs: vm,
+	}
+
+	for _, f := range funcs {
+		prog, err := goja.Compile("", f.Content, true)
+		if err != nil {
+			return nil, err
+		}
+		_, err = fc.Funcs.RunProgram(prog)
+		if err != nil {
+			return nil, err
+		}
+		v := fc.Funcs.Get(f.Name)
+		if v == nil {
+			return nil, fmt.Errorf("can't found function %s ", f.Name)
+		}
+
+		var fr goja.Callable
+		err = fc.Funcs.ExportTo(v, &fr)
+		if err != nil {
+			return nil, err
+		}
+		fc.Call[f.Name] = fr
+	}
+
+	return fc, nil
+}
+
 func (w *Worker) Run() error {
 	w.conf.Logger.Debug(fmt.Sprintf("worker %d run ", w.ID))
 	natConn, err := nats.Connect(w.conf.NatURL, optNatsWorker(defaultNatsOptions())...)
@@ -524,8 +576,22 @@ func (w *Worker) Run() error {
 	if err != nil {
 		return err
 	}
+	fc, err := w.InitFC()
+	if err != nil {
+		return err
+	}
+	w.fc = fc
+	w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+		value.Template.SetFuncs(fc)
+		return nil
+	})
 
 	w.status = workflow.Running
+
+	if err != nil {
+		w.conf.Logger.Error(err)
+		return err
+	}
 	go w.setWfStatus(workflow.Delivering)
 	go w.retryDeliver()
 
@@ -567,7 +633,7 @@ func (w *Worker) Run() error {
 					fmt.Printf("[ALL TASK DELIVER SUCCESS]\n")
 					go w.setWfStatus(workflow.Running)
 					w.logWorkflow(
-						fmt.Sprintf("Success setup workflow"),
+						fmt.Sprintf("Workflow setup success"),
 						models.WFRecordScuccess,
 						nil,
 					)
@@ -582,7 +648,7 @@ func (w *Worker) Run() error {
 					fmt.Printf("[ALL TASK DELIVER SUCCESS]\n")
 					go w.setWfStatus(workflow.Running)
 					w.logWorkflow(
-						fmt.Sprintf("Success setup workflow"),
+						fmt.Sprintf("Workflow setup success"),
 						models.WFRecordScuccess,
 						nil,
 					)
@@ -630,6 +696,8 @@ func (w *Worker) reciveMessageSync() error {
 		if err != nil {
 			w.conf.Logger.Error(err)
 		}
+		w.conf.Logger.Infof("Reciver trigger %+v", trigger)
+
 		var cmd workflow.CmdTask
 		cmd.Cmd = workflow.TriggerCmd
 		cmd.Trigger = &trigger
@@ -650,9 +718,79 @@ func (w *Worker) reciveMessageSync() error {
 			if err != nil {
 				w.conf.Logger.Error(err)
 			}
+		} else {
+			if trigger.Type == "task" {
+				var task *workflow.Task
+				w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
+					if value.ID == trigger.ObjectID {
+						task = value
+					}
+					return nil
+				})
+				if task == nil {
+					w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
+					return
+				}
+
+				w.Sched.AddTask(w, task, trigger.Input)
+			}
+
+			if trigger.Type == "broker" {
+				var broker *workflow.Broker
+				w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+					if value.ID == trigger.ObjectID {
+						broker = value
+					}
+					return nil
+				})
+				if broker == nil {
+					w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
+					return
+				}
+
+				w.Sched.AddBroker(w, broker, trigger.Input)
+			}
 		}
 	})
 	return nil
+}
+
+func (w *Worker) RunTask(task *workflow.Task, input string) {
+
+}
+
+func (w *Worker) RunBroker(broker *workflow.Broker, input string) {
+
+	group := w.getGroup()
+	part := w.getPart("", 0, 0)
+	reply := workflow.CmdReplyTask{
+		Cmd:        -1,
+		BeginPart:  true,
+		StartInput: input,
+		Start:      true,
+		RunOn:      workflow.GetBrokerName(broker.Name),
+		BrokerID:   broker.ID,
+		BrokerName: broker.Name,
+		Group:      group,
+		Part:       part,
+		WorkflowID: w.workflow.ID,
+	}
+	var req workflow.CmdTask
+	req.Cmd = workflow.InputTaskCmd
+
+	req.From = reply.RunOn
+	resultCh := make(chan []byte)
+	req.WorkflowID = reply.WorkflowID
+	req.Group = reply.Group
+	req.StartInput = reply.StartInput
+	var brokerInput map[string]workflow.ReplyData
+	err := json.Unmarshal([]byte(input), &brokerInput)
+	if err != nil {
+		w.conf.Logger.Error(err)
+	}
+	go w.processBroker(broker, *w.points[workflow.GetBrokerName(broker.Name)], &reply, &req, &brokerInput, resultCh)
+	<-resultCh
+	w.conf.Logger.Error("Finish broker")
 }
 
 func (w *Worker) handleLogFromDeam(log *workflow.LogDaemon) {
@@ -756,6 +894,165 @@ func (w *Worker) reciveMessage() error {
 	return err
 }
 
+func (w *Worker) processBroker(broker *workflow.Broker, from Point, reply *workflow.CmdReplyTask, req *workflow.CmdTask, input *map[string]workflow.ReplyData, resultCh chan []byte) error {
+	bg := w.getBrokerGroup() // tính thời điểm vào broker
+	sender := w.points[reply.RunOn]
+	m, _ := json.Marshal(reply)
+
+	req.Task = &workflow.Task{
+		ID:         reply.TaskID,
+		WorkflowID: reply.WorkflowID,
+		Name:       reply.TaskName,
+	}
+
+	w.CBQueue.Push(func(duration time.Duration) {
+		w.logMessageFlowReply(sender, &from, m, reply.SendAt, bg)
+	})
+
+	if len(broker.Flows.Endpoints) > 0 {
+		for _, endpoint := range broker.Flows.Endpoints {
+			receiver := w.points[endpoint]
+			if receiver.Type == TaskPoint {
+				w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
+					if receiver.ID == task.ID {
+						for _, c := range task.Clients {
+							receiver = w.points[workflow.GetClientName(c)]
+							go w.deliverInputTaskCmd(&from, receiver, req, reply, nil, bg)
+						}
+					}
+					return nil
+				})
+			} else {
+				go w.deliverInputTaskCmd(&from, receiver, req, reply, nil, bg)
+			}
+
+		}
+	} else {
+		if !broker.Queue {
+			broker.DynamicVars = make(map[string]*workflow.CmdReplyTask)
+			fmt.Println("RUN TO EMPTY QUEUE BROKER")
+			if strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
+				w.cacheMu.RLock()
+				c := strings.ToLower(reply.RunOn)
+				broker.DynamicVars[c] = reply
+				w.cacheMu.RUnlock()
+			}
+
+			if strings.HasSuffix(reply.RunOn, workflow.SubClient) {
+				w.cacheMu.RLock()
+				c := strings.ToLower(reply.RunOn)
+				broker.DynamicVars[c] = reply
+				w.cacheMu.RUnlock()
+
+				if w.workflow.Tasks.Exists(reply.TaskName) {
+					w.cacheMu.RLock()
+					c := strings.ToLower(workflow.GetTaskName(reply.TaskName))
+					broker.DynamicVars[c] = reply
+					w.cacheMu.RUnlock()
+				}
+			}
+
+		} else {
+			setBrokerQueue(strings.ToLower(reply.RunOn), reply, reply.WorkflowID)
+			if strings.HasSuffix(reply.RunOn, workflow.SubClient) && reply.TaskName != "" {
+				setBrokerQueue(strings.ToLower(workflow.GetTaskName(reply.TaskName)), reply, reply.WorkflowID)
+			}
+
+			vars := make(map[string]bool)
+			for k := range broker.Template.ListenVars {
+				k = strings.TrimPrefix(strings.ToLower(workflow.GetRootDefaultVar(k)), ".")
+				vars[k] = true
+			}
+
+			bqs, err := storage.GetKVQueues(vars, w.workflow.ID)
+			if err != nil {
+				fmt.Printf("[ GetKVQueues ERR ] %+v\n", err)
+				return nil
+			}
+
+			for _, bg := range bqs {
+				var r workflow.CmdReplyTask
+				err := json.Unmarshal([]byte(bg.Value), &r)
+				if err != nil {
+					fmt.Printf("[ Unmarshal To CmdReplyTask ERR ] %+v\n", err)
+					// Log Err
+					return nil
+				}
+				broker.DynamicVars[bg.Key] = &r
+			}
+		}
+		replies := make(map[string]workflow.ReplyData)
+
+		for k, v := range broker.DynamicVars {
+			replies[k] = workflow.ReplyData{}
+			if v.Content != nil {
+				replies[k]["content"] = v.Content
+			}
+
+			if v.Result != nil {
+				replies[k]["result"] = v.Result
+			}
+			fmt.Println("DEBG DYNAMIC VAR", k)
+		}
+		if input != nil {
+			for k, v := range *input {
+				replies[k] = v
+			}
+		}
+
+		trun := broker.Template.NewRutime(replies)
+		exeOutput := trun.Execute()
+
+		delivers := exeOutput.DeliverFlows
+		w.CBQueue.Push(func(duration time.Duration) {
+			// input, err := json.Marshal(replies)
+			// if err != nil {
+			// 	w.conf.Logger.Error(err)
+			// 	return
+			// }
+			// output, err := json.Marshal(exeOutput)
+			// if err != nil {
+			// 	w.conf.Logger.Error(err)
+			// 	return
+			// }
+			// var status int
+			// if exeOutput.Tracking.Err == "" {
+			// 	status = workflow.BrokerExecuteSuccess
+			// } else {
+			// 	status = workflow.BrokerExecuteFault
+			// }
+			// w.saveBrokerRecord(broker.ID, string(input), string(output), status)
+		})
+
+		// TODO Get Vars
+		// if err == nil {
+		// 	w.cacheMu.Lock()
+		// 	for k := range broker.DynamicVars {
+		// 		broker.DynamicVars[k] = nil
+		// 	}
+		// 	ids := make([]int64, 0)
+		// 	for _, bq := range bqs {
+		// 		ids = append(ids, bq.ID)
+		// 	}
+		// 	err := storage.UsedKVQueue(ids)
+		// 	if err != nil {
+		// 		fmt.Printf("[Used KV QUeue] %s\n", err)
+		// 	}
+		// 	w.cacheMu.Unlock()
+		// } else if err == workflow.ErrorVariableNotReady {
+		// 	// TODO save queue
+		// 	w.cacheMu.Lock()
+		// 	w.cacheMu.Unlock()
+		// }
+		for _, v := range delivers {
+			fmt.Printf("DELIVER Reciever= %s  Msg= %+v\n", v.Reciever, v.Msg)
+		}
+		fmt.Printf("[WORKER DELIVERS] %+v exeOutput = %+v \n", delivers, exeOutput)
+		w.handleDeliver(&from, delivers, reply, req, trun, resultCh, exeOutput, bg)
+	}
+	return nil
+}
+
 func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask, resultCh chan []byte) {
 	// TODO TEST
 	// if !w.IsRunning() {
@@ -802,14 +1099,7 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 
 		if (broker.IsListen(reply.TaskName) || broker.IsListen(reply.RunOn)) && len(broker.Clients) == 0 {
 			isHasDest = true
-			bg := w.getBrokerGroup() // tính thời điểm vào broker
 			w.conf.Logger.Debugf("Reply runon=%s sendAt=%d Now=%d", reply.RunOn, reply.SendAt, helper.GetTimeNow())
-
-			req.Task = &workflow.Task{
-				ID:         reply.TaskID,
-				WorkflowID: reply.WorkflowID,
-				Name:       reply.TaskName,
-			}
 
 			if strings.HasSuffix(reply.RunOn, workflow.SubTask) {
 				if reply.Result == nil {
@@ -829,146 +1119,7 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 				w.conf.Logger.Infof("Reciver message from %s value= %+v", reply.RunOn, reply.Content)
 			}
 
-			w.CBQueue.Push(func(duration time.Duration) {
-				w.logMessageFlowReply(sender, &from, m, reply.SendAt, bg)
-			})
-
-			if len(broker.Flows.Endpoints) > 0 {
-				for _, endpoint := range broker.Flows.Endpoints {
-					receiver := w.points[endpoint]
-					if receiver.Type == TaskPoint {
-						w.workflow.Tasks.Range(func(_ string, task *workflow.Task) error {
-							if receiver.ID == task.ID {
-								for _, c := range task.Clients {
-									receiver = w.points[workflow.GetClientName(c)]
-									go w.deliverInputTaskCmd(&from, receiver, req, reply, nil, bg)
-								}
-							}
-							return nil
-						})
-					} else {
-						go w.deliverInputTaskCmd(&from, receiver, req, reply, nil, bg)
-					}
-
-				}
-			} else {
-				if !broker.Queue {
-					broker.DynamicVars = make(map[string]*workflow.CmdReplyTask)
-					fmt.Println("RUN TO EMPTY QUEUE BROKER")
-					if strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
-						w.cacheMu.RLock()
-						c := strings.ToLower(reply.RunOn)
-						broker.DynamicVars[c] = reply
-						w.cacheMu.RUnlock()
-					}
-
-					if strings.HasSuffix(reply.RunOn, workflow.SubClient) {
-						w.cacheMu.RLock()
-						c := strings.ToLower(reply.RunOn)
-						broker.DynamicVars[c] = reply
-						w.cacheMu.RUnlock()
-
-						if w.workflow.Tasks.Exists(reply.TaskName) {
-							w.cacheMu.RLock()
-							c := strings.ToLower(workflow.GetTaskName(reply.TaskName))
-							broker.DynamicVars[c] = reply
-							w.cacheMu.RUnlock()
-						}
-					}
-
-				} else {
-					setBrokerQueue(strings.ToLower(reply.RunOn), reply, reply.WorkflowID)
-					if strings.HasSuffix(reply.RunOn, workflow.SubClient) && reply.TaskName != "" {
-						setBrokerQueue(strings.ToLower(workflow.GetTaskName(reply.TaskName)), reply, reply.WorkflowID)
-					}
-
-					vars := make(map[string]bool)
-					for k := range broker.Template.ListenVars {
-						k = strings.TrimPrefix(strings.ToLower(workflow.GetRootDefaultVar(k)), ".")
-						vars[k] = true
-					}
-
-					bqs, err := storage.GetKVQueues(vars, w.workflow.ID)
-					if err != nil {
-						fmt.Printf("[ GetKVQueues ERR ] %+v\n", err)
-						return nil
-					}
-
-					for _, bg := range bqs {
-						var r workflow.CmdReplyTask
-						err := json.Unmarshal([]byte(bg.Value), &r)
-						if err != nil {
-							fmt.Printf("[ Unmarshal To CmdReplyTask ERR ] %+v\n", err)
-							// Log Err
-							return nil
-						}
-						broker.DynamicVars[bg.Key] = &r
-					}
-				}
-				replies := make(map[string]workflow.ReplyData)
-
-				for k, v := range broker.DynamicVars {
-					replies[k] = workflow.ReplyData{}
-					if v.Content != nil {
-						replies[k]["content"] = v.Content
-					}
-
-					if v.Result != nil {
-						replies[k]["result"] = v.Result
-					}
-					fmt.Println("DEBG DYNAMIC VAR", k)
-				}
-
-				trun := broker.Template.NewRutime(replies)
-				exeOutput := trun.Execute()
-
-				delivers := exeOutput.DeliverFlows
-				w.CBQueue.Push(func(duration time.Duration) {
-					// input, err := json.Marshal(replies)
-					// if err != nil {
-					// 	w.conf.Logger.Error(err)
-					// 	return
-					// }
-					// output, err := json.Marshal(exeOutput)
-					// if err != nil {
-					// 	w.conf.Logger.Error(err)
-					// 	return
-					// }
-					// var status int
-					// if exeOutput.Tracking.Err == "" {
-					// 	status = workflow.BrokerExecuteSuccess
-					// } else {
-					// 	status = workflow.BrokerExecuteFault
-					// }
-					// w.saveBrokerRecord(broker.ID, string(input), string(output), status)
-				})
-
-				// TODO Get Vars
-				// if err == nil {
-				// 	w.cacheMu.Lock()
-				// 	for k := range broker.DynamicVars {
-				// 		broker.DynamicVars[k] = nil
-				// 	}
-				// 	ids := make([]int64, 0)
-				// 	for _, bq := range bqs {
-				// 		ids = append(ids, bq.ID)
-				// 	}
-				// 	err := storage.UsedKVQueue(ids)
-				// 	if err != nil {
-				// 		fmt.Printf("[Used KV QUeue] %s\n", err)
-				// 	}
-				// 	w.cacheMu.Unlock()
-				// } else if err == workflow.ErrorVariableNotReady {
-				// 	// TODO save queue
-				// 	w.cacheMu.Lock()
-				// 	w.cacheMu.Unlock()
-				// }
-				for _, v := range delivers {
-					fmt.Printf("DELIVER Reciever= %s  Msg= %+v\n", v.Reciever, v.Msg)
-				}
-				fmt.Printf("[WORKER DELIVERS] %+v\n", delivers)
-				w.handleDeliver(&from, delivers, reply, req, trun, resultCh, exeOutput, bg)
-			}
+			w.processBroker(broker, from, reply, req, nil, resultCh)
 		}
 		return nil
 	})
@@ -1061,10 +1212,26 @@ func (w *Worker) handleDeliver(from *Point, delivers []*workflow.DeliverFlow, re
 					go w.deliverInputTaskCmd(from, receiver, &reqDeliver, reply, exeOutput, bg)
 				}
 			}
-			if resultCh != nil && !hasSync {
-				resultCh <- []byte("")
-			}
 		}
+	}
+
+	if len(delivers) == 0 {
+		reqDeliver := *req
+		reqDeliver.WorkflowID = w.workflow.ID
+		if reply != nil {
+			tracking, err := json.Marshal(exeOutput)
+			if err != nil {
+				w.conf.Logger.Error(err)
+			}
+			reqDeliver.Part = w.getPart(reply.Part, from.ID, from.Type)
+			reqDeliver.Parent = reply.Part
+			reqDeliver.Message = string(tracking)
+			go w.deliverInputTaskCmd(from, from, &reqDeliver, reply, exeOutput, bg)
+		}
+	}
+
+	if resultCh != nil && !hasSync {
+		resultCh <- []byte("")
 	}
 }
 
@@ -1129,33 +1296,36 @@ func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTas
 		if reply != nil && reply.Cmd == workflow.ReplyOutputTaskCmd {
 			w.saveTaskRecord(reply)
 		}
-		var traking string
+		var tracking string
 		if exeOutput != nil {
 			eo, _ := json.Marshal(exeOutput)
-			traking = string(eo)
+			tracking = string(eo)
 		}
-		w.logMessageFlowRequest(from, receiver, req, duration.Milliseconds(), traking, bg)
+
+		w.logMessageFlowRequest(from, receiver, req, duration.Milliseconds(), tracking, bg)
 	})
 
-	err := w.deliverAsync(from, receiver, req, func(crt *workflow.CmdReplyTask, err error) {
-		fmt.Printf("[CALLBACK DELIVER InputTaskCmd ] res = %+v err = %+v\n", req, err)
-		if err != nil {
-			w.wrapDeliverErr(from, receiver, req, crt, err)
-			return
-		}
-		crt.Group = req.Group
-		crt.Parent = req.Parent
-		crt.Part = req.Part
-		m, _ := json.Marshal(crt)
+	if !(from.ID == receiver.ID && from.Name == receiver.Name && from.Type == receiver.Type) {
+		err := w.deliverAsync(from, receiver, req, func(crt *workflow.CmdReplyTask, err error) {
+			fmt.Printf("[CALLBACK DELIVER InputTaskCmd ] res = %+v err = %+v\n", req, err)
+			if err != nil {
+				w.wrapDeliverErr(from, receiver, req, crt, err)
+				return
+			}
+			crt.Group = req.Group
+			crt.Parent = req.Parent
+			crt.Part = req.Part
+			m, _ := json.Marshal(crt)
 
-		w.CBQueue.Push(func(duration time.Duration) {
-			w.logMessageFlowReply(receiver, from, m, crt.SendAt, "")
+			w.CBQueue.Push(func(duration time.Duration) {
+				w.logMessageFlowReply(receiver, from, m, crt.SendAt, "")
+			})
 		})
-	})
 
-	if err != nil {
-		var crt workflow.CmdReplyTask
-		w.wrapDeliverErr(from, receiver, req, &crt, err)
+		if err != nil {
+			var crt workflow.CmdReplyTask
+			w.wrapDeliverErr(from, receiver, req, &crt, err)
+		}
 	}
 }
 
@@ -1614,10 +1784,10 @@ func (w *Worker) pushAllCmdTask(cmd workflow.RequestActionTask) error {
 					// 	fmt.Println("[RECIVER CMD REPLY TASK]", crt)
 					// })
 				}
-				w.Sched.AddTask(task)
+				w.Sched.AddTask(w, task, "")
 				w.conf.Logger.Info("START Trigger")
 			}
-			w.Sched.AddTask(task)
+			w.Sched.AddTask(w, task, "")
 			cmdReply := workflow.ReplySetTaskCmd
 			status := workflow.SuccessSetTask
 			if cmd == workflow.TriggerStartTaskCmd {
@@ -1812,6 +1982,8 @@ func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workfl
 	e, _ := json.Marshal(msg)
 	mf.ResponseSize = len(e)
 	mf.BrokerGroup = broker_group
+
+	mf.Tracking = tracking
 	id, err := storage.LogMessageFlow(&mf)
 	if err != nil {
 		w.conf.Logger.Errorf(fmt.Sprint("[SAVE TASK REQUEST FLOW ERR]", err))

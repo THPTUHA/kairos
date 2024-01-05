@@ -15,8 +15,8 @@ import (
 	"github.com/THPTUHA/kairos/server/messaging"
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/THPTUHA/kairos/server/storage/models"
+	"github.com/dop251/goja"
 	"github.com/gin-gonic/gin"
-	"github.com/rs/zerolog/log"
 )
 
 func (ctr *Controller) CreateWorkflow(c *gin.Context) {
@@ -139,20 +139,58 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 		OrderedMap: brokers,
 	}
 	uid, _ := strconv.ParseInt(userID.(string), 10, 64)
-	fs, err := storage.FindFunctionsByUserID(uid)
+	funcs, err := storage.GetAllFunctionsByUserID(uid)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),
 		})
 		return
 	}
-	scriptCode := ""
-	for _, f := range fs {
-		scriptCode += f.Content + "\n"
+
+	vm := goja.New()
+
+	fc := &workflow.FuncCall{
+		Call:  make(map[string]goja.Callable),
+		Funcs: vm,
+	}
+	for _, f := range funcs {
+		prog, err := goja.Compile("", f.Content, true)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err": err.Error(),
+			})
+			return
+		}
+		_, err = fc.Funcs.RunProgram(prog)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"error":    err.Error(),
+				"output":   "",
+				"tracking": "",
+			})
+			return
+		}
+		v := fc.Funcs.Get(f.Name)
+		if v == nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err": fmt.Sprintf("%s not found", f.Name),
+			})
+			return
+		}
+
+		var fr goja.Callable
+		err = fc.Funcs.ExportTo(v, &fr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err": fmt.Sprintf("%s not found", f.Name),
+			})
+		}
+		fc.Call[f.Name] = fr
 	}
 
-	err = workflowFile.Compile(nil)
+	err = workflowFile.Compile(fc.Funcs)
 	if err != nil {
+		ctr.Log.Error(err)
 		c.JSON(http.StatusOK, gin.H{
 			"err": err.Error(),
 		})
@@ -179,7 +217,7 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 
 	wf, err := storage.DetailWorkflow(wid, userID.(string))
 	if err != nil {
-		log.Err(err)
+		ctr.Log.Error(err)
 		return
 	}
 	// wf.Vars.Range(func(key string, value *workflow.Var) error {
@@ -192,7 +230,7 @@ func (ctr *Controller) CreateWorkflow(c *gin.Context) {
 	// 	fmt.Printf("%+v\n", value)
 	// 	return nil
 	// })
-	err = wf.Compile(nil)
+	err = wf.Compile(fc.Funcs)
 	if err != nil {
 		ctr.Log.Error(err)
 		return

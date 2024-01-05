@@ -159,14 +159,13 @@ func (exp *Expression) Execute(globalVar *Vars, outputVars map[string]ReplyData,
 			if e != nil {
 				return nil, e
 			}
-			fmt.Println("OUPUT IF", mp[exp.Params[0]])
 			if mp[exp.Params[0]] != "" && mp[exp.Params[0]] != false && mp[exp.Params[0]] != "false" {
 				return []interface{}{true}, nil
 			} else {
 				return []interface{}{false}, nil
 			}
 		} else if len(exp.Params) == 2 {
-			vm.params = exp.Params[:1]
+			vm.params = exp.Params[1:]
 			mp, e := setValue(&vm)
 			if e != nil {
 				return nil, e

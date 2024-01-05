@@ -27,19 +27,26 @@ type EntryTask struct {
 	task  *workflow.Task
 }
 
+type EntryBroker struct {
+	entry  *cron.Entry
+	broker *workflow.Broker
+}
+
 type Scheduler struct {
-	mu      sync.RWMutex
-	Cron    *cron.Cron
-	started bool
-	logger  *logrus.Entry
+	mu         sync.RWMutex
+	Cron       *cron.Cron
+	BrokerCron *cron.Cron
+	started    bool
+	logger     *logrus.Entry
 }
 
 func NewScheduler(logger *logrus.Entry) *Scheduler {
 	schedulerStarted.Set(0)
 	return &Scheduler{
-		Cron:    cron.New(cron.WithParser(extcron.NewParser())),
-		started: false,
-		logger:  logger,
+		Cron:       cron.New(cron.WithParser(extcron.NewParser())),
+		BrokerCron: cron.New(cron.WithParser(extcron.NewParser())),
+		started:    false,
+		logger:     logger,
 	}
 }
 
@@ -54,7 +61,7 @@ func (s *Scheduler) ClearCron() {
 	}
 }
 
-func (s *Scheduler) AddTask(task *workflow.Task) (cron.EntryID, error) {
+func (s *Scheduler) AddTask(worker *Worker, task *workflow.Task, input string) (cron.EntryID, error) {
 	s.logger.Debug(fmt.Sprintf("schedule task name = %s, id =%d", task.Name, task.ID))
 	if _, ok := s.GetEntryTask(task.ID); ok {
 		s.RemoveTask(task.ID)
@@ -62,7 +69,7 @@ func (s *Scheduler) AddTask(task *workflow.Task) (cron.EntryID, error) {
 
 	schedule := task.Schedule
 	if schedule == "" {
-		task.Execute(nil)
+		worker.RunTask(task, input)
 		return -1, nil
 	}
 	if task.Timezone != "" &&
@@ -83,25 +90,49 @@ func (s *Scheduler) AddTask(task *workflow.Task) (cron.EntryID, error) {
 	return tjid, nil
 }
 
-func (s *Scheduler) Start(tasks []*workflow.Task) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.started {
-		return errors.New("scheduler: cron already started, should be stopped first")
+func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, input string) (cron.EntryID, error) {
+	s.logger.Debug(fmt.Sprintf("schedule broker name = %s, id =%d", broker.Name, broker.ID))
+	if _, ok := s.GetEntryBroker(broker.ID); ok {
+		s.RemoveTask(broker.ID)
 	}
-	s.ClearCron()
 
-	for _, task := range tasks {
-		if _, err := s.AddTask(task); err != nil {
-			return err
-		}
+	schedule := broker.Schedule
+	if schedule == "" {
+		worker.RunBroker(broker, input)
+		return -1, nil
 	}
-	s.Cron.Start()
-	s.started = true
-	schedulerStarted.Set(1)
-	return nil
+
+	s.logger.WithFields(logrus.Fields{
+		"broker":   broker.ID,
+		"schedule": broker.Schedule,
+	}).Debug("scheduler: Adding broker to cron")
+	tjid, err := s.BrokerCron.AddJob(schedule, broker)
+	if err != nil {
+		return -1, err
+	}
+	s.BrokerCron.Start()
+	return tjid, nil
 }
+
+// func (s *Scheduler) Start(tasks []*workflow.Task) error {
+// 	s.mu.Lock()
+// 	defer s.mu.Unlock()
+
+// 	if s.started {
+// 		return errors.New("scheduler: cron already started, should be stopped first")
+// 	}
+// 	s.ClearCron()
+
+// 	for _, task := range tasks {
+// 		if _, err := s.AddTask(task); err != nil {
+// 			return err
+// 		}
+// 	}
+// 	s.Cron.Start()
+// 	s.started = true
+// 	schedulerStarted.Set(1)
+// 	return nil
+// }
 
 func (s *Scheduler) Stop() context.Context {
 	ctx := s.Cron.Stop()
@@ -139,6 +170,22 @@ func (s *Scheduler) GetEntryTask(taskID int64) (EntryTask, bool) {
 	return EntryTask{}, false
 }
 
+func (s *Scheduler) GetEntryBroker(brokerID int64) (EntryBroker, bool) {
+	for _, e := range s.Cron.Entries() {
+		if j, ok := e.Job.(*workflow.Broker); !ok {
+			s.logger.Errorf("scheduler: Failed to cast broker to *Broker found type %T", e.Job)
+		} else {
+			if j.ID == brokerID {
+				return EntryBroker{
+					entry:  &e,
+					broker: j,
+				}, true
+			}
+		}
+	}
+	return EntryBroker{}, false
+}
+
 func (s *Scheduler) RemoveTask(taskID int64) {
 	s.logger.WithFields(logrus.Fields{
 		"task": taskID,
@@ -147,5 +194,16 @@ func (s *Scheduler) RemoveTask(taskID int64) {
 	if ej, ok := s.GetEntryTask(taskID); ok {
 		s.Cron.Remove(ej.entry.ID)
 		cronInspect.Delete(fmt.Sprint(taskID))
+	}
+}
+
+func (s *Scheduler) RemoveBroker(brokerID int64) {
+	s.logger.WithFields(logrus.Fields{
+		"broker": brokerID,
+	}).Info("scheduler: Removing broker from cron")
+
+	if ej, ok := s.GetEntryBroker(brokerID); ok {
+		s.BrokerCron.Remove(ej.entry.ID)
+		cronInspect.Delete(fmt.Sprint(brokerID))
 	}
 }

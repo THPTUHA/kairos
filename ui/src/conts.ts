@@ -14,7 +14,8 @@ const Delivering = 1
 const Running = 2
 const Pause = 3
 const Destroying = 4
-const Recovering = 5
+const Destroyed = 5
+const Recovering = 6
 
 const SetStatusWorkflow = 0
 const LogMessageFlow = 1

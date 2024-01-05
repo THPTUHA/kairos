@@ -190,33 +190,33 @@ const DashBoardPage = () => {
             } catch (error) {
                 msg = wfCmd.message
             }
-
-            const entry = {
+            const record = wfCmd.data
+            const  entry = {
                 id: cnt.current,
-                flow_id: wfCmd.id,
-                status: wfCmd.status,
-                timestamp: wfCmd.send_at,
+                flow_id: record.id,
+                status: record.status,
+                timestamp: record.created_at,
                 src: {
-                    id: wfCmd.sender_id,
-                    name: wfCmd.sender_name,
-                    type: wfCmd.sender_type,
+                    id: record.sender_id,
+                    name: record.sender_name,
+                    type: record.sender_type,
                 },
                 dst: {
-                    id: wfCmd.receiver_id,
-                    name: wfCmd.receiver_name,
-                    type: wfCmd.receiver_type,
+                    id: record.receiver_id,
+                    name: record.receiver_name,
+                    type: record.receiver_type,
                 },
                 outgoing: false,
-                requestSize: wfCmd.request_size ? wfCmd.request_size : -1,
-                responseSize: wfCmd.response_size ? wfCmd.response_size : -1,
-                elapsedTime: 0,
+                requestSize: record.request_size ? record.request_size : -1,
+                responseSize: record.response_size ? record.response_size : -1,
+                elapsedTime: record.elapsed_time,
                 workflow: {
                     name: wfCmd.workflow_name,
-                    id: wfCmd.workflow_id,
+                    id: record.workflow_id,
                 },
-                cmd: wfCmd.cmd,
+                cmd: record.cmd,
                 payload: msg,
-                reply: wfCmd.flow === RecieverFlow
+                reply: record.flow === RecieverFlow
             }
 
             if (entriesRef.current.length >= 50) {

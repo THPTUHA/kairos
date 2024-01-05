@@ -5,7 +5,6 @@ import { services } from "../services";
 import { Checkbox, Drawer, Menu, Radio, RadioChangeEvent, Tabs } from "antd";
 import { CheckboxValueType } from "antd/es/checkbox/Group";
 import { BrokerPoint, ChannelPoint, ClientPoint, ColorGreen, ColorRed, TaskPoint } from "../conts";
-import { Utils } from "../helper/utils";
 import { formatDate } from "../helper/date";
 import { FaChevronDown, FaChevronUp, FaDeleteLeft, FaRegClock } from "react-icons/fa6";
 import ReactJson from "react-json-view";
@@ -17,10 +16,9 @@ import { Task } from "kairos-js";
 import { Channel } from "../models/channel";
 import { Toast } from "../components/Toast";
 import { IoMdAddCircleOutline } from "react-icons/io";
-import Cron from 'react-cron-generator'
 import { GrTrigger } from "react-icons/gr";
 import { Trigger } from "../models/trigger";
-
+import { Cron } from 'react-js-cron'
 interface Edge {
     id: string;
     from: string;
@@ -493,10 +491,9 @@ const GraphPage = () => {
     //     setGraphType(e.target.value)
     // }
 
-
     return (
         <div className="relative">
-            <div className="w-1/3  absolute">
+            <div className="w-1/3  absolute bg-gray-500 rounded px-2 py-2">
                 <div>Workflow</div>
                 {
                     wfs.loading ? <div>Loading</div> : (
@@ -582,47 +579,74 @@ export default GraphPage
 const BrokerDetail = ({ broker, client, wid }: { broker: Broker, client: string, wid: number }) => {
     return (
         <div>
-            <div className="font-bold text-2xl">{broker.name}</div>
+            <div className="font-bold text-2xl">{broker.name}(broker)</div>
             <TriggerFrom object={broker} type="broker" client={client} wid={wid} />
-            {
-                broker.flows ?
-                    <div>
-                        <div className="flex items-center">
-                            <div className="font-bold ">Flows</div>
-                            <TiFlowSwitch className="ml-2" />
+            <div className="my-2 border-blue-500 border-dashed border-2 w-11/12 px-2 py-2">
+                {
+                    broker.flows ?
+                        <div>
+                            <div className="flex items-center">
+                                <div className="font-bold ">Flows</div>
+                                <TiFlowSwitch className="ml-2" />
+                            </div>
+                            {parseBrokerFlows(broker.flows).map((exp: any, idx: any) => (
+                                <span key={idx}>
+                                    {
+                                        exp.map((e: any, edx: any) => (
+                                            <span key={edx} className={`${e.className} whitespace-pre`}>{e.value}</span>
+                                        ))
+                                    }
+                                </span>
+                            ))}
                         </div>
-                        {parseBrokerFlows(broker.flows).map((exp: any, idx: any) => (
-                            <span key={idx}>
-                                {
-                                    exp.map((e: any, edx: any) => (
-                                        <span key={edx} className={`${e.className} whitespace-pre`}>{e.value}</span>
-                                    ))
-                                }
-                            </span>
-                        ))}
-                    </div>
-                    : <div></div>
-            }
+                        : <div></div>
+                }
+            </div>
         </div>
     )
 }
 
+function getDefaultSchedule(object: any, type: string) {
+    console.log({object})
+    if (type == "channel" || type == "broker") {
+        return "Input"
+    }
+
+    if (object.schedule) {
+        return object.schedule
+    }
+
+    if (object.wait) {
+        return object.wait
+    }
+
+    return "Immediately"
+}
+
 const TaskDetail = ({ task, client, wid }: { task: Task, client: string, wid: number }) => {
+    
+
 
     return (
         <div>
-            <div className="font-bold text-2xl">{task.name}</div>
+            <div className="font-bold text-2xl">{task.name}(task)</div>
             <TriggerFrom object={task} type="task" client={client} wid={wid} />
-            <div className="flex items-center my-2">
-                <div className="font-bold mr-2">Executor</div>
-                <div>{task.executor}</div>
-            </div>
-            <div className="">
-                <div className="flex">
-                    <div className="font-bold">Payload</div>
+            <div className="border-2 border-blue-500 px-2 w-11/12 my-4 py-2">
+                <div className="my-2 flex ">
+                    <div className="font-bold mr-2">Schedule</div>
+                    {getDefaultSchedule(task, "task")}
+                </div>
+                <div className="flex items-center my-2">
+                    <div className="font-bold mr-2">Executor</div>
+                    <div>{task.executor}</div>
                 </div>
                 <div className="">
-                    <ReactJson src={task && task.payload ? JSON.parse(task.payload) : {}} name={false} />
+                    <div className="flex">
+                        <div className="font-bold">Payload</div>
+                    </div>
+                    <div className="">
+                        <ReactJson src={task && task.payload ? JSON.parse(task.payload) : {}} name={false} />
+                    </div>
                 </div>
             </div>
         </div>
@@ -669,17 +693,17 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
 
     const saveTrigger = async () => {
         let value = ""
-        if(type == "broker"){
-            let v :any= {}
-            for(const i of input){
-               v[i.name] = i.value 
+        if (type == "broker") {
+            let v: any = {}
+            for (const i of input) {
+                v[i.name] = i.value
             }
             value = JSON.stringify(v)
-        }else if(type == "task" || type == "channel"){
+        } else if (type == "task" || type == "channel") {
             let o = input[0]
-            if(o){
+            if (o) {
                 value = JSON.stringify(o.value)
-            }else{
+            } else {
                 o = {}
             }
         }
@@ -714,90 +738,126 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
 
     return (
         <div>
-            <div className="flex items-center ">
-                <div>Trigger</div>
-                <div className="cursor-pointer" onClick={saveTrigger}>
-                    <GrTrigger />
+            <div className="flex-col items-center border-2 border-blue-500 border-dashed w-11/12 px-2 py-2">
+                <div className="flex items-center ">
+                    <div className="font-bold text-lg">Trigger</div>
+                    <div className="cursor-pointer mx-2 hover:bg-yellow-500 w-10 h-8 bg-blue-500 flex items-center justify-center rounded-lg"
+                        onClick={saveTrigger}>
+                        <GrTrigger />
+                    </div>
+                </div>
+                <div className="flex items-center my-2">
+                    <div className="font-bold mr-2">Schedule</div>
+                    <div>{schedule}</div>
+                    <button className="mx-2" onClick={() => setOpenSchedule(true)}><IoMdAddCircleOutline /></button>
+                </div>
+
+                <div className="items-center my-2 border-green-500 border-dashed mx-2 border-2 px-2 py-2">
+                    <div className="flex ">
+                        <div className="font-bold mr-2">Input</div>
+                        {
+                            type == "broker" && <button className="mx-2" onClick={() => setOpenInput(true)}><IoMdAddCircleOutline /></button>
+                        }
+                    </div>
+                    {
+                        input.map((item: any, idx: number) => (
+                            <div key={item.name} className="flex items-center">
+                                <div>{item.name}</div>
+                                <ReactJson
+                                    src={item.value}
+                                    name={false}
+                                    enableClipboard={false}
+                                    onAdd={(e) => {
+                                        setInput((input: any) => {
+                                            if (e.updated_src) {
+                                                const newInput = [...input]
+                                                newInput[idx].value = e.updated_src
+                                                return newInput
+                                            }
+                                            return input
+                                        })
+                                    }}
+                                    onDelete={(e) => {
+                                        setInput((input: any) => {
+                                            if (e.updated_src) {
+                                                const newInput = [...input]
+                                                newInput[idx].value = e.updated_src
+                                                console.log("NEW INPU==", newInput)
+                                                return newInput
+                                            }
+                                            return input
+                                        })
+                                    }}
+                                    onEdit={(e) => {
+                                        console.log(e)
+                                        setInput((input: any) => {
+                                            if (e.updated_src) {
+                                                const newInput = [...input]
+                                                newInput[idx].value = e.updated_src
+                                                console.log("NEW INPU==", newInput)
+                                                return newInput
+                                            }
+                                            return input
+                                        })
+                                    }}
+                                />
+                                {
+                                    type == "broker" && (
+                                        <FaDeleteLeft onClick={() => {
+                                            const newI = input.filter((i: any) => i.name !== item.name)
+                                            setInput([...newI])
+                                        }}
+                                            className="cursor-pointer"
+                                        />
+                                    )
+                                }
+
+                            </div>
+                        ))
+                    }
+                </div>
+                <div className="items-center my-2 border-green-500 border-dashed mx-2 border-2 px-2 py-2">
+                    <div className="flex ">
+                        <div className="font-bold mr-2">List trigger</div>
+                        <div>
+                            {
+                                type == "broker" && <button className="mx-2" onClick={() => setOpenInput(true)}><IoMdAddCircleOutline /></button>
+                            }
+                        </div>
+                    </div>
+                    {
+                        triggers.value && triggers.value.map(tri => (
+                            <div key={tri.id}
+                                className="flex cursor-pointer items-center ">
+                                <div
+                                    className="mr-2 w-24"
+                                    onClick={() => { setOpenTrigger(tri) }}>
+                                    {tri.schedule ? tri.schedule : "Immediately"}
+                                </div>
+                                <div className="text-sm">
+                                    {
+                                        tri.status == 0 ? <div>(Delivering)</div>
+                                            : tri.status == 1 ? <div>(Schedule)</div>
+                                                : tri.status == 2 ? <div>(Finish)</div>
+                                                    : <div>(Running)</div>
+                                    }
+                                </div>
+                                <div className="ml-2">
+                                    {
+                                        tri.status != 2 && (
+                                            <FaDeleteLeft onClick={() => { deleteTrigger(tri.id) }}
+                                                className="cursor-pointer"
+                                            />
+                                        )
+                                    }
+                                </div>
+                            </div>
+                        ))
+                    }
                 </div>
             </div>
-            <div>
-                Default: {(type=="channel" || type == "broker")? "On Input" : "" }
-            </div>
-            <div className="flex items-center my-2">
-                <div className="mr-2">Schedule</div>
-                <div>{schedule}</div>
-                <button className="mx-2" onClick={() => setOpenSchedule(true)}><IoMdAddCircleOutline /></button>
-            </div>
-            <div className="flex items-center my-2">
-                <div>Input</div>
-                {
-                    type == "broker" && <button className="mx-2" onClick={() => setOpenInput(true)}><IoMdAddCircleOutline /></button>
-                }
-            </div>
-            {
-                triggers.value && triggers.value.map(tri => (
-                    <div key={tri.id}
-                        className="flex cursor-pointer w-32">
-                        <div onClick={() => { setOpenTrigger(tri) }}>
-                            {tri.schedule ? tri.schedule : "Immediately"}
-                        </div>
-                        <FaDeleteLeft onClick={()=>{deleteTrigger(tri.id)}}
-                            className="cursor-pointer"
-                        />
-                    </div>
-                ))
-            }
-            {
-                input.map((item: any, idx: number) => (
-                    <div key={item.name} className="flex items-center">
-                        <div>{item.name}</div>
-                        <ReactJson
-                            src={item.value}
-                            name={false}
-                            enableClipboard={false}
-                            onAdd={(e) => {
-                                setInput((input: any) => {
-                                    if (e.updated_src) {
-                                        const newInput = [...input]
-                                        newInput[idx].value = e.updated_src
-                                        return newInput
-                                    }
-                                    return input
-                                })
-                            }}
-                            onDelete={(e) => {
-                                setInput((input: any) => {
-                                    if (e.updated_src) {
-                                        const newInput = [...input]
-                                        newInput[idx].value = e.updated_src
-                                        console.log("NEW INPU==", newInput)
-                                        return newInput
-                                    }
-                                    return input
-                                })
-                            }}
-                            onEdit={(e) => {
-                                console.log(e)
-                                setInput((input: any) => {
-                                    if (e.updated_src) {
-                                        const newInput = [...input]
-                                        newInput[idx].value = e.updated_src
-                                        console.log("NEW INPU==", newInput)
-                                        return newInput
-                                    }
-                                    return input
-                                })
-                            }}
-                        />
-                        <FaDeleteLeft onClick={() => {
-                            const newI = input.filter((i: any) => i.name !== item.name)
-                            setInput([...newI])
-                        }}
-                            className="cursor-pointer"
-                        />
-                    </div>
-                ))
-            }
+
+
             <Modal
                 open={openInput}
                 onClose={() => { setOpenInput(false); setInName("") }}
@@ -839,7 +899,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                                     }
                                 }
                                 const root = `${inName}${type == "broker" ? (inputType == 1 ? '_task' : '_channel') : ""}`
-                                return [...input, { name: root, value }]
+                                return [...input, { name: root, value }].filter(e=> e.name)
 
                             })
                             setOpenInput(false); setInName("")
@@ -854,21 +914,21 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                 onClose={() => { setOpenSchedule(false) }}
                 center
             >
-                <div className="flex items-center mx-2 my-2" onClick={() => { setOpenSchedule(false) }}>
+                <div className="flex items-center mx-2 my-2" >
                     <button className="cursor-pointer bg-blue-500 text-white flex items-center px-2 rounded py-2">
-                        <FaRegClock className="mr-2" />  Schedule
+                        <FaRegClock className="mr-2" onClick={() => { setOpenSchedule(false) }}/>  Schedule
                     </button>
-                    <div className="ml-2">{schedule}</div>
+                    <div className="ml-2">
+                        {schedule}
+                    </div>
                 </div>
-                <div className="min-w-[600px]">
+                <div className="min-w-[600px] h-32">
                     <Cron
-                        onChange={(e) => { setSchedule(e) }}
+                        setValue={setSchedule}
                         value={schedule}
-                        showResultText={true}
-                        showResultCron={true}
-
                     />
                 </div>
+               
             </Modal>
 
             <Modal
@@ -885,10 +945,10 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                                     openTrigger.input.map((item: any) => (
                                         <div key={item.name}>
                                             <div>{item.name}</div>
-                                            <ReactJson src={item.value} />
+                                            <ReactJson src={item.value} enableClipboard={false} />
                                         </div>
                                     ))
-                                ) : <ReactJson src={openTrigger.input ? openTrigger.input : {}} />
+                                ) : <ReactJson src={openTrigger.input ? openTrigger.input : {}} enableClipboard={false} />
                             }
                         </>
                     )

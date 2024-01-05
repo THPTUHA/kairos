@@ -35,6 +35,22 @@ export function getColorPoint(point: Point){
       return TaskPointColor
   }
 }
+
+export function getPointName(point: Point){
+  switch(point.type){
+    case KairosPoint:
+      return "server"
+    case ClientPoint:
+      return "client"
+    case BrokerPoint:
+      return "broker"
+    case ChannelPoint:
+      return "channel"
+    case TaskPoint:
+      return "task"
+  }
+}
+
 export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, namespace }) => {
   const [focusedItem, setFocusedItem] = useRecoilState(focusedItemAtom);
   const isSelected = focusedItem === entry.id;
@@ -145,10 +161,11 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
           iconStyle={{ marginRight: "16px" }}
         >
           <span
-            className={`${styles.tcpInfo} ${styles.ip} ${getColorPoint(entry.src)}`}
+            className={`${styles.tcpInfo} ${styles.ip} ${getColorPoint(entry.src)} flex-col`}
             title="Source name"
           >
             {entry.src.name}
+            {`(${getPointName(entry.src)})`}
           </span>
         </Queryable>
         <div className="flex items-center ml-2 mr-2">
@@ -176,7 +193,7 @@ export const EntryItem: React.FC<EntryProps> = ({ entry, style, headingMode, nam
             className={`${styles.tcpInfo} ${styles.ip} ${getColorPoint(entry.dst)}`}
             title="Destination Name"
           >
-            {entry.dst.name}
+            {entry.dst.name}{`(${getPointName(entry.dst)})`}
           </span>
         </Queryable>
       </div>

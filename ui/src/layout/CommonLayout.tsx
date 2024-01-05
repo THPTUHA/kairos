@@ -1,4 +1,4 @@
-import { Layout, Menu } from "antd"
+import { Image, Layout, Menu } from "antd"
 import Sider from "antd/es/layout/Sider"
 import React, { useEffect, useState } from "react"
 import { Link, useLocation } from "react-router-dom";
@@ -138,7 +138,8 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                                 </Menu>
                             </Sider>
                             <Layout>
-                                <Header >
+                                <Header className="flex items-center" >
+                                    <Image src={userInfo?.avatar} width={50} height={50} className="rounded"/>
                                     <div>{userInfo?.username}</div>
                                 </Header>
                                 {children}

@@ -70,3 +70,10 @@ g.waring ellipse,
 g.waring circle {
   animation: pulse2 1s infinite; 
 }
+
+
+g.nodeliver rect,
+g.nodeliver ellipse,
+g.nodeliver circle {
+  fill: rgb(247, 231, 11);
+}

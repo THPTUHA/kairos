@@ -62,12 +62,16 @@ export const EntriesList: React.FC<EntriesListProps> = ({
                         }
                         return o
                     })
-                }}>{"<< Pre"}</div>
+                }}
+                className="cursor-pointer"
+                >{"<< Pre"}</div>
                 <div onClick={() => {
                     if (entries.length > 0) {
                         setOffset((o: any) => o + 1)
                     }
-                }}>{"Next >>"}</div>
+                }}
+                className="cursor-pointer"
+                >{"Next >>"}</div>
 
             </div>
             <div className="mx-2"></div>

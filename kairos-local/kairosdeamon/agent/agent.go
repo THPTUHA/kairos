@@ -499,7 +499,6 @@ func (a *Agent) Trigger(tr *workflow.Trigger) error {
 				a.logger.Error(err)
 			}
 		}
-
 	}
 
 	return nil
@@ -1003,7 +1002,9 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		exc[k] = v
 	}
 	var input string
-	if re != nil && exc != nil {
+	if task.Input != "" {
+		input = task.Input
+	} else if re != nil && exc != nil {
 		if task.Schedule != "" {
 			s, err := json.Marshal(re)
 			if err != nil {
@@ -1119,6 +1120,7 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 						t.Parent = execution.Part
 						t.TaskName = task.Name
 						t.TaskInput = string(inputTask)
+						t.StartInput = task.Input
 					}
 				}
 				time.Sleep(time.Second)
