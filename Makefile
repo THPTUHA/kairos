@@ -85,7 +85,7 @@ image:
 	docker push nexta2020/kairos
 
 seed:
-	psql -h 61.28.230.61 -U kairos -d kairos -f diagram.sql
+	psql -h 103.173.254.32 -U kairos -d kairos -f diagram.sql
 
 linux:
 	cd server/plugin/kairos-executor-dockerlite && GOOS=linux GOARCH=amd64 go build  -o  ${ROOT_DIR}/release/linux

@@ -148,3 +148,6 @@ kubectl delete configmap runner-config -n kairos
 sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
 sudo firewall-cmd --reload
 sudo setenforce 0
+
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder

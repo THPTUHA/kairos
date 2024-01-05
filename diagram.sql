@@ -11,4 +11,6 @@
 --   (4,'client2', 1, 1702577960 , 1702577960);
 -- select * from users;
 
-select * from certificates
+-- select * from certificates
+
+delete from workflows;
