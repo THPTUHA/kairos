@@ -113,7 +113,9 @@ func (pe *ProcessEndpoint) process_txtout() {
 			pe.output <- &Output{
 				data: trimEOL(buf),
 			}
-			defer close(pe.output)
+			pe.output <- &Output{
+				data: []byte{},
+			}
 			return
 		}
 		pe.output <- &Output{
@@ -148,7 +150,6 @@ func (pe *ProcessEndpoint) log_stderr() {
 	bufstderr := bufio.NewReader(pe.process.stderr)
 	for {
 		buf, err := bufstderr.ReadSlice('\n')
-		defer close(pe.err)
 		if err != nil {
 			if err != io.EOF {
 				fmt.Printf("process: Unexpected error while reading STDERR from process: %s", err)
@@ -159,6 +160,9 @@ func (pe *ProcessEndpoint) log_stderr() {
 		}
 		pe.err <- &Error{
 			data: buf,
+		}
+		pe.err <- &Error{
+			data: []byte{},
 		}
 		// fmt.Printf("stderr: %s", string(trimEOL(buf)))
 	}
