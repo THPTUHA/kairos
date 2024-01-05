@@ -9,7 +9,7 @@ tasks:
     payload: |
       {
         "command": "/bin/sh",
-        "commandArgs": "[\"-c\", \"cd /root/Code/demo/shopok && git pull  \"]"
+        "commandArgs": "[\"-c\", \"cd /root/Code/demo && git pull  \"]"
       }
   build_image:
     wait: input
@@ -19,7 +19,7 @@ tasks:
       {
         "action": "build",
         "imageName": "nexta2020/shopok",
-        "contextDir": "/root/Code/demo/shopok"
+        "contextDir": "/root/Code/demo"
       }
   push_image:
     executor: dockerlite

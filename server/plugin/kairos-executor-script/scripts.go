@@ -16,7 +16,6 @@ func (s *Script) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*p
 	out, err := s.ExecuteImpl(args, cb)
 	resp := &proto.ExecuteResponse{
 		Output: out,
-		Error:  err.Error(),
 	}
 	if err != nil {
 		resp.Error = err.Error()
