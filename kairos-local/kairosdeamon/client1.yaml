@@ -1,18 +1,18 @@
-serverPort: 3111
-httpEndpoint: "http://localhost:8001"
-serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
-pubSubEnpoint: "ws://localhost:8003/pubsub"
-logLevel: "debug"
-nodeName: "kairosdeamon"
-agentHTTPAddrPort: 8080
-agentDefaultPort: 6868
-agentDataDir: "kairos.boltdb"
-
 # serverPort: 3111
-# httpEndpoint: "http://nghia.nexta.vn"
-# serverPubSubEnpoint: "ws://nghia.nexta.vn/server/pubsub"
-# pubSubEnpoint: "ws://nghia.nexta.vn/pubsub"
+# httpEndpoint: "http://localhost:8001"
+# serverPubSubEnpoint: "ws://localhost:8002/server/pubsub"
+# pubSubEnpoint: "ws://localhost:8003/pubsub"
+# logLevel: "debug"
 # nodeName: "kairosdeamon"
 # agentHTTPAddrPort: 8080
 # agentDefaultPort: 6868
 # agentDataDir: "kairos.boltdb"
+
+serverPort: 3111
+httpEndpoint: "http://nghia.nexta.vn"
+serverPubSubEnpoint: "ws://nghia.nexta.vn/server/pubsub"
+pubSubEnpoint: "ws://nghia.nexta.vn/pubsub"
+nodeName: "kairosdeamon"
+agentHTTPAddrPort: 8080
+agentDefaultPort: 6868
+agentDataDir: "kairosdemo.boltdb"

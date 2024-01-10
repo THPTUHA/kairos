@@ -725,7 +725,12 @@ const TriggerForm = ({ object, type, client, wid }: { object: any, type: string,
                     t.input = JSON.parse(t.input)
                 }
             }
-            setTriggers(ts)
+            setTriggers(ts.map(t=>{
+                return {
+                    ...t,
+                    schedule: t.schedule? t.schedule.split(" ").splice(0).join(" ") : ""
+                }
+            }))
             return ts
         }
         return []
@@ -752,7 +757,7 @@ const TriggerForm = ({ object, type, client, wid }: { object: any, type: string,
         const trigger: Trigger = {
             id: 0,
             trigger_at: 0,
-            schedule: "* " +schedule.trim(),
+            schedule: schedule.trim()? "* "+schedule.trim(): "",
             input: value,
             object_id: object.id,
             type: type,

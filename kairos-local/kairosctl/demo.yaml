@@ -21,7 +21,7 @@ tasks:
         "imageName": "nexta2020/graduation",
         "contextDir": "/root/Code/demo"
       }
-  push_image:
+  push_image: 
     executor: dockerlite
     clients: [client1]
     wait: input
@@ -45,7 +45,9 @@ tasks:
     wait: input
     clients: [client2]
     payload: |
-      {}
+      {
+        "receivers": ["minhnghiabadao1002@gmail.com"]
+      }
 
 brokers:
   prepare_process:
@@ -56,7 +58,7 @@ brokers:
         {{get .pull_code_task ("result") | .result 
         | get ("success") | .success}}
           {{if .success}}
-             {{send _ping .build_image_task}}
+             {{send _ping build_image_task}}
           {{end}}
         {{end}}
       {{end}}
@@ -65,7 +67,7 @@ brokers:
         {{get .build_image_task ("result") | .result 
         | get ("success") | .success}}
           {{if .success}}
-             {{send _ping .push_image_task}}
+             {{send _ping push_image_task}}
           {{end}}
         {{end}}
       {{end}}
