@@ -49,6 +49,14 @@ const (
 	Wait     = "wait"
 )
 
+const (
+	KairosPoint = iota
+	ClientPoint
+	ChannelPoint
+	BrokerPoint
+	TaskPoint
+)
+
 type Agent struct {
 	ExecutorPlugins  Plugins
 	HTTPTransport    Transport
@@ -114,19 +122,20 @@ func (a *Agent) getBrokerGroup(wid int64) string {
 	return fmt.Sprintf("deamonbroker-%d-%d-%s", wid, id, a.ClientID)
 }
 
-func (a *Agent) getPart(wid int64, replyPart string) string {
+func (a *Agent) getPart(replyPart string, wid int64, rvID int64, rvType int) string {
 	a.fm.RLock()
 	defer a.fm.RUnlock()
 	if replyPart == "" {
 		id := a.nextCnt()
-		p := fmt.Sprintf("deamonpart-%d-%d-%s", wid, id, a.ClientID)
+		p := fmt.Sprintf("daemonpart-%d-%d", wid, id)
 		return p
 	}
-	reqPart, ok := a.flowMap[replyPart]
+	my := fmt.Sprintf("%s@%d-%d", replyPart, rvID, rvType)
+	reqPart, ok := a.flowMap[my]
 	if !ok {
 		id := a.nextCnt()
-		p := fmt.Sprintf("deamonpart-%d-%d-%s", wid, id, a.ClientID)
-		a.flowMap[replyPart] = p
+		p := fmt.Sprintf("part-%d-%d", wid, id)
+		a.flowMap[my] = p
 		return p
 	}
 	return reqPart
@@ -443,7 +452,7 @@ func (a *Agent) Trigger(tr *workflow.Trigger) error {
 			broker.Log = a.logger
 			broker.Output = make(chan *workflow.ExecOutput)
 			broker.Input = tr.Input
-			broker.TriggerID = tr.ID
+			broker.Trigger = tr
 			broker.Schedule = tr.Schedule
 			if broker == nil {
 				return fmt.Errorf("Not found broker id = %d", tr.ObjectID)
@@ -475,25 +484,26 @@ func (a *Agent) Trigger(tr *workflow.Trigger) error {
 				a.logger.Error(err)
 				return err
 			}
+			task.Trigger = tr
 			task.Result = make(chan *workflow.CmdReplyTask)
 			task.Input = tr.Input
 			task.Schedule = tr.Schedule
 			task.Agent = a
-			wait := make(chan bool)
-			go func(wait chan bool) {
-				select {
-				case out := <-task.Result:
-					a.logger.Warnf("OUTPUT TASK= %+v", out)
-					a.Broadcast(out)
-				case <-wait:
+			// wait := make(chan bool)
+			// go func(wait chan bool) {
+			// 	select {
+			// 	case out := <-task.Result:
+			// 		a.logger.Warnf("OUTPUT TASK= %+v", out)
+			// 		a.Broadcast(out)
+			// 	case <-wait:
 
-				}
-			}(wait)
+			// 	}
+			// }(wait)
 
 			if err := a.sched.AddTask(task); err != nil {
 				return err
 			}
-			close(wait)
+			// close(wait)
 			err = a.Store.DeleteTrigger(fmt.Sprint(tr.ID))
 			if err != nil {
 				a.logger.Error(err)
@@ -573,7 +583,7 @@ func (a *Agent) handleSubMessage(sub *broker.Subscriber, b *workflow.Broker) {
 		fmt.Printf("BrokerMessage bid=%d wid=%d value = %+v \n", b.ID, b.WorkflowID, v)
 		replies := make(map[string]workflow.ReplyData)
 		if reply, ok := v.(*workflow.CmdReplyTask); ok {
-			fmt.Printf("BROKER handle brokerid = %d \n", b.ID)
+			a.logger.Infof("BROKER handle brokerid = %d name= %s, value=%+v\n", b.ID, b.Name, reply)
 			// task tự kích hoạt sau đó gọi broker, broker cần ngăn kích hoạt lại, ngăn thay đổi giá trị không cần thiết
 			replyNew := DeepCopy(reply)
 			replyNew.Start = false
@@ -589,7 +599,7 @@ func (a *Agent) handleSubMessage(sub *broker.Subscriber, b *workflow.Broker) {
 			replyNew.WorkflowID = b.WorkflowID
 			replyNew.BrokerName = b.Name
 			replyNew.Parent = replyNew.Part
-			replyNew.Part = a.getPart(b.WorkflowID, replyNew.Part)
+			replyNew.Part = a.getPart(replyNew.Part, b.WorkflowID, b.ID, BrokerPoint)
 
 			tr := b.Template.NewRutime(replies)
 			exo := tr.Execute()
@@ -624,12 +634,11 @@ func (a *Agent) handleSubMessage(sub *broker.Subscriber, b *workflow.Broker) {
 
 func (a *Agent) handleBrokerDeliver(b *workflow.Broker, exo *workflow.ExecOutput, replyNew *workflow.CmdReplyTask) {
 	bg := a.getBrokerGroup(b.WorkflowID)
-	var group, part, parent string
+	var group, part string
 
 	if replyNew != nil {
 		group = replyNew.Group
-		part = a.getPart(b.WorkflowID, replyNew.Part)
-		parent = replyNew.Part
+		part = replyNew.Part
 		go a.hub.PublishLog(&workflow.LogDaemon{
 			Cmd:         workflow.ReplyLogWfCmd,
 			Reply:       replyNew,
@@ -638,7 +647,7 @@ func (a *Agent) handleBrokerDeliver(b *workflow.Broker, exo *workflow.ExecOutput
 		})
 	} else {
 		group = a.getGroup(b.WorkflowID)
-		part = a.getPart(b.WorkflowID, "")
+		part = a.getPart("", b.WorkflowID, b.ID, BrokerPoint)
 		go a.hub.PublishLog(&workflow.LogDaemon{
 			Cmd: workflow.ReplyLogWfCmd,
 			Reply: &workflow.CmdReplyTask{
@@ -650,6 +659,7 @@ func (a *Agent) handleBrokerDeliver(b *workflow.Broker, exo *workflow.ExecOutput
 				BrokerName: b.Name,
 				Group:      group,
 				Part:       part,
+				Trigger:    b.Trigger,
 			},
 			WorkflowID:  b.WorkflowID,
 			BrokerGroup: bg,
@@ -693,8 +703,9 @@ func (a *Agent) handleBrokerDeliver(b *workflow.Broker, exo *workflow.ExecOutput
 		re.WorkflowID = b.WorkflowID
 		re.Cmd = workflow.InputTaskCmd
 		re.Group = group
-		re.Part = part
-		re.Parent = parent
+		uid, _ := strconv.ParseInt(t.ID, 10, 64)
+		re.Part = a.getPart(part, b.WorkflowID, uid, TaskPoint)
+		re.Parent = part
 		re.From = a.hub.RunOn()
 
 		go a.hub.PublishLog(&workflow.LogDaemon{
@@ -999,8 +1010,17 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 	exc := make(map[string]string)
 
 	for k, v := range task.ExecutorConfig {
-		exc[k] = v
+		if str, ok := v.(string); ok {
+			exc[k] = str
+		} else {
+			str, err := json.Marshal(v)
+			if err != nil {
+				return err
+			}
+			exc[k] = string(str)
+		}
 	}
+
 	var input string
 	if task.Input != "" {
 		input = task.Input
@@ -1038,8 +1058,8 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 			return err
 		}
 		for k, v := range mp {
-			if v, ok := v.(string); ok {
-				exc[k] = v
+			if str, ok := v.(string); ok {
+				exc[k] = str
 			} else {
 				str, err := json.Marshal(v)
 				if err != nil {
@@ -1059,8 +1079,6 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		agent.logger.Error(err)
 		return err
 	}
-
-	exc["debug"] = ""
 
 	if jex == "" {
 		return errors.New("agent: No executor defined, nothing to do")
@@ -1086,9 +1104,11 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 				t := task.ToCmdReplyTask()
 				if execution.Offset == 0 {
 					t.BeginPart = true
-					execution.Part = agent.getPart(t.WorkflowID, "")
+					t.Trigger = task.Trigger
+					execution.Part = agent.getPart("", t.WorkflowID, t.TaskID, TaskPoint)
 					if re != nil {
-						execution.Parent = re.Part
+						execution.Parent = re.Parent
+						execution.Part = re.Part
 					}
 				}
 				if execution.Status == PendingTask || execution.Status == RunningTask {
@@ -1123,7 +1143,7 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 						t.StartInput = task.Input
 					}
 				}
-				time.Sleep(time.Second)
+				time.Sleep(time.Millisecond * 500)
 				go agent.Broadcast(t)
 
 				fmt.Printf("[ OUTPUT TASK ] %+v  RESULT = %+v\n", t, t.Result)
@@ -1141,7 +1161,6 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 			err = errors.New(out.Error)
 		}
 		execution.FinishedAt = time.Now()
-		fmt.Println("FINISH TASK----", out)
 		if err != nil {
 			agent.logger.WithError(err).WithField("task", task.Name).WithField("plugin", executor).Error("agent: command error output")
 			execution.Status = FaultTask
@@ -1162,7 +1181,8 @@ func (agent *Agent) Run(task *Task, execution *Execution, re *workflow.CmdTask) 
 		execution.Status = FaultTask
 		execution.Output = err.Error()
 		execution.FinishedAt = time.Now()
-		execution.Part = agent.getPart(task.WorkflowID, "")
+		tid, _ := strconv.ParseInt(task.ID, 10, 64)
+		execution.Part = agent.getPart("", task.WorkflowID, tid, TaskPoint)
 		if re != nil {
 			execution.Parent = re.Part
 		}
@@ -1240,7 +1260,7 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 	}).Info("agent: Starting task")
 
 	jex := task.Executor
-	exc := task.ExecutorConfig
+	exc := make(map[string]string)
 
 	if re != nil {
 		exc["input"] = re.Task.Input
@@ -1252,8 +1272,6 @@ func (agent *Agent) RunSync(task *Task, execution *Execution, re *workflow.CmdTa
 	execution.NodeName = agent.config.NodeName
 	execution.Id = execution.Key()
 	agent.SetExecution(execution)
-
-	exc["debug"] = ""
 
 	if jex == "" {
 		return nil, errors.New("agent: No executor defined, nothing to do")

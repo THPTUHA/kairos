@@ -24,7 +24,7 @@ const MenuItems = [
     { path: "/channels", title: "channels", icon: <RiWechatChannelsLine /> },
     { path: "/functions", title: "fuction", icon: <PiFunctionBold /> },
     { path: "/certificates", title: "certificates", icon: <GrCertificate /> },
-    { path: "/dashboard", title: "dashboard", icon: <TbLayoutDashboard /> },
+    { path: "/dashboard/logs", title: "dashboard", icon: <TbLayoutDashboard /> },
     { path: "/graphs", title: "graph", icon: <FcWorkflow /> },
 ]
 function CommonLayout({ children }: { children: React.ReactElement }) {
@@ -109,7 +109,12 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
     useEffect(()=>{
         if( route.pathname){
             console.log("Change",route.pathname)
-            setPathSelect( route.pathname.split("?")[0])
+            if(route.pathname.includes("/dashboard")){
+                setPathSelect("/dashboard/logs")
+            }else{
+                setPathSelect( route.pathname.split("?")[0])
+            }
+           
         }
     },[route])
 

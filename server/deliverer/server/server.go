@@ -230,7 +230,9 @@ func (d *DelivererServer) createNode() error {
 	})
 
 	node.OnConnect(func(client *deliverer.Client) {
+
 		log.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
+		// d.sub.Con.Publish(messaging.USER_RESOURCE, )
 		// msgs := d.GetCacheKey(client.UserID())
 		// go func() {
 		// 	for _, ms := range msgs {

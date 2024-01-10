@@ -32,21 +32,27 @@ type EntryBroker struct {
 	broker *workflow.Broker
 }
 
+type EntryChannl struct {
+	entry   *cron.Entry
+	channel *workflow.Channel
+}
 type Scheduler struct {
-	mu         sync.RWMutex
-	Cron       *cron.Cron
-	BrokerCron *cron.Cron
-	started    bool
-	logger     *logrus.Entry
+	mu          sync.RWMutex
+	Cron        *cron.Cron
+	BrokerCron  *cron.Cron
+	ChannelCron *cron.Cron
+	started     bool
+	logger      *logrus.Entry
 }
 
 func NewScheduler(logger *logrus.Entry) *Scheduler {
 	schedulerStarted.Set(0)
 	return &Scheduler{
-		Cron:       cron.New(cron.WithParser(extcron.NewParser())),
-		BrokerCron: cron.New(cron.WithParser(extcron.NewParser())),
-		started:    false,
-		logger:     logger,
+		Cron:        cron.New(cron.WithParser(extcron.NewParser())),
+		BrokerCron:  cron.New(cron.WithParser(extcron.NewParser())),
+		ChannelCron: cron.New(cron.WithParser(extcron.NewParser())),
+		started:     false,
+		logger:      logger,
 	}
 }
 
@@ -90,7 +96,7 @@ func (s *Scheduler) AddTask(worker *Worker, task *workflow.Task, input string) (
 	return tjid, nil
 }
 
-func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, input string) (cron.EntryID, error) {
+func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, trigger *workflow.Trigger) (cron.EntryID, error) {
 	s.logger.Debug(fmt.Sprintf("schedule broker name = %s, id =%d", broker.Name, broker.ID))
 	if _, ok := s.GetEntryBroker(broker.ID); ok {
 		s.RemoveTask(broker.ID)
@@ -98,7 +104,7 @@ func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, input str
 
 	schedule := broker.Schedule
 	if schedule == "" {
-		worker.RunBroker(broker, input)
+		worker.RunBroker(broker, trigger.Input, trigger.ID)
 		return -1, nil
 	}
 
@@ -112,6 +118,46 @@ func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, input str
 	}
 	s.BrokerCron.Start()
 	return tjid, nil
+}
+
+func (s *Scheduler) AddChannel(worker *Worker, channel *workflow.Channel, trigger *workflow.Trigger) (cron.EntryID, error) {
+	s.logger.Debug(fmt.Sprintf("schedule channel name = %s, id =%d", channel.Name, channel.ID))
+	if _, ok := s.GetEntryBroker(channel.ID); ok {
+		s.RemoveTask(channel.ID)
+	}
+
+	schedule := channel.Schedule
+	if schedule == "" {
+		worker.RunChannel(channel, trigger.Input, trigger.ID)
+		return -1, nil
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"channel":  channel.ID,
+		"schedule": channel.Schedule,
+	}).Debug("scheduler: Adding broker to cron")
+	tjid, err := s.ChannelCron.AddJob(schedule, channel)
+	if err != nil {
+		return -1, err
+	}
+	s.ChannelCron.Start()
+	return tjid, nil
+}
+
+func (s *Scheduler) GetEntryChannel(channelID int64) (EntryChannl, bool) {
+	for _, e := range s.Cron.Entries() {
+		if c, ok := e.Job.(*workflow.Channel); !ok {
+			s.logger.Errorf("scheduler: Failed to cast broker to *Broker found type %T", e.Job)
+		} else {
+			if c.ID == channelID {
+				return EntryChannl{
+					entry:   &e,
+					channel: c,
+				}, true
+			}
+		}
+	}
+	return EntryChannl{}, false
 }
 
 // func (s *Scheduler) Start(tasks []*workflow.Task) error {

@@ -16,7 +16,7 @@ type Executor interface {
 	Execute(args *proto.ExecuteRequest, cb StatusHelper) (*proto.ExecuteResponse, error)
 }
 
-type ExecutorPluginConfig map[string]string
+type ExecutorPluginConfig map[string]interface{}
 
 type ExecutorServer struct {
 	proto.ExecutorServer

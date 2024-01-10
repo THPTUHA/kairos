@@ -5,6 +5,7 @@ export interface Trigger {
     type: string;
     schedule: string;
     input: string;
+    name: string;
     status: number;
     trigger_at: number;
     client: string;

@@ -39,4 +39,5 @@ type MessageFlow struct {
 	FinishPart   bool   `json:"finish_part"`
 	Tracking     string `json:"tracking"`
 	BrokerGroup  string `json:"broker_group"`
+	TriggerID    int64  `json:"trigger_id"`
 }

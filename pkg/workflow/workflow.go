@@ -34,6 +34,12 @@ const (
 	ScriptTask   = "script"
 )
 
+const (
+	KairosUser    = "kairosuser"
+	KairosChannel = "kairoschannel"
+	KairosDaemon  = "kairosdeamon"
+)
+
 // wait = input or wait = 3s, 3h..
 const TaskWaitInput = "input"
 
@@ -95,10 +101,11 @@ type Broker struct {
 	Template    *Template                `json:"template,omitempty"`
 	DynamicVars map[string]*CmdReplyTask `json:"dynamic_vars,omitempty"`
 	WorkflowID  int64                    `json:"workflow_id"`
-	TriggerID   int64                    `json:"trigger_id"`
+	Trigger     *Trigger                 `json:"-"`
 
-	Log    *logrus.Entry    `json:"-"`
-	Output chan *ExecOutput `json:"-"`
+	Log       *logrus.Entry    `json:"-"`
+	TriggerCh chan *Trigger    `json:"-"`
+	Output    chan *ExecOutput `json:"-"`
 }
 
 func (b *Broker) IsListen(name string) bool {
@@ -110,18 +117,13 @@ func (b *Broker) IsListen(name string) bool {
 	return false
 }
 
+func (c *Channel) Run() {
+	c.TriggerCh <- c.Trigger
+}
+
 func (b *Broker) Run() {
-	replies := make(map[string]ReplyData)
-	if b.Input != "" {
-		err := json.Unmarshal([]byte(b.Input), &replies)
-		if err != nil {
-			b.Log.Error(err)
-		}
-	}
-	tr := b.Template.NewRutime(replies)
-	exo := tr.Execute()
-	b.Output <- exo
-	b.Log.Logger.Warnf("REPlIES %+v, input=%s", replies, b.Input)
+	b.TriggerCh <- b.Trigger
+	b.Log.Logger.Warnf("TRIGGER ---- %+v", b.Trigger)
 }
 
 func validateVarListen(dv string, clients []*Client, channels []*Channel, tasks *Tasks) bool {
@@ -186,8 +188,11 @@ type Brokers struct {
 }
 
 type Channel struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID        int64         `json:"id"`
+	Name      string        `json:"name"`
+	Schedule  string        `json:"schedule"`
+	Trigger   *Trigger      `json:"-"`
+	TriggerCh chan *Trigger `json:"-"`
 }
 
 type Client struct {
@@ -700,7 +705,7 @@ type Result struct {
 	Success    bool   `json:"success"`
 	Output     string `json:"output"`
 	Attempt    uint   `json:"attempt"`
-	StartedAt  int64  `json:"startd_at"`
+	StartedAt  int64  `json:"started_at"`
 	FinishedAt int64  `json:"finished_at"`
 	Offset     int    `json:"offset"`
 	RunCount   int64  `json:"run_coun,omitemptyt"`
@@ -727,6 +732,7 @@ type CmdReplyTask struct {
 	Message    string             `json:"message,omitempty"`
 	Content    *Content           `json:"content,omitempty"`
 	Result     *Result            `json:"result,omitempty"`
+	Trigger    *Trigger           `json:"trigger,omitempty"`
 	Input      string             `json:"input,omitempty"`
 	SendAt     int64              `json:"send_at"`
 	RunCount   int64              `json:"run_coun,omitempty"`
@@ -744,6 +750,7 @@ type Trigger struct {
 	ID         int64  `json:"id"`
 	WorkflowID int64  `json:"workflow_id"`
 	ObjectID   int64  `json:"object_id"`
+	Name       string `json:"name"`
 	Type       string `json:"type"`
 	Schedule   string `json:"schedule"`
 	Input      string `json:"input"`
@@ -752,26 +759,31 @@ type Trigger struct {
 	Client     string `json:"client"`
 }
 
+type Retry struct {
+	ID      int64 `json:"cmd"`
+	Attempt int   `json:"attempt"`
+}
 type CmdTask struct {
-	Cmd         RequestActionTask `json:"cmd"`
-	Task        *Task             `json:"task,omitempty"`
-	Message     interface{}       `json:"message,omitempty"`
-	DeliverID   int64             `json:"deliver_id"`
-	WorkflowID  int64             `json:"workflow_id,omitempty"`
-	Channel     string            `json:"channel"`
-	Status      int               `json:"status"`
-	From        string            `json:"from,omitempty"`
-	SendAt      int64             `json:"send_at"`
-	Offset      int               `json:"offset,omitempty"`
-	RunCount    int64             `json:"run_coun,omitemptyt"`
-	Broker      *Broker           `json:"broker,omitempty"`
-	Trigger     *Trigger          `json:"trigger,omitempty"`
-	ChannelDest *Channel          `json:"channel_dest,omitempty"`
-	Group       string            `json:"group,omitempty"`
-	Parent      string            `json:"parent,omitempty"`
-	Part        string            `json:"part,omitempty"`
-	Start       bool              `json:"start,omitempty"`
-	StartInput  string            `json:"start_input,omitempty"`
+	Cmd        RequestActionTask `json:"cmd"`
+	Task       *Task             `json:"task,omitempty"`
+	Message    interface{}       `json:"message,omitempty"`
+	DeliverID  int64             `json:"deliver_id"`
+	WorkflowID int64             `json:"workflow_id,omitempty"`
+	Channel    string            `json:"channel"`
+	Status     int               `json:"status"`
+	From       string            `json:"from,omitempty"`
+	SendAt     int64             `json:"send_at"`
+	Offset     int               `json:"offset,omitempty"`
+	RunCount   int64             `json:"run_coun,omitemptyt"`
+	Broker     *Broker           `json:"broker,omitempty"`
+	Trigger    *Trigger          `json:"trigger,omitempty"`
+	Group      string            `json:"group,omitempty"`
+	Parent     string            `json:"parent,omitempty"`
+	Part       string            `json:"part,omitempty"`
+	Start      bool              `json:"start,omitempty"`
+	StartInput string            `json:"start_input,omitempty"`
+	Retry      *Retry            `json:"retry,omitempty"`
+	Attempt    int               `json:"attempt,omitempty"`
 }
 
 type LogDaemon struct {
@@ -792,6 +804,7 @@ const (
 	DestroyWorkflow
 	RecoverWorkflow
 	ObjectStatusWorkflow
+	TriggerStatusWorkflow
 )
 
 const (

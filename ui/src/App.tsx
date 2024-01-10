@@ -18,7 +18,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/clients" element={<ClientPage />} />
-        <Route path="/dashboard" element={<DashBoardPage />} />
+        <Route path="/dashboard/:view" element={<DashBoardPage />} />
         <Route path="/workflows" element={<WorkflowListPage />} />
         <Route path="/verify" element={<Verify />} />
         <Route path="/clients" element={<ClientPage />} />

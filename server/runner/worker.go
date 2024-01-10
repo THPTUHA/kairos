@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/THPTUHA/kairos/server/storage"
 	"github.com/THPTUHA/kairos/server/storage/models"
 	"github.com/dop251/goja"
+	"github.com/jpillora/backoff"
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
@@ -43,6 +45,13 @@ const (
 	ChannelPoint
 	BrokerPoint
 	TaskPoint
+)
+
+const (
+	TriggerDeliver = iota
+	TriggerScheduled
+	TriggerFinish
+	TriggerRunning
 )
 
 type Event struct {
@@ -83,6 +92,7 @@ type Worker struct {
 	taskDelivers   map[int64][]*taskDeliver
 	brokerDelivers map[int64][]*brokerDeliver
 	fc             *workflow.FuncCall
+	triggerCh      chan *workflow.Trigger
 
 	clientsActive     []*Point
 	CBQueue           *cbqueue.CBQueue
@@ -91,18 +101,20 @@ type Worker struct {
 	flowMap           map[string]string
 	requestMap        map[string]string
 	fm                sync.RWMutex
+	backoffDeliver    backoffDeliver
 	workerNatsOptions *workerNatsOptions
 	natsConn          *nats.Conn
 }
 
-func NewWorker(workerID int64, workflow *workflow.Workflow, conf *WorkerConfig, Sched *Scheduler) *Worker {
+func NewWorker(workerID int64, wf *workflow.Workflow, conf *WorkerConfig, Sched *Scheduler) *Worker {
 	return &Worker{
 		ID:                workerID,
 		eventChan:         make(chan *Event),
 		deliverErrCh:      make(chan *DeliverErr),
 		status:            events.WorkerCreating,
-		workflow:          workflow,
+		workflow:          wf,
 		workerNatsOptions: defaultNatsOptions(),
+		triggerCh:         make(chan *workflow.Trigger),
 		conf:              conf,
 		requests:          map[int64]request{},
 		responsesIDs:      make(map[int64]bool),
@@ -226,7 +238,7 @@ func (w *Worker) Destroy() bool {
 			defer wait.Done()
 			if err != nil {
 				success = false
-				w.wrapDeliverErr(from, p, &cmd, crt, fmt.Errorf("Client %s can't clear workflow, msg = %s ", p.Name, crt.Message))
+				w.wrapDeliverErr(from, p, &cmd, crt, fmt.Errorf("Client '%s' can't clear workflow, msg = %s ", p.Name, crt.Message))
 				return
 			}
 
@@ -234,14 +246,13 @@ func (w *Worker) Destroy() bool {
 				w.mu.Lock()
 				p.Status = PointDestroy
 				w.logWorkflow(
-					fmt.Sprintf("Client %s clear workflow ", p.Name),
+					fmt.Sprintf("Client '%s' clear workflow ", p.Name),
 					models.WFRecordScuccess,
 					nil,
+					-1,
 				)
-				for _, p := range w.clientsActive {
-					fmt.Printf("%+v\n", p)
-				}
-				w.conf.Logger.Warnf("Destroy success workflow = %s id = %d on client = %s ", w.workflow.Name, w.workflow.ID, p.Name)
+
+				w.conf.Logger.Warnf("Destroy success workflow = '%s' id = %d on client = '%s' ", w.workflow.Name, w.workflow.ID, p.Name)
 				for _, p := range w.clientsActive {
 					if p.Status != PointDestroy {
 						w.mu.Unlock()
@@ -273,7 +284,7 @@ func (w *Worker) Destroy() bool {
 
 			} else {
 				success = false
-				w.wrapDeliverErr(from, p, &cmd, crt, fmt.Errorf("Client %s can't clear workflow, msg = %s ", p.Name, crt.Message))
+				w.wrapDeliverErr(from, p, &cmd, crt, fmt.Errorf("Client '%s' can't clear workflow, msg = %s ", p.Name, crt.Message))
 			}
 		})
 	}
@@ -423,7 +434,7 @@ func (w *Worker) retryDeliver() {
 		msg := ne.Msg
 		errStatus := -99
 		w.CBQueue.Push(func(_ time.Duration) {
-			reply := e.Reply
+			reply := ne.Reply
 			if msg.Task != nil {
 				reply.TaskID = msg.Task.ID
 			}
@@ -432,67 +443,151 @@ func (w *Worker) retryDeliver() {
 				reply.Message = e.err.Error()
 			}
 			reply.Status = errStatus
-			w.conf.Logger.Errorf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v receiver= %+v, message= %s\n", msg.Cmd, msg.Task, msg.Broker, e.Receiver, msg.Message)
+			w.conf.Logger.Errorf("[ERRR DELIVER ----] CMD= %d  task= %+v broker= %+v receiver= %+v, message= %s deliver_id = %d \n", msg.Cmd, msg.Task, msg.Broker, e.Receiver, msg.Message, reply.DeliverID)
 			switch msg.Cmd {
 			case workflow.SetTaskCmd:
 				reply.Cmd = workflow.ReplySetTaskCmd
-				w.logWorkflow(
-					fmt.Sprintf("Task '%s' can't setup on client '%s', msg = %s ",
-						msg.Task.Name,
-						msg.From,
-						reply.Message),
-					models.WFRecordFault,
-					ne,
-				)
+				w.handleRetryDeliver(fmt.Sprintf("Task '%s' can't setup on client '%s', msg = %s ",
+					msg.Task.Name,
+					e.Receiver.Name,
+					reply.Message), ne)
+
 			case workflow.TriggerStartTaskCmd:
 				reply.Cmd = workflow.ReplyStartTaskCmd
-				w.logWorkflow(
-					fmt.Sprintf("Task '%s' can't trigger on client '%s', msg = %s ",
-						msg.Task.Name,
-						msg.From,
-						reply.Message),
-					models.WFRecordFault,
-					ne,
-				)
+				w.handleRetryDeliver(fmt.Sprintf("Task '%s' can't trigger on client '%s', msg = %s ",
+					msg.Task.Name,
+					msg.From,
+					reply.Message), ne)
+
 			case workflow.InputTaskCmd:
 				reply.Cmd = workflow.ReplyInputTaskCmd
 				if msg.Task != nil {
-					w.logWorkflow(
-						fmt.Sprintf("Result of task '%s' can't deliver to '%s'(%s), msg = %s ",
-							msg.Task.Name,
-							e.Receiver.Name,
-							w.getNameType(e.Receiver.Type),
-							reply.Message),
-						models.WFRecordFault,
+					w.handleRetryDeliver(fmt.Sprintf("Can't deliver to '%s'(%s), msg = %s ",
+						e.Receiver.Name,
+						w.getNameType(e.Receiver.Type),
+						reply.Message),
 						ne,
 					)
 				}
 
 			case workflow.SetBrokerCmd:
 				reply.Cmd = workflow.ReplySetBrokerCmd
-				w.logWorkflow(
-					fmt.Sprintf("Broker '%s' can't setup on client '%s', msg = %s ",
-						msg.Broker.Name,
-						e.Receiver.Name,
-						reply.Message),
-					models.WFRecordFault,
-					ne,
-				)
+				w.handleRetryDeliver(fmt.Sprintf("Broker '%s' can't setup on client '%s', msg = %s ",
+					msg.Broker.Name,
+					e.Receiver.Name,
+					reply.Message), ne)
+
 			case workflow.RequestDestroyWf:
 				reply.Cmd = workflow.ReplyDestroyWf
-				w.logWorkflow(
-					reply.Message,
-					models.WFRecordFault,
-					ne,
-				)
+				if msg.Broker != nil {
+					w.handleRetryDeliver(fmt.Sprintf("Broker '%s' can't setup on client '%s', msg = %s ",
+						msg.Broker.Name,
+						e.Receiver.Name,
+						reply.Message), ne)
+				}
 			}
-			reply.DeliverID = msg.DeliverID
-			reply.Group = msg.Group
-			reply.Parent = msg.Parent
-			reply.Part = msg.Part
-			m, _ := json.Marshal(reply)
-			w.logMessageFlowReply(e.Receiver, e.From, m, time.Now().UnixMilli()-msg.SendAt, "")
 		})
+	}
+}
+
+func (w *Worker) handleRetryDeliver(record string, e *DeliverErr) {
+	msg := e.Msg
+	reply := e.Reply
+	if msg.Retry != nil {
+		if msg.Attempt > 3 {
+			w.conf.Logger.Errorf("Attempt deliver more than 3")
+			return
+		}
+		if msg.Retry.ID == 0 {
+			id, err := storage.GetWorkflowRecord(w.workflow.ID, msg.DeliverID)
+			if err != nil {
+				w.conf.Logger.Error(err)
+				return
+			}
+			msg.Retry.ID = id
+		}
+		msg.Attempt++
+		msg.Retry.Attempt++
+
+		err := storage.SetWfRecovered(msg.Retry.ID, msg.Retry.Attempt, false)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return
+		}
+		err = storage.UpdateAttemptDeliver(msg.DeliverID, msg.Retry.Attempt)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return
+		}
+		d := w.backoffDeliver.timeBeforeNextAttempt(msg.Retry.Attempt)
+
+		time.AfterFunc(d, func() {
+			w.conf.Logger.Warnf("Run herer----- FROM=%+v RECEIVER=%+v", e.From, e.Receiver)
+			err = w.deliverAsync(e.From, e.Receiver, msg, func(reply *workflow.CmdReplyTask, err error) {
+				reply.Group = msg.Group
+				reply.Parent = msg.Parent
+				reply.Part = msg.Part
+				if err != nil {
+					w.wrapDeliverErr(e.From, e.Receiver, e.Msg, reply, err)
+					return
+				}
+				if msg.Retry != nil {
+					storage.SetWfRecovered(msg.Retry.ID, int(msg.Retry.Attempt), true)
+				}
+				m, _ := json.Marshal(reply)
+				w.logMessageFlowReply(e.Receiver, e.From, m, helper.GetTimeNow(), fmt.Sprint(msg.DeliverID))
+			})
+		})
+	} else {
+		reply.Group = msg.Group
+		reply.Parent = msg.Parent
+		reply.Part = msg.Part
+		m, _ := json.Marshal(reply)
+		err := storage.UpdateAttemptDeliver(msg.DeliverID, msg.Attempt)
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+		w.logMessageFlowReply(e.Receiver, e.From, m, time.Now().UnixMilli()-msg.SendAt, "")
+		id, err := storage.GetWorkflowRecord(w.workflow.ID, msg.DeliverID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				w.conf.Logger.Warnf("ATTEMPT FIRST")
+				id := w.logWorkflow(
+					record,
+					models.WFRecordFault,
+					e,
+					msg.DeliverID,
+				)
+				msg.Retry = &workflow.Retry{
+					ID: id,
+				}
+			} else {
+				w.conf.Logger.Error(err)
+				return
+			}
+		} else {
+			msg.Retry = &workflow.Retry{
+				ID: id,
+			}
+		}
+
+		msg.Attempt++
+		msg.Retry.Attempt = msg.Attempt
+		msg.DeliverID = reply.DeliverID
+		err = w.deliverAsync(e.From, e.Receiver, msg, func(reply *workflow.CmdReplyTask, err error) {
+			if err != nil {
+				w.wrapDeliverErr(e.From, e.Receiver, e.Msg, reply, err)
+				return
+			}
+			if msg.Retry != nil {
+				storage.SetWfRecovered(msg.Retry.ID, int(msg.Retry.Attempt)+1, true)
+			}
+			m, _ := json.Marshal(reply)
+			w.logMessageFlowReply(e.Receiver, e.From, m, helper.GetTimeNow(), fmt.Sprint(msg.DeliverID))
+		})
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
 	}
 }
 
@@ -561,6 +656,128 @@ func (w *Worker) InitFC() (*workflow.FuncCall, error) {
 	return fc, nil
 }
 
+func (w *Worker) handleTrigger(trigger workflow.Trigger) {
+	if trigger.Client != "" {
+		var cmd workflow.CmdTask
+		cmd.Cmd = workflow.TriggerCmd
+		cmd.Trigger = &trigger
+		cmd.WorkflowID = w.workflow.ID
+		cmd.DeliverID = w.nextCmdID()
+		cmd.Attempt = 1
+		from := w.points["kairos"]
+		receiver := w.points[workflow.GetClientName(trigger.Client)]
+		err := w.deliverAsync(from, receiver, &cmd, func(crt *workflow.CmdReplyTask, err error) {
+			if err != nil {
+				w.wrapDeliverErr(from, receiver, &cmd, crt, err)
+				return
+			}
+			if cmd.Retry != nil {
+				storage.SetWfRecovered(cmd.Retry.ID, int(cmd.Retry.Attempt)+1, true)
+			}
+			w.CBQueue.Push(func(duration time.Duration) {
+				w.UpdateTrigger(trigger.ID, TriggerScheduled)
+			})
+		})
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+	} else {
+		if trigger.Type == "task" {
+			var task *workflow.Task
+			w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
+				if value.ID == trigger.ObjectID {
+					task = value
+				}
+				return nil
+			})
+			if task == nil {
+				w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
+				return
+			}
+
+			w.Sched.AddTask(w, task, trigger.Input)
+			w.UpdateTrigger(trigger.ID, TriggerScheduled)
+		}
+
+		if trigger.Type == "broker" {
+			var broker *workflow.Broker
+			w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+				if value.ID == trigger.ObjectID {
+					broker = value
+				}
+				return nil
+			})
+			if broker == nil {
+				w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
+				return
+			}
+
+			w.Sched.AddBroker(w, broker, &trigger)
+			w.UpdateTrigger(trigger.ID, TriggerScheduled)
+		}
+
+		if trigger.Type == "channel" {
+			for _, c := range w.workflow.Channels {
+				if c.ID == trigger.ObjectID {
+					w.Sched.AddChannel(w, c, &trigger)
+					w.UpdateTrigger(trigger.ID, TriggerScheduled)
+					return
+				}
+			}
+			w.conf.Logger.Errorf("not found channel id=%d ", trigger.ObjectID)
+		}
+	}
+}
+
+func (w *Worker) handleTriggerSchedule() {
+	trigger, ok := <-w.triggerCh
+	if !ok {
+		w.Sched.logger.Error("chan trigger closed")
+		return
+	}
+	w.conf.Logger.Infof("Trigger object %+v", trigger)
+
+	if trigger != nil {
+		switch trigger.Type {
+		case "task":
+			var task *workflow.Task
+			w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
+				if value.ID == trigger.ObjectID {
+					task = value
+				}
+				return nil
+			})
+			if task == nil {
+				w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
+				return
+			}
+			w.RunTask(task, trigger.Input)
+			w.UpdateTrigger(trigger.ID, TriggerScheduled)
+		case "broker":
+			var broker *workflow.Broker
+			w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+				if value.ID == trigger.ObjectID {
+					broker = value
+				}
+				return nil
+			})
+			if broker == nil {
+				w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
+				return
+			}
+			w.RunBroker(broker, trigger.Input, trigger.ID)
+			w.UpdateTrigger(trigger.ID, TriggerScheduled)
+		case "channel":
+			for _, c := range w.workflow.Channels {
+				if c.ID == trigger.ObjectID {
+					w.UpdateTrigger(trigger.ID, TriggerScheduled)
+					return
+				}
+			}
+		}
+	}
+}
+
 func (w *Worker) Run() error {
 	w.conf.Logger.Debug(fmt.Sprintf("worker %d run ", w.ID))
 	natConn, err := nats.Connect(w.conf.NatURL, optNatsWorker(defaultNatsOptions())...)
@@ -606,6 +823,7 @@ func (w *Worker) Run() error {
 	w.CBQueue = &cbqueue.CBQueue{}
 	w.CBQueue.Cond = sync.NewCond(&w.CBQueue.Mu)
 	go w.CBQueue.Dispatch()
+	go w.handleTriggerSchedule()
 
 	for {
 		select {
@@ -636,6 +854,7 @@ func (w *Worker) Run() error {
 						fmt.Sprintf("Workflow setup success"),
 						models.WFRecordScuccess,
 						nil,
+						-1,
 					)
 					w.pushAllCmdTask(workflow.TriggerStartTaskCmd)
 				}
@@ -651,6 +870,7 @@ func (w *Worker) Run() error {
 						fmt.Sprintf("Workflow setup success"),
 						models.WFRecordScuccess,
 						nil,
+						-1,
 					)
 					w.pushAllCmdTask(workflow.TriggerStartTaskCmd)
 				}
@@ -690,77 +910,35 @@ func (w *Worker) reciveMessageSync() error {
 	if err != nil {
 		return err
 	}
-	_, err = w.natsConn.Subscribe(fmt.Sprintf("%s-%d", messaging.TRIGGER, w.workflow.ID), func(msg *nats.Msg) {
-		var trigger workflow.Trigger
-		err := json.Unmarshal(msg.Data, &trigger)
-		if err != nil {
-			w.conf.Logger.Error(err)
-		}
-		w.conf.Logger.Infof("Reciver trigger %+v", trigger)
 
-		var cmd workflow.CmdTask
-		cmd.Cmd = workflow.TriggerCmd
-		cmd.Trigger = &trigger
-		cmd.WorkflowID = w.workflow.ID
-		if trigger.Client != "" {
-			from := w.points["kairos"]
-			receiver := w.points[workflow.GetClientName(trigger.Client)]
-			err := w.deliverAsync(from, receiver, &cmd, func(crt *workflow.CmdReplyTask, err error) {
-				if err != nil {
-					w.wrapDeliverErr(from, receiver, &cmd, crt, err)
-					return
-				}
-
-				w.CBQueue.Push(func(duration time.Duration) {
-					w.UpdateTrigger(trigger.ID, 1)
-				})
-			})
-			if err != nil {
-				w.conf.Logger.Error(err)
-			}
-		} else {
-			if trigger.Type == "task" {
-				var task *workflow.Task
-				w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
-					if value.ID == trigger.ObjectID {
-						task = value
-					}
-					return nil
-				})
-				if task == nil {
-					w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
-					return
-				}
-
-				w.Sched.AddTask(w, task, trigger.Input)
-			}
-
-			if trigger.Type == "broker" {
-				var broker *workflow.Broker
-				w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
-					if value.ID == trigger.ObjectID {
-						broker = value
-					}
-					return nil
-				})
-				if broker == nil {
-					w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
-					return
-				}
-
-				w.Sched.AddBroker(w, broker, trigger.Input)
-			}
-		}
-	})
 	return nil
+}
+
+func (w *Worker) RunChannel(channel *workflow.Channel, input string, triggerID int64) {
+	from := w.points["kairos"]
+	p := w.points[workflow.GetChannelName(channel.Name)]
+	req := workflow.CmdTask{
+		Cmd:        workflow.InputTaskCmd,
+		Message:    input,
+		Group:      w.getGroup(),
+		Part:       w.getPart("", p.ID, ClientPoint),
+		Start:      true,
+		Channel:    channel.Name,
+		WorkflowID: w.workflow.ID,
+		StartInput: input,
+		Trigger: &workflow.Trigger{
+			ID: triggerID,
+		},
+	}
+	go w.deliverInputTaskCmd(from, p, &req, nil, nil, "")
+	return
 }
 
 func (w *Worker) RunTask(task *workflow.Task, input string) {
 
 }
 
-func (w *Worker) RunBroker(broker *workflow.Broker, input string) {
-
+func (w *Worker) RunBroker(broker *workflow.Broker, input string, triggerID int64) {
 	group := w.getGroup()
 	part := w.getPart("", 0, 0)
 	reply := workflow.CmdReplyTask{
@@ -774,6 +952,9 @@ func (w *Worker) RunBroker(broker *workflow.Broker, input string) {
 		Group:      group,
 		Part:       part,
 		WorkflowID: w.workflow.ID,
+		Trigger: &workflow.Trigger{
+			ID: triggerID,
+		},
 	}
 	var req workflow.CmdTask
 	req.Cmd = workflow.InputTaskCmd
@@ -790,10 +971,10 @@ func (w *Worker) RunBroker(broker *workflow.Broker, input string) {
 	}
 	go w.processBroker(broker, *w.points[workflow.GetBrokerName(broker.Name)], &reply, &req, &brokerInput, resultCh)
 	<-resultCh
-	w.conf.Logger.Error("Finish broker")
+	w.conf.Logger.Warnf("Finish broker")
 }
 
-func (w *Worker) handleLogFromDeam(log *workflow.LogDaemon) {
+func (w *Worker) handleLogFromDaem(log *workflow.LogDaemon) {
 	if log.Reply != nil {
 		w.conf.Logger.Warnf("LOGGER  REPLY =  %+v", log.Reply)
 		reply := log.Reply
@@ -848,7 +1029,7 @@ func (w *Worker) reciveMessage() error {
 		if reply.Cmd == workflow.ReplyLogWfCmd {
 			var log workflow.LogDaemon
 			if err := json.Unmarshal(msg.Data, &log); err == nil {
-				w.handleLogFromDeam(&log)
+				w.handleLogFromDaem(&log)
 			} else {
 				w.conf.Logger.Error(err)
 			}
@@ -891,7 +1072,111 @@ func (w *Worker) reciveMessage() error {
 			}
 		}
 	})
+
+	_, err = w.natsConn.Subscribe(fmt.Sprintf("%s-%d", messaging.TRIGGER, w.workflow.ID), func(msg *nats.Msg) {
+		var trigger workflow.Trigger
+		err := json.Unmarshal(msg.Data, &trigger)
+		if err != nil {
+			w.conf.Logger.Error(err)
+		}
+		w.conf.Logger.Infof("Reciver trigger %+v", trigger)
+		w.handleTrigger(trigger)
+	})
+
+	subs := make(map[string]bool)
+	for _, c := range w.workflow.Clients {
+		subs[fmt.Sprintf("%s-%d@%d", workflow.KairosDaemon, c.ID, w.workflow.UserID)] = true
+	}
+
+	for _, c := range w.workflow.Channels {
+		subs[fmt.Sprintf("%s-%d@%d", c.Name, c.ID, w.workflow.UserID)] = true
+	}
+
+	for sub := range subs {
+		_, err = w.natsConn.Subscribe(sub, func(msg *nats.Msg) {
+			w.conf.Logger.Warnf("Receiver message from %s", msg.Subject)
+			ids := strings.Split(msg.Subject, "@")
+			uid, _ := strconv.ParseInt(ids[1], 10, 64)
+			cids := strings.Split(ids[0], "-")
+			cid, _ := strconv.ParseInt(cids[1], 10, 64)
+			w.syncData(cids[0], uid, cid, string(msg.Data))
+		})
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return err
+		}
+	}
 	return err
+}
+
+func (w *Worker) syncData(cType string, userID, clientID int64, status string) {
+	w.conf.Logger.Errorf(cType)
+	if status == "connect" {
+		if cType == workflow.KairosDaemon {
+
+		} else {
+			mfs, err := storage.GetMessageFlowNotDeliver(clientID, ChannelPoint, 0)
+			w.conf.Logger.Error(len(mfs))
+			if err != nil {
+				w.conf.Logger.Error(err)
+				return
+			}
+			for _, mf := range mfs {
+				reqs, err := storage.GetMessageFlowDeliver(mf.DeliverID)
+				if err != nil {
+					w.conf.Logger.Error(err)
+					continue
+				}
+				if len(reqs) != 1 {
+					w.conf.Logger.Errorf("Deliver can't found deliverID = %d", mf.DeliverID)
+					continue
+				}
+				req := reqs[0]
+				cmdReq := workflow.CmdTask{
+					Cmd: workflow.RequestActionTask(req.Cmd),
+					Task: &workflow.Task{
+						ID:    req.TaskID,
+						Name:  req.TaskName,
+						Input: req.Message,
+					},
+					Message: req.Message,
+					Retry: &workflow.Retry{
+						Attempt: req.Attempt,
+					},
+					DeliverID:  req.DeliverID,
+					WorkflowID: req.WorkflowID,
+					Attempt:    0,
+					Group:      req.Group,
+					Start:      req.Start,
+					StartInput: req.StartInput,
+					Parent:     req.Parent,
+					Part:       req.Part,
+				}
+				cmdReply := workflow.CmdReplyTask{
+					Cmd:       workflow.ResponseActionTask(mf.Cmd),
+					Group:     mf.Group,
+					DeliverID: mf.DeliverID,
+					Parent:    mf.Parent,
+					Part:      mf.Part,
+				}
+
+				w.handleRetryDeliver("", &DeliverErr{
+					From: &Point{
+						ID:   req.SenderID,
+						Type: req.SenderType,
+						Name: req.SenderName,
+					},
+					Receiver: &Point{
+						ID:   req.ReceiverID,
+						Type: req.ReceiverType,
+						Name: req.ReceiverName,
+					},
+					Msg:   &cmdReq,
+					Reply: &cmdReply,
+				})
+			}
+		}
+	}
 }
 
 func (w *Worker) processBroker(broker *workflow.Broker, from Point, reply *workflow.CmdReplyTask, req *workflow.CmdTask, input *map[string]workflow.ReplyData, resultCh chan []byte) error {
@@ -1081,7 +1366,10 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 		w.CBQueue.Push(func(duration time.Duration) {
 			w.logMessageFlowReply(sender, sender, m, reply.SendAt, "")
 		})
-		return
+		if reply.Start {
+			isHasDest = true
+		}
+		reply.Start = false
 	}
 
 	w.workflow.Brokers.Range(func(key string, broker *workflow.Broker) error {
@@ -1098,28 +1386,31 @@ func (w *Worker) computeMsg(reply *workflow.CmdReplyTask, req *workflow.CmdTask,
 		}
 
 		if (broker.IsListen(reply.TaskName) || broker.IsListen(reply.RunOn)) && len(broker.Clients) == 0 {
+			newReply := *reply
+			newReply.Parent = reply.Part
+			newReply.Part = w.getPart(reply.Part, broker.ID, BrokerPoint)
 			isHasDest = true
-			w.conf.Logger.Debugf("Reply runon=%s sendAt=%d Now=%d", reply.RunOn, reply.SendAt, helper.GetTimeNow())
+			w.conf.Logger.Debugf("Reply runon=%s sendAt=%d Now=%d", newReply.RunOn, newReply.SendAt, helper.GetTimeNow())
 
-			if strings.HasSuffix(reply.RunOn, workflow.SubTask) {
-				if reply.Result == nil {
-					err := fmt.Errorf("reply from %s empty result", reply.RunOn)
+			if strings.HasSuffix(newReply.RunOn, workflow.SubTask) {
+				if newReply.Result == nil {
+					err := fmt.Errorf("newReply from %s empty result", newReply.RunOn)
 					w.conf.Logger.Error(err)
 					return err
 				}
-				w.conf.Logger.Infof("Reciver message from %s value= %+v", reply.RunOn, reply.Result)
+				w.conf.Logger.Infof("Reciver message from %s value= %+v", newReply.RunOn, newReply.Result)
 			}
 
-			if strings.HasSuffix(reply.RunOn, workflow.SubChannel) {
-				if reply.Content == nil {
-					err := fmt.Errorf("reply from %s empty content", reply.RunOn)
+			if strings.HasSuffix(newReply.RunOn, workflow.SubChannel) {
+				if newReply.Content == nil {
+					err := fmt.Errorf("newReply from %s empty content", newReply.RunOn)
 					w.conf.Logger.Error(err)
 					return err
 				}
-				w.conf.Logger.Infof("Reciver message from %s value= %+v", reply.RunOn, reply.Content)
+				w.conf.Logger.Infof("Reciver message from %s value= %+v", newReply.RunOn, newReply.Content)
 			}
 
-			w.processBroker(broker, from, reply, req, nil, resultCh)
+			w.processBroker(broker, from, &newReply, req, nil, resultCh)
 		}
 		return nil
 	})
@@ -1244,6 +1535,13 @@ type ReplyChannel struct {
 }
 
 func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *workflow.CmdReplyTask, req *workflow.CmdTask, trun *workflow.TemplateRuntime, resultCh chan []byte, exeOutput *workflow.ExecOutput, bg string) {
+	if req.DeliverID == 0 {
+		req.DeliverID = w.nextCmdID()
+	}
+	if req.Attempt == 0 {
+		req.Attempt++
+	}
+
 	err := w.deliverAsync(from, receiver, req, func(crt *workflow.CmdReplyTask, err error) {
 		fmt.Printf("[CALLBACK deliverRequestRunTaskCmd ] result = %+v err = %+v\n", crt.Result, err)
 
@@ -1251,6 +1549,9 @@ func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *
 			w.wrapDeliverErr(from, receiver, req, crt, err)
 			trun.ExpInput = append(trun.ExpInput, err.Error())
 		} else {
+			if req.Retry != nil {
+				storage.SetWfRecovered(req.Retry.ID, int(req.Retry.Attempt)+1, true)
+			}
 			if receiver.Type == TaskPoint || receiver.Type == ClientPoint {
 				trun.ExpInput = append(trun.ExpInput, ReplyTask{
 					Result: crt.Result,
@@ -1292,6 +1593,12 @@ func (w *Worker) deliverRequestRunTaskSync(from *Point, receiver *Point, reply *
 
 func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTask, reply *workflow.CmdReplyTask, exeOutput *workflow.ExecOutput, bg string) {
 	fmt.Printf("[BROKER %+v DELIVER OUTPUT TASK BY ENDPOINT] \n", receiver)
+	if req.DeliverID == 0 {
+		req.DeliverID = w.nextCmdID()
+	}
+	if req.Attempt == 0 {
+		req.Attempt++
+	}
 	w.CBQueue.Push(func(duration time.Duration) {
 		if reply != nil && reply.Cmd == workflow.ReplyOutputTaskCmd {
 			w.saveTaskRecord(reply)
@@ -1307,7 +1614,7 @@ func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTas
 
 	if !(from.ID == receiver.ID && from.Name == receiver.Name && from.Type == receiver.Type) {
 		err := w.deliverAsync(from, receiver, req, func(crt *workflow.CmdReplyTask, err error) {
-			fmt.Printf("[CALLBACK DELIVER InputTaskCmd ] res = %+v err = %+v\n", req, err)
+			fmt.Printf("[CALLBACK DELIVER InputTaskCmd ] res = %+v err = %+v\n", crt, err)
 			if err != nil {
 				w.wrapDeliverErr(from, receiver, req, crt, err)
 				return
@@ -1316,6 +1623,9 @@ func (w *Worker) deliverInputTaskCmd(from, receiver *Point, req *workflow.CmdTas
 			crt.Parent = req.Parent
 			crt.Part = req.Part
 			m, _ := json.Marshal(crt)
+			if req.Retry != nil {
+				storage.SetWfRecovered(req.Retry.ID, int(req.Retry.Attempt)+1, true)
+			}
 
 			w.CBQueue.Push(func(duration time.Duration) {
 				w.logMessageFlowReply(receiver, from, m, crt.SendAt, "")
@@ -1434,6 +1744,7 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 				return
 			}
 			var reply workflow.CmdReplyTask
+			reply.DeliverID = cmdDeliver.DeliverID
 			req.cb(&reply, ErrDeliverTimeout)
 			return
 		case <-w.closeCh:
@@ -1444,6 +1755,7 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 				return
 			}
 			var reply workflow.CmdReplyTask
+			reply.DeliverID = cmdDeliver.DeliverID
 			req.cb(&reply, ErrStopWorker)
 		}
 	}()
@@ -1451,6 +1763,13 @@ func (w *Worker) deliverAsync(from *Point, receiver *Point, cmd *workflow.CmdTas
 }
 
 func (w *Worker) deliverTaskToClient(from *Point, receiver *Point, msg *workflow.CmdTask) error {
+	if msg.DeliverID == 0 {
+		msg.DeliverID = w.nextCmdID()
+	}
+
+	if msg.Attempt == 0 {
+		msg.Attempt++
+	}
 	msg.Part = w.getPart("", -1, -1)
 	w.CBQueue.Push(func(duration time.Duration) {
 		w.logMessageFlowRequest(from, receiver, msg, duration.Milliseconds(), "", "")
@@ -1589,7 +1908,7 @@ func (w *Worker) Recover() error {
 					w.conf.Logger.Error(err)
 					return
 				}
-				err = storage.SetWfRecovered(e.ID)
+				err = storage.SetWfRecovered(e.ID, e.Retry+1, true)
 				if err != nil {
 					success = false
 					return
@@ -1600,9 +1919,10 @@ func (w *Worker) Recover() error {
 		wg.Wait()
 		if !success {
 			w.logWorkflow(
-				fmt.Sprintf("Fault recover workflow"),
+				fmt.Sprintf("Fault recovery workflow"),
 				models.WFRecordFault,
 				nil,
+				-1,
 			)
 			msg := workflow.MonitorWorkflow{
 				Cmd:        workflow.RecoverWorkflow,
@@ -1624,9 +1944,10 @@ func (w *Worker) Recover() error {
 	if success {
 		w.setWfStatus(workflow.Running)
 		w.logWorkflow(
-			fmt.Sprintf("Success recover workflow"),
+			fmt.Sprintf("Successful Recovery Workflow"),
 			models.WFRecordScuccess,
 			nil,
+			-1,
 		)
 
 		msg := workflow.MonitorWorkflow{
@@ -1834,6 +2155,7 @@ func (w *Worker) UpdateTrigger(triggerID int64, newStatus int) {
 	if err != nil {
 		w.conf.Logger.Error(err)
 	}
+	w.sendTriggerStatus(triggerID, newStatus)
 }
 
 func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, receiverAt int64, broker_group string) {
@@ -1843,14 +2165,10 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	var m []byte
 	var err error
 	if msg.Result != nil {
-		if msg.TaskInput != "" {
-			m = []byte(msg.TaskInput)
-		} else {
-			m, err = json.Marshal(msg.Result)
-			if err != nil {
-				w.conf.Logger.Error(err)
-				return
-			}
+		m, err = json.Marshal(msg.Result)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return
 		}
 		if msg.Result.StartedAt != 0 {
 			mf.BeginPart = true
@@ -1880,6 +2198,10 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 		mf.Flow = models.RecieverFlow
 	}
 
+	if msg.Trigger != nil {
+		mf.TriggerID = msg.Trigger.ID
+	}
+
 	mf.SenderID = from.ID
 	mf.SenderType = from.Type
 	mf.SenderName = from.Name
@@ -1902,33 +2224,45 @@ func (w *Worker) logMessageFlowReply(from *Point, receiver *Point, mrs []byte, r
 	mf.Parent = msg.Parent
 	mf.BrokerGroup = broker_group
 	mf.StartInput = msg.StartInput
-	fmt.Printf("mf= %+v\n", mf)
-	id, err := storage.LogMessageFlow(&mf)
 
+	fmt.Printf("mf= %+v\n", mf)
+	var id int64
+	did, err := strconv.ParseInt(broker_group, 10, 64)
+	if err == nil {
+		w.conf.Logger.Errorf("RUN HERE %d", did)
+		if err = storage.DeleteMessageFlow(did); err != nil {
+			w.conf.Logger.Error(err)
+		}
+	}
+
+	id, err = storage.LogMessageFlow(&mf)
 	if err != nil {
-		w.conf.Logger.Error(err)
+		w.Sched.logger.Error(err)
 	}
 	mf.ID = id
 
-	data, err := json.Marshal(&mf)
-	if err != nil {
-		w.conf.Logger.Error(err)
-		return
-	}
-	mwf := workflow.MonitorWorkflow{
-		Cmd:          workflow.LogMessageFlow,
-		UserID:       w.workflow.UserID,
-		WorkflowID:   w.workflow.ID,
-		WorkflowName: w.workflow.Name,
-		Data:         string(data),
-	}
-	js, _ := json.Marshal(mwf)
+	if did == 0 {
+		data, err := json.Marshal(&mf)
+		if err != nil {
+			w.conf.Logger.Error(err)
+			return
+		}
+		mwf := workflow.MonitorWorkflow{
+			Cmd:          workflow.LogMessageFlow,
+			UserID:       w.workflow.UserID,
+			WorkflowID:   w.workflow.ID,
+			WorkflowName: w.workflow.Name,
+			Data:         string(data),
+		}
+		js, _ := json.Marshal(mwf)
 
-	err = w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
+		err = w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js)
 
-	if err != nil {
-		fmt.Println("[MONITOR WORKFLOW REPLY ERROR] ", err)
+		if err != nil {
+			fmt.Println("[MONITOR WORKFLOW REPLY ERROR] ", err)
+		}
 	}
+
 }
 
 func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workflow.CmdTask, sendAt int64, tracking string, broker_group string) {
@@ -1960,6 +2294,10 @@ func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workfl
 	} else {
 		mf.Flow = models.DeliverFlow
 	}
+
+	if msg.Trigger != nil {
+		mf.TriggerID = msg.Trigger.ID
+	}
 	mf.SenderID = from.ID
 	mf.SenderType = from.Type
 	mf.SenderName = from.Name
@@ -1978,11 +2316,11 @@ func (w *Worker) logMessageFlowRequest(from *Point, receiver *Point, msg *workfl
 	mf.StartInput = msg.StartInput
 	mf.Parent = msg.Parent
 	mf.Part = msg.Part
+	mf.Attempt = msg.Attempt
 	mf.BeginPart = true
 	e, _ := json.Marshal(msg)
 	mf.ResponseSize = len(e)
 	mf.BrokerGroup = broker_group
-
 	mf.Tracking = tracking
 	id, err := storage.LogMessageFlow(&mf)
 	if err != nil {
@@ -2058,7 +2396,7 @@ func (w *Worker) saveBrokerRecord(brokerID int64, input string, output string, s
 	}
 }
 
-func (w *Worker) logWorkflow(record string, status int, de *DeliverErr) {
+func (w *Worker) logWorkflow(record string, status int, de *DeliverErr, deliverID int64) int64 {
 	var data string
 	var err error
 
@@ -2067,20 +2405,69 @@ func (w *Worker) logWorkflow(record string, status int, de *DeliverErr) {
 		js, err := json.Marshal(de)
 		if err != nil {
 			w.conf.Logger.Error(err)
-			return
+			return -1
 		}
 		isRecovered = false
 		data = string(js)
 	}
-	err = storage.InsertWorkflowRecord(&models.WorkflowRecords{
+	rcid, err := storage.InsertWorkflowRecord(&models.WorkflowRecords{
 		CreatedAt:   helper.GetTimeNow(),
 		WorkflowID:  w.workflow.ID,
 		Record:      record,
 		Status:      status,
 		DeliverErr:  data,
 		IsRecovered: isRecovered,
+		DeliverID:   deliverID,
 	})
 	if err != nil {
 		w.conf.Logger.Error(err)
+	}
+
+	return rcid
+}
+
+func (w *Worker) getDelivererDelay(attempt int) time.Duration {
+	return w.backoffDeliver.timeBeforeNextAttempt(attempt)
+}
+
+type backoffDeliver struct {
+	Factor   float64
+	Jitter   bool
+	MinDelay time.Duration
+	MaxDelay time.Duration
+}
+
+var defaultBackoffDeliver = &backoffDeliver{
+	MinDelay: 200 * time.Millisecond,
+	MaxDelay: 20 * time.Second,
+	Factor:   2,
+	Jitter:   true,
+}
+
+func (r *backoffDeliver) timeBeforeNextAttempt(attempt int) time.Duration {
+	b := &backoff.Backoff{
+		Min:    r.MinDelay,
+		Max:    r.MaxDelay,
+		Factor: r.Factor,
+		Jitter: r.Jitter,
+	}
+	return b.ForAttempt(float64(attempt))
+}
+
+func (w *Worker) sendTriggerStatus(id int64, status int) {
+	mwf := workflow.MonitorWorkflow{
+		Cmd:          workflow.TriggerStatusWorkflow,
+		UserID:       w.workflow.UserID,
+		WorkflowID:   w.workflow.ID,
+		WorkflowName: w.workflow.Name,
+		Data: `{
+			"id": "` + fmt.Sprint(id) + `",
+			"status": "` + fmt.Sprint(status) + `"
+		}`,
+	}
+	js, _ := json.Marshal(mwf)
+
+	if err := w.natsConn.Publish(messaging.MONITOR_WORKFLOW, js); err != nil {
+		w.conf.Logger.Errorf("can't send trigger status id = %d err=%s", id, err.Error())
 	}
 }

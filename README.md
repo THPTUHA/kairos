@@ -154,3 +154,6 @@ sudo killall -HUP mDNSResponder
 
 sudo firewall-cmd --permanent --zone=public --add-icmp-block=echo-request
 sudo firewall-cmd --reload
+
+
+Cho biết hệ thống của bạn có đặc điểm gì gọi là phân tán.

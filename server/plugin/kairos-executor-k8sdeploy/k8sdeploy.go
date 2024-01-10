@@ -81,13 +81,6 @@ func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, namespace, serviceNa
 			return err
 		}
 
-		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env,
-			corev1.EnvVar{
-				Name:  "RESTARTED_AT",
-				Value: time.Now().Format(time.RFC3339),
-			},
-		)
-
 		_, err = clientset.AppsV1().Deployments(namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 		return err
 	})
@@ -101,7 +94,7 @@ func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, namespace, serviceNa
 		return nil, err
 	}
 
-	return []byte(fmt.Sprintf("restart deployment %s namespace %s success", serviceName, namespace)), nil
+	return []byte(fmt.Sprintf("restart deployment '%s' namespace '%s' successful", serviceName, namespace)), nil
 }
 
 type PodStatus struct {

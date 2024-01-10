@@ -28,7 +28,9 @@ CREATE TABLE IF NOT EXISTS workflow_records (
     created_at BIGINT NOT NULL,
     status INT NOT NULL,
     deliver_err TEXT,
+    retry INT DEFAULT 1,
     is_recovered BOOLEAN DEFAULT FALSE,
+    deliver_id BIGINT NOT NULL,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -141,6 +143,7 @@ CREATE TABLE IF NOT EXISTS message_flows (
     tracking TEXT,
     broker_group VARCHAR(255) DEFAULT '',
     start_input TEXT DEFAULT '',
+    trigger_id bigserial NOT NULL,
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 );
 
@@ -183,5 +186,15 @@ CREATE TABLE IF NOT EXISTS triggers (
     status INT  DEFAULT 0,
     trigger_at BIGINT DEFAULT 0,
     client VARCHAR(255),
+    name VARCHAR(255),
     CONSTRAINT fk_workflow FOREIGN KEY(workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
-)
+);
+
+CREATE TABLE IF NOT EXISTS honors(
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(255) DEFAULT '',
+    title VARCHAR(255) DEFAULT '',
+    date VARCHAR(255) DEFAULT '',
+    content TEXT DEFAULT '',
+    status INT
+);

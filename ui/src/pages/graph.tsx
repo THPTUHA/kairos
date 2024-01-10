@@ -4,7 +4,7 @@ import { useAsync } from "react-use";
 import { services } from "../services";
 import { Checkbox, Drawer, Menu, Radio, RadioChangeEvent, Tabs } from "antd";
 import { CheckboxValueType } from "antd/es/checkbox/Group";
-import { BrokerPoint, ChannelPoint, ClientPoint, ColorGreen, ColorRed, TaskPoint } from "../conts";
+import { BrokerPoint, ChannelPoint, ClientPoint, ColorGreen, ColorRed, TaskPoint, TriggerStatusWorkflow } from "../conts";
 import { formatDate } from "../helper/date";
 import { FaChevronDown, FaChevronUp, FaDeleteLeft, FaRegClock } from "react-icons/fa6";
 import ReactJson from "react-json-view";
@@ -19,6 +19,10 @@ import { IoMdAddCircleOutline } from "react-icons/io";
 import { GrTrigger } from "react-icons/gr";
 import { Trigger } from "../models/trigger";
 import { Cron } from 'react-js-cron'
+import { MdOutlineAccessTime, MdOutlineSwitchAccessShortcut } from "react-icons/md";
+import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
+import { useRecoilValue } from "recoil";
+import { Link } from "react-router-dom";
 interface Edge {
     id: string;
     from: string;
@@ -191,6 +195,7 @@ const GraphPage = () => {
             const items = sn.split("-")
             const type = items[items.length - 1]
             const oid = items[0]
+            console.log({ sn, type, oid, channels })
             let client = ""
             if (items.length == 3) {
                 client = items[1]
@@ -223,7 +228,6 @@ const GraphPage = () => {
                         setObject({
                             type: type,
                             obj: c,
-                            client
                         })
                         break;
                     }
@@ -264,7 +268,7 @@ const GraphPage = () => {
         //     .catch(setError)
         const tasks = []
         const brokers = []
-        // const clients = []
+        const channels = []
         if (Array.isArray(graph)) {
             var nodes: Node[] = []
             var edges: Edge[] = []
@@ -298,6 +302,7 @@ const GraphPage = () => {
                                 id: `${channel.id}-channel`, label: channel.name, group: g.id, value: 10, color: "white"
                             })
                         }
+                        channels.push(channel)
                     }
                 }
 
@@ -487,6 +492,7 @@ const GraphPage = () => {
         setWfIDs([e.target.value])
     }
 
+    console.log({ object })
     // function onChangeTypeGraph(e: RadioChangeEvent) {
     //     setGraphType(e.target.value)
     // }
@@ -580,14 +586,46 @@ const BrokerDetail = ({ broker, client, wid }: { broker: Broker, client: string,
     return (
         <div>
             <div className="font-bold text-2xl">{broker.name}(broker)</div>
-            <TriggerFrom object={broker} type="broker" client={client} wid={wid} />
-            <div className="my-2 border-blue-500 border-dashed border-2 w-11/12 px-2 py-2">
+            <TriggerForm object={broker} type="broker" client={client} wid={wid} />
+
+            {
+                broker.clients && typeof broker.clients == "object" ?
+                    <div className="my-2 border-blue-500 border-dashed border-2 w-11/12 px-6 py-2">
+                        <div>
+                            <div className="flex items-center">
+                                <MdOutlineSwitchAccessShortcut className="" />
+                                <div className="font-bold ml-2">Run on</div>
+                            </div>
+                            {broker.clients.map((e: any) =>
+                                <div key={e}>{e}</div>
+                            )}
+                        </div>
+                    </div>
+
+                    : <div></div>
+            }
+            <div className="my-2 border-blue-500 border-dashed border-2 w-11/12 px-6 py-2">
+                {
+                    broker.listens ?
+                        <div>
+                            <div className="flex items-center">
+                                <MdOutlineSwitchAccessShortcut className="" />
+                                <div className="font-bold ml-2">Listening</div>
+                            </div>
+                            {broker.listens.map((e: any) =>
+                                <div key={e}>{e}</div>
+                            )}
+                        </div>
+                        : <div></div>
+                }
+            </div>
+            <div className="my-2 border-blue-500 border-dashed border-2 w-11/12 px-6 py-2">
                 {
                     broker.flows ?
                         <div>
                             <div className="flex items-center">
-                                <div className="font-bold ">Flows</div>
-                                <TiFlowSwitch className="ml-2" />
+                                <   TiFlowSwitch className="" />
+                                <div className="font-bold ml-2">Flows</div>
                             </div>
                             {parseBrokerFlows(broker.flows).map((exp: any, idx: any) => (
                                 <span key={idx}>
@@ -607,7 +645,7 @@ const BrokerDetail = ({ broker, client, wid }: { broker: Broker, client: string,
 }
 
 function getDefaultSchedule(object: any, type: string) {
-    console.log({object})
+    console.log({ object })
     if (type == "channel" || type == "broker") {
         return "Input"
     }
@@ -624,13 +662,11 @@ function getDefaultSchedule(object: any, type: string) {
 }
 
 const TaskDetail = ({ task, client, wid }: { task: Task, client: string, wid: number }) => {
-    
-
 
     return (
         <div>
             <div className="font-bold text-2xl">{task.name}(task)</div>
-            <TriggerFrom object={task} type="task" client={client} wid={wid} />
+            <TriggerForm object={task} type="task" client={client} wid={wid} />
             <div className="border-2 border-blue-500 px-2 w-11/12 my-4 py-2">
                 <div className="my-2 flex ">
                     <div className="font-bold mr-2">Schedule</div>
@@ -657,15 +693,15 @@ const TaskDetail = ({ task, client, wid }: { task: Task, client: string, wid: nu
 const ChannelDetail = ({ channel, wid }: { channel: Channel, wid: number }) => {
     return (
         <div>
-            <div className="font-bold text-2xl">{channel.name}</div>
-            <TriggerFrom object={channel} type="channel" client="" wid={wid} />
+            <div className="font-bold text-2xl">{channel.name}(channel)</div>
+            <TriggerForm object={channel} type="channel" client="" wid={wid} />
         </div>
     )
 }
 
 
-const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string, client: string, wid: number }) => {
-    const [input, setInput] = useState<any>(type == "task" ? [{ name: "", value: {} }] : [])
+const TriggerForm = ({ object, type, client, wid }: { object: any, type: string, client: string, wid: number }) => {
+    const [input, setInput] = useState<any>(type == "task" || type == "channel" ? [{ name: "", value: {} }] : [])
     const [inputType, setInputType] = useState(1)
     const [inName, setInName] = useState("")
     const [openInput, setOpenInput] = useState(false)
@@ -674,9 +710,11 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
     const [reload, setReload] = useState(0)
     const [err, setError] = useState("")
     const [openTrigger, setOpenTrigger] = useState<any>(null);
+    const wfCmd = useRecoilValue(workflowMonitorAtom)
+    const [triggers, setTriggers] = useState<Trigger[]>([])
 
-    const triggers = useAsync(async () => {
-        console.log(wid, object.id, type)
+    useAsync(async () => {
+        console.log(wid, object, type)
         const ts = await services.workflows
             .getTrigger(wid, object.id, type)
             .catch(setError)
@@ -686,6 +724,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                     t.input = JSON.parse(t.input)
                 }
             }
+            setTriggers(ts)
             return ts
         }
         return []
@@ -708,6 +747,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             }
         }
 
+        console.log(object)
         const trigger: Trigger = {
             id: 0,
             trigger_at: 0,
@@ -715,6 +755,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             input: value,
             object_id: object.id,
             type: type,
+            name: object.name,
             client: client,
             workflow_id: wid,
             status: 0,
@@ -724,7 +765,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             .saveTrigger(trigger)
             .catch(setError)
 
-        setInput([])
+        setInput(type == "task" || type == "channel" ? [{ name: "", value: {} }] : [])
         setSchedule("")
         setReload(reload => reload + 1)
     }
@@ -736,9 +777,28 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
         setReload(reload => reload + 1)
     }
 
+    useEffect(() => {
+        if (wfCmd && wfCmd.cmd == TriggerStatusWorkflow) {
+            const data = wfCmd.data
+            setTriggers(trs => {
+                const newTrs = [...trs]
+                for (let i = 0; i < newTrs.length; ++i) {
+                    if (newTrs[i].id == data.id) {
+                        newTrs[i] = {
+                            ...newTrs[i],
+                            status: data.status
+                        }
+                        return newTrs
+                    }
+                }
+                return trs
+            })
+        }
+    }, [wfCmd])
+
     return (
         <div>
-            <div className="flex-col items-center border-2 border-blue-500 border-dashed w-11/12 px-2 py-2">
+            <div className="flex-col items-center border-2 border-blue-500 border-dashed w-11/12 px-4 py-2">
                 <div className="flex items-center ">
                     <div className="font-bold text-lg">Trigger</div>
                     <div className="cursor-pointer mx-2 hover:bg-yellow-500 w-10 h-8 bg-blue-500 flex items-center justify-center rounded-lg"
@@ -746,8 +806,9 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                         <GrTrigger />
                     </div>
                 </div>
-                <div className="flex items-center my-2">
-                    <div className="font-bold mr-2">Schedule</div>
+                <div className="flex items-center my-2 ml-2">
+                    <MdOutlineAccessTime className="mr-2" />
+                    <div className="font-bold mr-2 ">Schedule</div>
                     <div>{schedule}</div>
                     <button className="mx-2" onClick={() => setOpenSchedule(true)}><IoMdAddCircleOutline /></button>
                 </div>
@@ -825,8 +886,9 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                             }
                         </div>
                     </div>
+
                     {
-                        triggers.value && triggers.value.map(tri => (
+                        triggers.map(tri => (
                             <div key={tri.id}
                                 className="flex cursor-pointer items-center ">
                                 <div
@@ -834,14 +896,16 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                                     onClick={() => { setOpenTrigger(tri) }}>
                                     {tri.schedule ? tri.schedule : "Immediately"}
                                 </div>
-                                <div className="text-sm">
-                                    {
-                                        tri.status == 0 ? <div>(Delivering)</div>
-                                            : tri.status == 1 ? <div>(Schedule)</div>
-                                                : tri.status == 2 ? <div>(Finish)</div>
-                                                    : <div>(Running)</div>
-                                    }
-                                </div>
+                                <Link to={`/dashboard/timeline?trigger_id=${tri.id}`}>
+                                    <div className="text-sm hover:text-gray-500">
+                                        {
+                                            tri.status == 0 ? <div>(Delivering...)</div>
+                                                : tri.status == 1 ? <div>(Scheduled at {formatDate(tri.trigger_at)})</div>
+                                                    : tri.status == 2 ? <div>(Finish)</div>
+                                                        : <div>(Running)</div>
+                                        }
+                                    </div>
+                                </Link>
                                 <div className="ml-2">
                                     {
                                         tri.status != 2 && (
@@ -899,7 +963,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                                     }
                                 }
                                 const root = `${inName}${type == "broker" ? (inputType == 1 ? '_task' : '_channel') : ""}`
-                                return [...input, { name: root, value }].filter(e=> e.name)
+                                return [...input, { name: root, value }].filter(e => e.name && e.name != "_task" && e.name != "_channel")
 
                             })
                             setOpenInput(false); setInName("")
@@ -916,7 +980,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
             >
                 <div className="flex items-center mx-2 my-2" >
                     <button className="cursor-pointer bg-blue-500 text-white flex items-center px-2 rounded py-2">
-                        <FaRegClock className="mr-2" onClick={() => { setOpenSchedule(false) }}/>  Schedule
+                        <FaRegClock className="mr-2" onClick={() => { setOpenSchedule(false) }} />  Schedule
                     </button>
                     <div className="ml-2">
                         {schedule}
@@ -928,7 +992,7 @@ const TriggerFrom = ({ object, type, client, wid }: { object: any, type: string,
                         value={schedule}
                     />
                 </div>
-               
+
             </Modal>
 
             <Modal

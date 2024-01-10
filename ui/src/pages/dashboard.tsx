@@ -6,7 +6,7 @@ import workflowMonitorAtom from "../recoil/workflowMonitor/atom"
 import { BrokerPoint, DeliverFlow, LogMessageFlow, RecieverFlow, ViewHistory, ViewRealtime, ViewTimeLine } from "../conts"
 import { useAsync } from "react-use"
 import { services } from "../services"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { Checkbox, Radio, RadioChangeEvent } from "antd"
 
 // const Entries = [
@@ -95,8 +95,7 @@ const DashBoardPage = () => {
     const cnt = useRef(0)
     const [viewType, setViewType] = useState(0);
     const entriesRef = useRef<Entry[]>([])
-    const [value, setValue] = useState(1);
-    const location = useLocation()
+    const [value, setValue] = useState(0);
     const nav = useNavigate()
     const [offset, setOffset]  = useState(0)
     
@@ -156,29 +155,35 @@ const DashBoardPage = () => {
         }
     }, [viewType,offset])
 
-    useEffect(() => {
-        if (location.pathname) {
-            const q = location.search.split("&")[0]
-            console.log("Path", q)
-            if (!q) {
-                setViewType(ViewRealtime)
-            } else if (q == "?view=history") {
-                setViewType(ViewHistory)
-            } else if (q == "?view=timeline") {
-                setViewType(ViewTimeLine)
-            }
-        }
-    }, [location])
+    const params = useParams()
 
     useEffect(() => {
-        if (value == 1) {
-            nav("/dashboard")
-        } else if (value == 2) {
-            nav("/dashboard?view=timeline")
-        } else if (value == 3) {
-            nav("/dashboard?view=history")
+        switch(params.view){
+            case "timeline":
+                setViewType(ViewTimeLine)
+                break;
+            case "history":
+                setViewType(ViewHistory)
+                break;
+            default:
+                setViewType(ViewRealtime)
+                
         }
-    }, [value])
+    }, [params])
+
+    useEffect(()=>{
+        switch(value){
+            case 1:
+                nav("/dashboard/logs")
+                break
+            case 2:
+                nav("/dashboard/timeline")
+                break;
+            case 3:
+                nav("/dashboard/history")
+                break;
+        }
+    },[value])
 
     useEffect(() => {
         if (wfCmd && wfCmd.cmd == LogMessageFlow && (viewType == ViewRealtime || viewType == ViewTimeLine)) {
@@ -237,7 +242,7 @@ const DashBoardPage = () => {
 
     return (
         <>
-            <Radio.Group onChange={onChange} value={value}>
+            <Radio.Group onChange={onChange} value={viewType}>
                 <Radio value={1}>Logs</Radio>
                 <Radio value={2}>Timeline</Radio>
                 <Radio value={3}>History</Radio>

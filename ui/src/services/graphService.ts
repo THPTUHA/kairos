@@ -34,6 +34,7 @@ export interface MessageFlow {
     tracking: string;
     value: any;
     start_input: string;
+    response: any;
   }
 
 export const GraphService = {
@@ -55,9 +56,9 @@ export const GraphService = {
             })
             .then(res => res.body.data as any);
     },
-    getTimeLine() {
+    getTimeLine(trigger_id?:string) {
         return requests
-            .get(`apis/v1/service/graph/timeline`)
+            .get(`apis/v1/service/graph/timeline?trigger_id=${trigger_id}`)
             .send()
             .then(res => res.body.data as MessageFlow[]);
     },

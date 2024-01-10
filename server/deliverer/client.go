@@ -82,8 +82,6 @@ const (
 	flagClientSideRefresh
 )
 
-// ChannelContext contains extra context for channel connection subscribed to.
-// Note: this struct is aligned to consume less memory.
 type ChannelContext struct {
 	info              []byte
 	expireAt          int64
@@ -122,14 +120,10 @@ type ConnectRequest struct {
 	Subs    map[string]SubscribeRequest
 }
 
-// SubscribeRequest contains state of subscription to a channel.
 type SubscribeRequest struct {
-	// Recover enables publication recovery for a channel.
 	Recover bool
-	// Epoch last seen by a client.
-	Epoch string
-	// Offset last seen by a client.
-	Offset uint64
+	Epoch   string
+	Offset  uint64
 }
 
 func (r *ConnectRequest) toProto() *deliverprotocol.ConnectRequest {
@@ -312,7 +306,6 @@ func (c *Client) scheduleNextTimer() {
 	}
 }
 
-// Lock must be held outside.
 func (c *Client) stopTimer() {
 	if c.timer != nil {
 		c.timer.Stop()
@@ -1143,8 +1136,6 @@ func (c *Client) handleRefresh(req *deliverprotocol.RefreshRequest, cmd *deliver
 	return nil
 }
 
-// onSubscribeError cleans up a channel from client channels if an error during subscribe happened.
-// Channel kept in a map during subscribe request to check for duplicate subscription attempts.
 func (c *Client) onSubscribeError(channel string) {
 	c.mu.Lock()
 	_, ok := c.channels[channel]
@@ -1265,7 +1256,6 @@ func (c *Client) handlePublish(req *deliverprotocol.PublishRequest, cmd *deliver
 	info := c.clientInfo(channel)
 	c.mu.RUnlock()
 
-	// No permission
 	if info == nil || (info.ChanRole != models.WriteRole && info.ChanRole != models.ReadWriteRole) {
 		return ErrorPermissionDenied
 	}
@@ -1946,20 +1936,16 @@ func (c *Client) subscribeCmd(req *deliverprotocol.SubscribeRequest, reply Subsc
 	}
 
 	if !serverSide {
-		// Write subscription reply only if initiated by client.
 		protoReply, err := c.getSubscribeCommandReply(res)
 		if err != nil {
 			c.node.logger.log(newLogEntry(LogLevelError, "error encoding subscribe", map[string]any{"error": err.Error()}))
 			if !serverSide {
-				// Will be called later in case of server side sub.
 				c.pubSubSync.StopBuffering(channel)
 			}
 			ctx.disconnect = &DisconnectServerError
 			return ctx
 		}
 
-		// Need to flush data from writer so subscription response is
-		// sent before any subscription publication.
 		c.writeEncodedCommandReply(channel, deliverprotocol.FrameTypeSubscribe, cmd, protoReply, rw)
 		defer c.releaseSubscribeCommandReply(protoReply)
 	}

@@ -725,6 +725,14 @@ func GetVars(q *VarsQuery) ([]*models.Vars, error) {
 	return vars, nil
 }
 
+func DeleteMessageFlow(deliverID int64) error {
+	_, err := db.Exec(fmt.Sprintf("DELETE FROM message_flows where deliver_id=%d AND status=-99", deliverID))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func LogMessageFlow(mf *models.MessageFlow) (int64, error) {
 	// if mf.Flow == models.DeliverFlow {
 	// 	var stauts int
@@ -752,9 +760,9 @@ func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
 			receiver_type, receiver_name, workflow_id, message, attempt,
 			created_at, flow, deliver_id, request_size, response_size,
 			cmd, start, "group", task_id, send_at, receive_at, task_name,
-			part, parent, begin_part, finish_part, tracking, broker_group, start_input
+			part, parent, begin_part, finish_part, tracking, broker_group, start_input, trigger_id
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,$29
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,$29, $30
 		) RETURNING id
 	`)
 	if err != nil {
@@ -768,7 +776,7 @@ func InsertMessageFlow(mf *models.MessageFlow) (int64, error) {
 		mf.ReceiverType, mf.ReceiverName, mf.WorkflowID, mf.Message, mf.Attempt,
 		mf.CreatedAt, mf.Flow, mf.DeliverID, mf.RequestSize, mf.ResponseSize,
 		mf.Cmd, mf.Start, mf.Group, mf.TaskID, mf.SendAt, mf.ReceiveAt, mf.TaskName,
-		mf.Part, mf.Parent, mf.BeginPart, mf.FinishPart, mf.Tracking, mf.BrokerGroup, mf.StartInput,
+		mf.Part, mf.Parent, mf.BeginPart, mf.FinishPart, mf.Tracking, mf.BrokerGroup, mf.StartInput, mf.TriggerID,
 	).Scan(&mf.ID)
 	if err != nil {
 		return -1, err
@@ -794,6 +802,12 @@ func InsertChannel(channel *models.Channel) error {
 func SetBrokerQueue(brokerQueue *models.BrokerQueue) error {
 	_, err := Get().Exec("INSERT INTO broker_queues(key, value, workflow_id, used, created_at) VALUES($1, $2, $3, $4, $5)",
 		brokerQueue.Key, brokerQueue.Value, brokerQueue.WorkflowID, brokerQueue.Used, brokerQueue.CreatedAt)
+	return err
+}
+
+func UpdateAttemptDeliver(deliverID int64, attempt int) error {
+	_, err := Get().Exec("UPDATE message_flows SET attempt = $1 WHERE deliver_id = $2 AND flow = 0",
+		attempt, deliverID)
 	return err
 }
 
@@ -1260,21 +1274,25 @@ func countSenderReceiverPairs(wfIDs string) ([]*GraphEdge, error) {
 	return edges, nil
 }
 
-func GetMessageFlowsByUserID(userID int64) ([]*models.MessageFlow, error) {
-	rows, err := db.Query(`
-		SELECT
-			mf.id,  mf.sender_id, mf.sender_type, mf.sender_name,
-			mf.receiver_id, mf.receiver_type, mf.receiver_name, mf.workflow_id,
-			mf.attempt, mf.created_at, mf.flow, mf.deliver_id, mf.cmd, mf.group, w.name,
-			mf.part, mf.parent, mf.begin_part, mf.finish_part,mf.start, mf.message
-		FROM
-			message_flows mf
-		JOIN
-			workflows w ON mf.workflow_id = w.id
-		WHERE
-			w.user_id = $1 AND mf.start = true
-		ORDER BY id DESC
-	`, userID)
+func GetMessageFlowsTimeline(userID int64, triggerID int64) ([]*models.MessageFlow, error) {
+	var q string
+	if triggerID != 0 {
+		q += fmt.Sprintf(` AND trigger_id = %d`, triggerID)
+	}
+	rows, err := db.Query(fmt.Sprintf(`
+	SELECT
+		mf.id,  mf.sender_id, mf.sender_type, mf.sender_name,
+		mf.receiver_id, mf.receiver_type, mf.receiver_name, mf.workflow_id,
+		mf.attempt, mf.created_at, mf.flow, mf.deliver_id, mf.cmd, mf.group, w.name,
+		mf.part, mf.parent, mf.begin_part, mf.finish_part,mf.start, mf.message
+	FROM
+		message_flows mf
+	JOIN
+		workflows w ON mf.workflow_id = w.id 
+	WHERE
+		w.user_id = $1 AND mf.start = true %s
+	ORDER BY id DESC
+`, q), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1428,6 +1446,7 @@ func exactMessageFlow(rows *sql.Rows) ([]*models.MessageFlow, error) {
 			&mf.Tracking,
 			&mf.BrokerGroup,
 			&mf.StartInput,
+			&mf.TriggerID,
 		)
 		if err != nil {
 			return nil, err
@@ -1436,6 +1455,24 @@ func exactMessageFlow(rows *sql.Rows) ([]*models.MessageFlow, error) {
 	}
 
 	return messageFlows, nil
+}
+
+func GetMessageFlowNotDeliver(senderID int64, senderType int, id int64) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE sender_id = '%d' AND sender_type = '%d' AND id > %d AND status = -99 ORDER BY ID ASC LIMIT 10`, senderID, senderType, id)
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	return exactMessageFlow(rows)
+}
+
+func GetMessageFlowDeliver(deliverID int64) ([]*models.MessageFlow, error) {
+	query := fmt.Sprintf(`SELECT * FROM message_flows WHERE deliver_id = %d AND flow = 0 LIMIT 1`, deliverID)
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	return exactMessageFlow(rows)
 }
 
 func AddTaskRecord(record *models.TaskRecord) error {
@@ -1588,23 +1625,39 @@ func GetMessageFlows(userID int64, workflowName string, limit string, offset str
 	return flows, nil
 }
 
-func InsertWorkflowRecord(record *models.WorkflowRecords) error {
-	query := "INSERT INTO workflow_records (workflow_id, record, created_at, status, deliver_err, is_recovered) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id"
+func GetWorkflowRecord(wid, deliverID int64) (int64, error) {
+	query := "SELECT id FROM workflow_records WHERE workflow_id = $1 AND deliver_id = $2"
+	stmt, err := db.Prepare(query)
+	if err != nil {
+		return -1, err
+	}
+	defer stmt.Close()
+	var id int64
+	err = stmt.QueryRow(wid, deliverID).Scan(&id)
+	if err != nil {
+		return -1, err
+	}
+	return id, nil
+
+}
+
+func InsertWorkflowRecord(record *models.WorkflowRecords) (int64, error) {
+	query := "INSERT INTO workflow_records (workflow_id, record, created_at, status, deliver_err, is_recovered, retry, deliver_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id"
 	stmt, err := Get().Prepare(query)
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer stmt.Close()
 
-	err = stmt.QueryRow(record.WorkflowID, record.Record, record.CreatedAt, record.Status, record.DeliverErr, record.IsRecovered).Scan(&record.ID)
+	err = stmt.QueryRow(record.WorkflowID, record.Record, record.CreatedAt, record.Status, record.DeliverErr, record.IsRecovered, record.Retry, record.DeliverID).Scan(&record.ID)
 	if err != nil {
-		return err
+		return -1, err
 	}
-	return nil
+	return record.ID, nil
 }
 
 func GetWorkflowRecords(workflowID int64, limit int) ([]*models.WorkflowRecords, error) {
-	query := "SELECT id, workflow_id, record, created_at, status FROM workflow_records WHERE workflow_id = $1 ORDER BY ID DESC LIMIT $2"
+	query := "SELECT id, workflow_id, record, created_at, status, retry FROM workflow_records WHERE workflow_id = $1 ORDER BY ID DESC LIMIT $2"
 	stmt, err := db.Prepare(query)
 	if err != nil {
 		return nil, err
@@ -1620,7 +1673,7 @@ func GetWorkflowRecords(workflowID int64, limit int) ([]*models.WorkflowRecords,
 	var records []*models.WorkflowRecords
 	for rows.Next() {
 		var record models.WorkflowRecords
-		err := rows.Scan(&record.ID, &record.WorkflowID, &record.Record, &record.CreatedAt, &record.Status)
+		err := rows.Scan(&record.ID, &record.WorkflowID, &record.Record, &record.CreatedAt, &record.Status, &record.Retry)
 		if err != nil {
 			return nil, err
 		}
@@ -1631,7 +1684,7 @@ func GetWorkflowRecords(workflowID int64, limit int) ([]*models.WorkflowRecords,
 }
 
 func GetWorkflowRecordsRecovery(workflowID int64, limit int) ([]*models.WorkflowRecords, error) {
-	query := "SELECT id,deliver_err FROM workflow_records WHERE workflow_id = $1 AND is_recovered = $2 AND status = $3 ORDER BY created_at ASC LIMIT $4"
+	query := "SELECT id,deliver_err, retry FROM workflow_records WHERE workflow_id = $1 AND is_recovered = $2 AND status = $3 ORDER BY created_at ASC LIMIT $4"
 	stmt, err := Get().Prepare(query)
 	if err != nil {
 		return nil, err
@@ -1647,7 +1700,7 @@ func GetWorkflowRecordsRecovery(workflowID int64, limit int) ([]*models.Workflow
 	var records []*models.WorkflowRecords
 	for rows.Next() {
 		var record models.WorkflowRecords
-		err := rows.Scan(&record.ID, &record.DeliverErr)
+		err := rows.Scan(&record.ID, &record.DeliverErr, &record.Retry)
 		if err != nil {
 			return nil, err
 		}
@@ -1657,14 +1710,14 @@ func GetWorkflowRecordsRecovery(workflowID int64, limit int) ([]*models.Workflow
 	return records, nil
 }
 
-func SetWfRecovered(id int64) error {
-	query := "UPDATE workflow_records SET is_recovered = $1  WHERE id = $2"
+func SetWfRecovered(id int64, retry int, success bool) error {
+	query := "UPDATE workflow_records SET is_recovered = $1, retry = $2 WHERE id = $3"
 	stmt, err := Get().Prepare(query)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
-	_, err = Get().Exec(query, true, id)
+	_, err = Get().Exec(query, success, retry, id)
 	if err != nil {
 		return err
 	}
@@ -1674,12 +1727,12 @@ func SetWfRecovered(id int64) error {
 func InsertTrigger(trigger *models.Trigger) (int64, error) {
 	var triggerID int64
 
-	query := `INSERT INTO triggers (workflow_id, schedule, input, status, trigger_at, object_id, type, client) 
-			  VALUES ($1, $2, $3, $4, $5,$6, $7, $8) RETURNING id`
+	query := `INSERT INTO triggers (workflow_id, schedule, input, status, trigger_at, object_id, type, client, name) 
+			  VALUES ($1, $2, $3, $4, $5,$6, $7, $8, $9) RETURNING id`
 
 	err := Get().QueryRow(query, trigger.WorkflowID, trigger.Schedule,
 		trigger.Input, trigger.Status, trigger.TriggerAt,
-		trigger.ObjectID, trigger.Type, trigger.Client,
+		trigger.ObjectID, trigger.Type, trigger.Client, trigger.Name,
 	).Scan(&triggerID)
 	if err != nil {
 		return 0, err
@@ -1700,9 +1753,9 @@ func DeleteTriggerByID(triggerID string) error {
 }
 
 func GetTriggersByCriteria(workflowID, objectID int64, triggerType string) ([]*models.Trigger, error) {
-	var triggers []*models.Trigger
+	triggers := make([]*models.Trigger, 0)
 
-	query := `SELECT * FROM triggers WHERE workflow_id = $1 AND object_id = $2 AND type = $3`
+	query := `SELECT * FROM triggers WHERE workflow_id = $1 AND object_id = $2 AND type = $3 ORDER BY id DESC`
 
 	rows, err := Get().Query(query, workflowID, objectID, triggerType)
 	if err != nil {
@@ -1713,7 +1766,7 @@ func GetTriggersByCriteria(workflowID, objectID int64, triggerType string) ([]*m
 	for rows.Next() {
 		var trigger models.Trigger
 		err := rows.Scan(&trigger.ID, &trigger.WorkflowID, &trigger.ObjectID, &trigger.Type, &trigger.Schedule,
-			&trigger.Input, &trigger.Status, &trigger.TriggerAt, &trigger.Client)
+			&trigger.Input, &trigger.Status, &trigger.TriggerAt, &trigger.Client, &trigger.Name)
 		if err != nil {
 			return nil, err
 		}

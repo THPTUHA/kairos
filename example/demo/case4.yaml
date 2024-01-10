@@ -11,8 +11,8 @@ tasks:
     payload: |
       {
         "action": "build",
-        "imageName": "nexta2020/shopok",
-        "contextDir": "/Users/nghiabadao/Code/demo/shopok"
+        "imageName": "nexta2020/graduation",
+        "contextDir": "/Users/nghiabadao/Code/demo/graduation"
       }
   push_image:
     executor: dockerlite
@@ -21,7 +21,7 @@ tasks:
     payload: |
       {
         "action": "push",
-        "imageName": "nexta2020/shopok"
+        "imageName": "nexta2020/graduation"
       }
   deploy:
     executor: k8sdeploy
@@ -29,7 +29,7 @@ tasks:
     wait: input
     payload: |
       {
-        "service": "shopok",
+        "service": "graduation",
         "cmd": "deploy"
       }
   notification:

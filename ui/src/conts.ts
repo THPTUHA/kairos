@@ -22,6 +22,7 @@ const LogMessageFlow = 1
 const DestroyWorkflow = 2
 const RecoverWorkflow = 3
 const ObjectStatusWorkflow = 4
+const TriggerStatusWorkflow = 5
 
 const PendingDeliver = 0
 const SuccessSetTask = 1
@@ -53,8 +54,9 @@ const ChannelPointColor = `text-white`;
 const TaskPointColor = ` text-pink-600 `;
 
 const ViewRealtime= 1;
-const ViewHistory = 2;
-const ViewTimeLine = 3;
+const ViewTimeLine = 2;
+const ViewHistory = 3;
+
 
 const SuccessCode = [SuccessSetTask, SuccessTriggerTask,SuccessReceiveInputTaskCmd, SuccessReceiveOutputTaskCmd]
 const FailureCode = [FaultSetTask,FaultTriggerTask,FaultInputTask]
@@ -81,6 +83,7 @@ export {
   DestroyWorkflow,
   RecoverWorkflow,
   ObjectStatusWorkflow,
+  TriggerStatusWorkflow,
 
   PendingDeliver,
   SuccessSetTask,

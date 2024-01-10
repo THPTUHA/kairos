@@ -39,6 +39,7 @@ type Task struct {
 	Disabled       bool                        `json:"disabled"`
 	Metadata       map[string]string           `json:"metadata"`
 	Agent          *Agent                      `json:"-"`
+	Trigger        *workflow.Trigger           `json:"trigger,omitempty"`
 	Retries        int                         `json:"retries"`
 	Executor       string                      `json:"executor"`
 	ExecutorConfig plugin.ExecutorPluginConfig `json:"executor_config"`
@@ -236,9 +237,11 @@ func (t *Task) Validate() error {
 	}
 
 	if t.Executor == "shell" && t.ExecutorConfig["timeout"] != "" {
-		_, err := time.ParseDuration(t.ExecutorConfig["timeout"])
-		if err != nil {
-			return fmt.Errorf("Error parsing task timeout value")
+		if timeout, ok := t.ExecutorConfig["timeout"].(string); ok {
+			_, err := time.ParseDuration(timeout)
+			if err != nil {
+				return fmt.Errorf("Error parsing task timeout value")
+			}
 		}
 	}
 

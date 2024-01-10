@@ -109,7 +109,7 @@ Content-Type: application/json
   "executor": "script",
   "executor_config":  {
     "command": "/bin/sh",
-    "commandArgs": "[\"-c\", \"cd /Users/nghiabadao/Code/demo/shopok && git pull  \"]"
+    "commandArgs": "[\"-c\", \"cd /Users/nghiabadao/Code/demo/graduation && git pull  \"]"
   }
 } 
 
@@ -131,8 +131,8 @@ Content-Type: application/json
   "executor": "dockerlite",
   "executor_config":  {
     "action":"build",
-    "imageName": "nexta2020/shopok",
-    "contextDir": "/Users/nghiabadao/Code/demo/shopok"
+    "imageName": "nexta2020/graduation",
+    "contextDir": "/Users/nghiabadao/Code/demo/graduation"
   }
 } 
 
@@ -150,7 +150,7 @@ Content-Type: application/json
   },
   "executor": "k8sdeploy",
   "executor_config": {
-    "service": "shopok",
+    "service": "graduation",
     "cmd": "deploy",
     "namespace": "demo"
   }
@@ -169,12 +169,28 @@ Content-Type: application/json
   },
   "executor": "k8sdeploy",
   "executor_config": {
-    "service": "shopok",
+    "service": "graduation",
     "cmd": "log",
     "namespace": "demo"
   }
 } 
+###
+POST http://localhost:8080/v1/tasks
+Content-Type: application/json
 
+{
+  "id": "2",
+  "name": "task2",
+  "timezone": "Europe/Berlin",
+  "tags": {
+    "server": "true:1"
+  },
+  "executor": "mail",
+  "executor_config": {
+    "receivers": "[\"minhnghiabadao1002@gmail.com\"]",
+    "result": "{\"success\":true,\"output\":\"Restart deploy service abc successful\"}"
+  }
+} 
 
 ###
 POST http://localhost:8080/v1/tasks

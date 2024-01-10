@@ -22,7 +22,7 @@ import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
 import Modal from "react-responsive-modal";
 import Tree, { CustomNodeElementProps } from 'react-d3-tree';
 import { services } from "../services";
-import { useAsync } from "react-use";
+import { useAsync, useLocation } from "react-use";
 import { formatDate } from "../helper/date";
 import { MessageFlow } from "../services/graphService";
 import { Table } from "antd";
@@ -81,14 +81,17 @@ type TreeNode = {
   name: string,
   attributes: {
     type: number
+    start_input: string
   },
   id: number,
   type: number,
   part: string,
+  parent: string,
   owner_id: number,
   status: number,
   finish: boolean,
   owner_type: number,
+  start_input: string,
   children: TreeNode[]
 }
 
@@ -134,7 +137,6 @@ function mergeTree(a: TreeNode, b: TreeNode) {
       }
     }
 
-
     if (Array.isArray(b.children)) {
       for (const c1 of b.children) {
         let exist = false
@@ -171,6 +173,7 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
   const bidrect = new Map<string, MessageFlow>();
   let tree: TreeNode | {} = {};
   let selfroot: any = {}
+  let brokerTrigger: any = {}
   let parent: any = {}
   let root_cnt = 0
   mfs = mfs.filter(item => {
@@ -197,12 +200,28 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
       if (!item.flow || item.sender_type == BrokerPoint) {
         bidrect.set(key, item)
         return true
-      } else if (item.flow == 1) {
+      } else if (item.flow == 1 || item.flow == 3) {
         // luồng nhận
         mf.status = item.status
         mf.finish_part = item.finish_part
+        if (item.message) {
+          try {
+            mf.response = JSON.parse(item.message)
+          } catch (error) {
+            console.error(error)
+          }
+        }
       }
       return false
+    }
+    if (item.flow == 1 || item.flow == 3) {
+      if (item.message) {
+        try {
+          item.response = JSON.parse(item.message)
+        } catch (error) {
+          console.error(error)
+        }
+      }
     }
     bidrect.set(key, item)
     return true
@@ -217,8 +236,19 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
   //   console.error("invalid root", root_cnt)
   //   return {}
   // }
+  console.log("selfroot", selfroot)
 
   if (selfroot && !mfs.length) {
+    let success, finish
+    if (selfroot.message) {
+      try {
+        const mes = JSON.parse(selfroot.message)
+        success = mes.success
+        finish = mes.finished_at > 0
+      } catch (error) {
+        console.error(error)
+      }
+    }
     tree = {
       name: selfroot.task_name,
       id: selfroot.task_id,
@@ -227,11 +257,11 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
         id: selfroot.task_id,
         type: TaskPoint,
         client: selfroot.sender_name,
-        finish: selfroot.finish_part,
+        success: success,
+        finish: finish,
         status: selfroot.status,
         active: getClient(selfroot.sender_name, clients).status,
         start_input: selfroot.start_input,
-        message: selfroot.message,
       },
       status: selfroot.status,
       part: selfroot.part,
@@ -239,9 +269,9 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
       owner_type: selfroot.sender_type,
       children: []
     }
+    return tree
   }
 
-  console.log("selfroot", selfroot)
 
   try {
     mfs.forEach(item => {
@@ -260,7 +290,8 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
             id: item.task_id,
             type: TaskPoint,
             client: item.receiver_name,
-            success: success,
+            // success: success,
+            // finish: item.finish_part,
             status: item.status,
             active: getClient(item.receiver_name, clients).status,
             tracking: item.tracking,
@@ -272,6 +303,10 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
           parent: item.part,
           owner_id: item.receiver_id,
           owner_type: item.receiver_type,
+        }
+        if (item.response) {
+          c.attributes.success = item.response.success
+          c.attributes.finish = item.response.finished_at > 0
         }
       } else if (item.receiver_type != KairosPoint) {
         c = {
@@ -298,34 +333,79 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
       if (item.sender_type == ClientPoint) {
         if (!item.message) {
           console.error("empty message", item)
-          return
-        }
-        const msg = JSON.parse(item.message)
-        let success = false
-        if (msg.success == undefined || msg.success) {
-          success = true
-        }
-        p = {
-          name: item.task_name,
-          id: item.task_id,
-          type: TaskPoint,
-          attributes: {
+          if (item.task_id == 0 && item.receiver_type == BrokerPoint) {
+            brokerTrigger = item
+            // p = {
+            //   name: item.receiver_name,
+            //   id: item.receiver_id,
+            //   type: BrokerPoint,
+            //   attributes: {
+            //     id: item.task_id,
+            //     type: BrokerPoint,
+            //     client: item.sender_name,
+            //     finish: item.finish_part,
+            //     status: item.status,
+            //     tracking: item.tracking,
+            //     start_input: item.start_input,
+            //     message: item.message,
+            //   },
+            //   status: item.status,
+            //   part: item.part,
+            //   parent: item.parent,
+            //   owner_id: item.sender_id,
+            //   owner_type: item.sender_type,
+            //   children: []
+            // }
+          }
+        } else {
+          const msg = JSON.parse(item.message)
+          let success = false
+          if (msg.success == undefined || msg.success) {
+            success = true
+          }
+          p = {
+            name: item.task_name,
             id: item.task_id,
             type: TaskPoint,
-            client: item.sender_name,
+            attributes: {
+              id: item.task_id,
+              type: TaskPoint,
+              client: item.sender_name,
+              finish: item.finish_part,
+              success: success,
+              status: item.status,
+              tracking: item.tracking,
+              start_input: item.start_input,
+              message: item.message,
+            },
+            status: item.status,
+            part: item.part,
+            parent: item.parent,
+            owner_id: item.sender_id,
+            owner_type: item.sender_type,
+            children: []
+          }
+        }
+
+      } else if (item.sender_type == KairosPoint) {
+        p = {
+          part: item.part,
+          name: item.receiver_name,
+          id: item.receiver_id,
+          type: item.receiver_type,
+          status: item.status,
+          owner_id: item.receiver_id,
+          parent: item.parent,
+          owner_type: item.receiver_type,
+          attributes: {
+            id: item.receiver_id,
+            type: item.receiver_type,
             finish: item.finish_part,
-            success: success,
             status: item.status,
             tracking: item.tracking,
             start_input: item.start_input,
             message: item.message,
-          },
-          status: item.status,
-          part: item.part,
-          parent: item.parent,
-          owner_id: item.sender_id,
-          owner_type: item.sender_type,
-          children: []
+          }
         }
       } else {
         p = {
@@ -347,25 +427,27 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
             message: item.message,
           }
         }
-
       }
 
       const children = []
-      if (c) {
+      if (c && p) {
         if (!(p.id == c.id && p.type == c.type)) {
           children.push(c)
         }
       }
+      if (p) {
+        map.set(item.part, {
+          ...p,
+          children: children,
+        });
+      }
 
-      map.set(item.part, {
-        ...p,
-        children: children,
-      });
     });
 
   } catch (error) {
     console.error(error)
   }
+
   map.forEach((value, key) => {
     const cp = JSON.stringify(value)
     console.log(key, JSON.parse(cp))
@@ -419,6 +501,41 @@ function buildTree(mfs: MessageFlow[], clients: Client[], tasks: Task[], brokers
       }
     }
   }
+
+  console.log("FUCK PP", p)
+  if (!p && selfroot.id) {
+    console.log("RUN HERE????")
+    const parents: any[] = []
+    map.forEach((v, k) => {
+      if (v.parent == selfroot.part) {
+        parents.push(v)
+      }
+    })
+    p = parents[0]
+    if (p) {
+      for (let i = 1; i < parents.length; ++i) {
+        mergeTree(p, parents[i])
+      }
+    }
+  }
+
+  if (!p && brokerTrigger.id) {
+    const pn: any[] = []
+    map.forEach((v, k) => {
+      if (v.parent == brokerTrigger.part) {
+        pn.push(v)
+        v.start_input = brokerTrigger.start_input
+        v.attributes.start_input = brokerTrigger.start_input
+      }
+    })
+    console.log({ pn })
+    p = pn[0]
+    if (p) {
+      for (let i = 1; i < pn.length; ++i) {
+        mergeTree(p, pn[i])
+      }
+    }
+  }
   // console.log("PARENT", p, parents)
   return p;
 }
@@ -445,6 +562,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   const [isSnappedToBottom, setIsSnappedToBottom] = useState(true);
   const [searchParams] = useSearchParams();
   const [timeline, setTimeline] = useState<TimeLineSelected | null>(null);
+  const [error, setError] = useState(null)
   const entriesBuffer = useRef([] as Entry[]);
 
   const scrollableRef = useRef<any>(null);
@@ -452,7 +570,29 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   const queryRef = useRef<string>("");
   queryRef.current = query;
 
-  const navigate = useNavigate();
+  const location = useLocation();
+  useAsync(async () => {
+    if (location.search) {
+      const params = new URLSearchParams(location.search)
+      const triggerID = params.get("trigger_id")
+      console.log({triggerID})
+      if (triggerID) {
+        const mfs = await services.graphs
+          .getTimeLine(triggerID)
+          .catch(setError)
+        if (Array.isArray(mfs)) {
+          if(mfs.length > 1){
+            console.error("More than 1 trigger")
+          }else{
+            const mf =mfs[0]
+            setTimeline({group: mf.group, workflow_id: mf.workflow_id})
+          }
+          return mfs
+        }
+        return []
+      }
+    }
+  }, [location])
 
   useEffect(() => {
     const querySearchParam = searchParams.get("q");
@@ -602,17 +742,18 @@ const EntryTime = ({ mf, setTimeline }: { mf: MessageFlow, setTimeline: any }) =
       onClick={() => { setTimeline({ group: mf.group, workflow_id: mf.workflow_id }) }}
       className={`flex justify-between h-12 items-center`}>
       <div
-        className="">
+        className="flex items-center">
         <LuActivity />
+        <Queryable
+          query={`src.workflow == "${mf.workflow_name}"`}
+          displayIconOnMouseOver={true}
+          flipped={true}
+          iconStyle={{ marginRight: "10px" }}
+        >
+          <div>{mf.workflow_name}</div>
+        </Queryable>
       </div>
-      <Queryable
-        query={`src.workflow == "${mf.workflow_name}"`}
-        displayIconOnMouseOver={true}
-        flipped={true}
-        iconStyle={{ marginRight: "10px" }}
-      >
-        <div>{mf.workflow_name}</div>
-      </Queryable>
+
       <div>{mf.sender_name}</div>
       <div>{formatDate(mf.created_at)}</div>
     </div>
@@ -652,7 +793,7 @@ const TimeLineView = ({ setTimeline, timeline }: { setTimeline: any, timeline: T
               {
                 mfs.value?.map(e => (
                   <div key={e.id}
-                    className={`cursor-pointer  px-2 mx-2 my-2 rounded  ${timeline && e.group === timeline.group ? "border-green-500 border-2 border-dashed bg-gray-500" : "bg-gray-500"}`}>
+                    className={`cursor-pointer  px-2 mx-2 my-2 rounded  ${timeline && e.group === timeline.group ? "border-green-500 border-2 border-dashed bg-green-500" : "bg-gray-500"}`}>
                     <EntryTime mf={e} setTimeline={setTimeline} />
                   </div>
                 ))
@@ -699,7 +840,8 @@ type NodeSelected = {
   type: number,
   id: number,
   name: string,
-  hierarchyPointNode: any
+  hierarchyPointNode: any,
+  attributes: any,
 }
 
 const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
@@ -799,7 +941,11 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
       if (!exist) {
         mfsCur.current.push({ ...newMF })
       }
-      setTreeData(() => buildTree(mfsCur.current, clients, tasks, brokers))
+      setTreeData(() => {
+        const tree = buildTree(mfsCur.current, clients, tasks, brokers)
+        console.log("TREE 2", tree)
+        return tree
+      })
     }
 
     if (wfCmd && wfCmd.cmd == ObjectStatusWorkflow) {
@@ -812,7 +958,11 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
               ...c,
               status: wfCmd.status
             }
-            setTreeData(() => buildTree(mfsCur.current, newC, tasks, brokers))
+            setTreeData(() => {
+              const tree = buildTree(mfsCur.current, newC, tasks, brokers)
+              console.log("TREEE", tree)
+              return tree
+            })
             return newC
           }
         }
@@ -859,6 +1009,10 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
       query.parts = [hierarchyPointNode.data.part]
     }
 
+    if (!query.parent && hierarchyPointNode.data.parent) {
+      query.parent = hierarchyPointNode.data.parent
+    }
+
     query.receiver_id = hierarchyPointNode.data.id
     query.group = timeline.group
     const paths = await services.graphs
@@ -873,6 +1027,7 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
         name: hierarchyPointNode.data.name,
         id: hierarchyPointNode.data.id,
         hierarchyPointNode: hierarchyPointNode,
+        attributes: hierarchyPointNode.data.attributes
       })
     }
     console.log("PARTS---", paths)
@@ -916,6 +1071,9 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
       }
     }
 
+    if (attributes.type == ChannelPoint) {
+      return "success"
+    }
     // if(attributes.type == BrokerPoint){
     //   const task =  tasks.filter(t=>t.id == attributes.id)[0]
     //   if(task && attributes.client ){
@@ -944,7 +1102,7 @@ const TimeLineDetail = ({ timeline }: { timeline: TimeLineSelected }) => {
             nodeSelected && <div>
               <div className="flex py-2">
                 <div className="font-bold">{getNameFromType(nodeSelected.type)} : { }</div>
-                <div className="ml-2">{nodeSelected.name}</div>
+                <div className="ml-2 flex">{nodeSelected.name}<p className="ml-2">{nodeSelected.attributes.client ? `(Run on ${nodeSelected.attributes.client})`:""}</p></div>
               </div>
               <div>
                 {
@@ -1046,7 +1204,7 @@ type ItemChart = {
 const validateInput = (input: any) => {
   delete input["run_coun"]
   delete input["offset"]
-  delete input["startd_at"]
+  delete input["started_at"]
   if (input["finished_at"]) {
     input["finish"] = true
   } else if (input["finished_at"] != undefined) {
@@ -1062,29 +1220,30 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
     input: {},
     flows: []
   }
-
-  for (const o of outputs) {
+  let myOutput = outputs.filter(e => e.receiver_id != -1)
+  for (const o of myOutput) {
     if (o.start_input) {
       itemCharts.input = o
       itemCharts.input.value = JSON.parse(o.start_input)
+      itemCharts.input.parse_input = JSON.parse(o.start_input)
       break
     }
   }
 
   if (!itemCharts.input.id) {
-    for (let i = 0; i < outputs.length; i++) {
-      if (!outputs[i].flow || outputs[i].flow == 2) {
-        let request = outputs[i]
+    for (let i = 0; i < myOutput.length; i++) {
+      if (!myOutput[i].flow || myOutput[i].flow == 2) {
+        let request = myOutput[i]
         if (request.sender_name == broker.name) {
 
         }
         let response, input: any
-        for (let j = i + 1; j < outputs.length; j++) {
-          let res = outputs[j]
+        for (let j = i + 1; j < myOutput.length; j++) {
+          let res = myOutput[j]
           if (request.part == res.part && request.parent == res.parent && res.flow == 1
             && request.sender_id == res.receiver_id
             && request.sender_type == res.receiver_type && res.task_id == request.task_id) {
-            response = outputs[j]
+            response = myOutput[j]
             break;
           }
         }
@@ -1112,20 +1271,50 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
           request: request,
           response: response,
         })
-
-        const mi = JSON.parse(input.message)
-        if (mi) {
-          input.value = validateInput(mi)
-          itemCharts.input = input
+        if (input && input.message) {
+          try {
+            const mi = JSON.parse(input.message)
+            if (mi) {
+              input.value = validateInput(mi)
+              itemCharts.input = input
+            }
+          } catch (error) {
+            console.error(error)
+          }
         }
+
       }
       console.log(itemCharts)
     }
   } else {
-    for (const o of outputs) {
-      if (!o.start_input) {
+    // for (const o of myOutput) {
+    //   if (!o.start_input) {
+    //     itemCharts.flows.push({
+    //       request: o
+    //     })
+    //   }
+    // }
+    for (let i = 0; i < myOutput.length; i++) {
+      const req = myOutput[i]
+      if (req.sender_id == broker.id && req.sender_type == BrokerPoint) {
+        let res;
+        for (let j = 0; j < myOutput.length; j++) {
+          const temp = myOutput[j]
+          if (temp.sender_id == req.receiver_id && temp.sender_type == req.receiver_type) {
+            res = temp
+          }
+        }
+        const msg = JSON.parse(req.message)
+        if (req.receiver_type == ChannelPoint) {
+          req.value = validateInput(msg)
+        } else if (msg && msg.input) {
+          if (typeof msg.input == "string") {
+            req.value = validateInput(JSON.parse(msg.input))
+          }
+        }
         itemCharts.flows.push({
-          request: o
+          request: req,
+          response: (res && res.status != -99 ? res : undefined)
         })
       }
     }
@@ -1140,7 +1329,7 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
     if (value) {
       return value
     }
-    if (node && node.parent && node.parent.data.attributes.message) {
+    if (node && node.parent && node.parent.data.attributes && node.parent.data.attributes.message) {
 
       try {
         v = JSON.parse(node.parent.data.attributes.message)
@@ -1162,7 +1351,7 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
     return v
   }
 
-  console.log({ node })
+  console.log({ itemCharts })
   return (
     <div>
       <div className="border-2 border-dashed border-blue-500 px-2 py-2">
@@ -1189,7 +1378,13 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
               src={validateInput(getRecieve(itemCharts.input.value, node))}
               name={'result'}
               enableClipboard={false}
-            /> : (
+            /> : itemCharts.input.parse_input ? (
+              <ReactJson
+                src={itemCharts.input.parse_input}
+                name={false}
+                enableClipboard={false}
+              />
+            ) : (
               <ReactJson
                 src={validateInput(getRecieve(itemCharts.input.value, node))}
                 name={false}
@@ -1239,7 +1434,7 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
       }
       {
         itemCharts.flows.map((e, idx) => (
-          <div key={idx} className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} mb-8 px-2 py-2 `}>
+          <div key={idx} className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response || e.request.flow == 2) ? 'border-green-500' : 'border-red-500'} mb-8 px-2 py-2 `}>
             <div className="border-2 border-dashed border-blue-500 px-2 py-2">
               <div className="flex items-center">
                 <div className="font-bold">Send</div>
@@ -1275,18 +1470,23 @@ const BrokerDetail = ({ outputs, inputs, broker, clients, node }: { outputs: Mes
               </div>
             </div>
 
-            <div className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response) ? 'border-green-500' : 'border-red-500'} px-2 py-2 mt-6`}>
+            <div className={`border-2 border-dashed ${(itemCharts.input.flow == 2 || e.response || e.request.flow == 2) ? 'border-green-500' : 'border-red-500'} px-2 py-2 mt-6`}>
               <div className="flex items-center">
+                {e.request && e.request.attempt > 0 ?
+                  <div className="mr-2 text-sm">{ "(Attempt "+ e.request.attempt + ")"}</div>
+                : ""}
                 <div >
                   {
-                    itemCharts.input.flow == 2 ? <div className="text-green-500">Replied</div> : (
-                      <div>
-                        {
-                          e.response ? <div className="text-green-500">Replied</div>
-                            : <div className="text-red-500">No reply</div>
-                        }
-                      </div>
-                    )
+                    itemCharts.input.flow == 2 || e.request.flow == 2
+                      ? <div className="text-green-500">Replied</div> : (
+                        <div>
+                          {
+                            e.response ? <div className="text-green-500">Replied 
+                            </div>
+                              : <div className="text-red-500">No reply</div>
+                          }
+                        </div>
+                      )
                   }
                 </div>
               </div>
@@ -1339,16 +1539,18 @@ const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: Message
   if (!input) {
     input = inputs.filter(e => e.start_input)[0]
   }
-  if (input && input.start_input) {
+
+  if (input && input.start_input && input.sender_id == input.receiver_id && input.sender_type == input.receiver_type) {
     try {
       value = JSON.parse(input.start_input)
     } catch (error) {
       value = input.start_input
     }
   }
-  console.log({ input, value })
 
-  const outs = outputs.filter(e => e.parent != e.part).map(e => {
+  console.log({ input, value, outputs })
+
+  const outs = outputs.filter(e => e.flow != 0 && e.cmd != 3).map(e => {
     try {
       e.outobject = JSON.parse(e.message)
     } catch (error) {
@@ -1376,7 +1578,7 @@ const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: Message
       </div>
       {/* REQUEST------ */}
       {
-        input && input.start_input && (
+        input && input.start_input && input.sender_id == input.receiver_id && input.sender_type == input.receiver_type && (
           <div>
             <div className="flex justify-center py-4"><RiAddLine className="w-6 h-auto font-bold" /></div>
             <div className="border-blue-500 border-dashed border-2 px-2 py-2">
@@ -1455,7 +1657,7 @@ const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: Message
             <div className="">
               {
                 typeof value == "string" ? value :
-                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}} name={false} />
+                  <ReactJson src={value && task && task.payload ? mergeInput(value, task) : {}} name={false} enableClipboard={false}/>
               }
             </div>
           </div>
@@ -1483,7 +1685,7 @@ const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: Message
         )
       }
 
-      <div className={`border-dashed border-2 border-green-500 mt-6 px-2 py-2 ${outs.filter(e => !e.outobject.success)[0] ? "border-red-500" : "border-green-500"}`}>
+      <div className={`border-dashed border-2 border-green-500 mt-6 px-2 py-2 ${outs.filter(e => e.outobject.success == false)[0] ? "border-red-500" : "border-green-500"}`}>
         <div className="font-bold">Output</div>
         <div>
           {
@@ -1491,7 +1693,7 @@ const TaskDetail = ({ outputs, inputs, task, clients, node }: { outputs: Message
               <div key={e.id} className="flex items-center">
                 <div className="min-w-[22px] text-[10px] mr-2">{formatDate(e.receive_at)}</div>
                 {/* <div>{e.outobject.success ? "success" : "fault"}</div> */}
-                <p className={`  break-all ${e.outobject.success ? "" : "text-red-500"}`}>
+                <p className={`max-w-[500px]  break-all ${e.outobject.success ? "" : "text-red-500"}`}>
                   {e.outobject.output}
                 </p>
               </div>
@@ -1526,7 +1728,24 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
     }
   }
 
-  console.log({ input, output })
+  if (!input) {
+    for (const o of outputs) {
+      if (o.sender_id == -1) {
+        input = o
+      }
+    }
+  }
+
+  if (input && input.start_input) {
+    try {
+      input.start_input = JSON.parse(input.start_input)
+      value = input.start_input
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  console.log({ input })
   return (
     <div>
       {
@@ -1543,7 +1762,11 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
                     </div>
                   </div>
                 </div>
-                : <div></div>
+                : input.start_input &&
+                <div className="flex items-center">
+                  <div className="font-bold text-blue-500">Start by trigger</div>
+                  <div className="ml-3"><FaArrowRightLong /></div>
+                </div>
             }
 
             {

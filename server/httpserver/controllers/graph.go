@@ -67,6 +67,7 @@ func (ctr *Controller) GraphData(c *gin.Context) {
 
 func (ctr *Controller) GetTimeLine(c *gin.Context) {
 	userID, _ := c.Get("userID")
+	trigger := c.Query("trigger_id")
 	uid, err := strconv.ParseInt(userID.(string), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -74,8 +75,11 @@ func (ctr *Controller) GetTimeLine(c *gin.Context) {
 		})
 		return
 	}
-
-	mf, err := storage.GetMessageFlowsByUserID(uid)
+	tid, err := strconv.ParseInt(trigger, 10, 64)
+	if err != nil {
+		tid = 0
+	}
+	mf, err := storage.GetMessageFlowsTimeline(uid, tid)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),

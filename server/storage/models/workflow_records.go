@@ -13,4 +13,6 @@ type WorkflowRecords struct {
 	Status      int    `json:"status"`
 	DeliverErr  string `json:"deliver_err"`
 	IsRecovered bool   `json:"is_recovered"`
+	Retry       int    `json:"retry"`
+	DeliverID   int64  `json:"deliver_id"`
 }

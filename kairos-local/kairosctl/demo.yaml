@@ -18,7 +18,7 @@ tasks:
     payload: |
       {
         "action": "build",
-        "imageName": "nexta2020/shopok",
+        "imageName": "nexta2020/graduation",
         "contextDir": "/root/Code/demo"
       }
   push_image:
@@ -28,7 +28,7 @@ tasks:
     payload: |
       {
         "action": "push",
-        "imageName": "nexta2020/shopok"
+        "imageName": "nexta2020/graduation"
       }
   deploy:
     executor: k8sdeploy
@@ -36,7 +36,7 @@ tasks:
     wait: input
     payload: |
       {
-        "service": "shopok",
+        "service": "graduation",
         "cmd": "deploy",
         "namespace": "demo"
       }

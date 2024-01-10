@@ -55,7 +55,7 @@ func (d *DockerLite) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 		if err != nil {
 			return []byte(err.Error()), err
 		}
-		return []byte(fmt.Sprintf("Build image %s/%s successful", imageName, imageTag)), err
+		return []byte(fmt.Sprintf("Build image %s:%s successful", imageName, imageTag)), err
 	case "push":
 		err := d.pushImage(imageName, imageTag)
 		if err != nil {

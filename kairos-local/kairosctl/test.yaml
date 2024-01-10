@@ -9,8 +9,8 @@ tasks:
     payload: |
       {
         "action": "build",
-        "imageName": "nexta2020/shopok",
-        "contextDir": "/Users/nghiabadao/Code/demo/shopok"
+        "imageName": "nexta2020/graduation",
+        "contextDir": "/Users/nghiabadao/Code/demo/graduation"
       }
 
 brokers:

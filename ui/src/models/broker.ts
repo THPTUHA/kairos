@@ -1,7 +1,7 @@
 export interface Broker {
     id: number;
     name: string;
-    listens: string;
+    listens: any;
     flows: string;
     workflowId: number;
     status: number;

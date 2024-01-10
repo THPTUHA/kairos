@@ -10,4 +10,5 @@ type Trigger struct {
 	Status     int    `json:"status"`
 	TriggerAt  int64  `json:"trigger_at"`
 	Client     string `json:"client"`
+	Name       string `json:"name"`
 }

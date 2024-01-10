@@ -226,9 +226,7 @@ const FuntionPage = () => {
 }
 
 const DebugTool = () => {
-    const [code, setCode] = useState("")
     const [input, setInput] = useState<any>([])
-    const [output, setOuput] = useState("")
     const [err, setError] = useState("")
     const [editor, setEditor] = useState<any[]>([])
     const editorRef = useRef<HTMLDivElement | null>(null);
@@ -309,7 +307,7 @@ const DebugTool = () => {
                                             const newInput = [...input]
                                             newInput[idx].value = e.updated_src
                                             console.log("NEW INPU==", newInput)
-                                            return newInput
+                                            return newInput.filter(e=> e && e != "_task" && e != "_channel")
                                         }
                                         return input
                                     })

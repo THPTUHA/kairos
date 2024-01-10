@@ -179,6 +179,16 @@ func (d *DelivererServer) createNode() error {
 
 	node.OnConnect(func(client *Client) {
 		fmt.Printf("client %s connected via %s", client.UserID(), client.Transport().Name())
+		d.logger.Infof("User connect with channels %+v", client.channels)
+		for c := range client.channels {
+			cid := client.UserID()
+			uid := strings.Split(cid, "@")[1]
+			err := d.sub.Con.Publish(fmt.Sprintf("%s@%s", c, uid), []byte("connect"))
+
+			if err != nil {
+				d.logger.Error(err)
+			}
+		}
 
 		client.OnSubscribe(func(e SubscribeEvent, cb SubscribeCallback) {
 			fmt.Printf("client %s subscribes on channel %s", client.UserID(), e.Channel)
@@ -217,6 +227,11 @@ func (d *DelivererServer) createNode() error {
 			ids := strings.Split(id, "@")
 			uid := ids[1]
 			cid := strings.Split(ids[0], "-")[1]
+			err := d.sub.Con.Publish(client.UserID(), []byte("disconnect"))
+			if err != nil {
+				d.logger.Error(err)
+			}
+
 			go func() {
 				us := ObjectStatusCmd{
 					Cmd:      workflow.ObjectStatusWorkflow,
