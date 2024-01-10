@@ -118,12 +118,13 @@ func (b *Broker) IsListen(name string) bool {
 }
 
 func (c *Channel) Run() {
+	fmt.Println("CHANNEL START TRIGGER")
 	c.TriggerCh <- c.Trigger
 }
 
 func (b *Broker) Run() {
+	fmt.Println("BROKER START TRIGGER")
 	b.TriggerCh <- b.Trigger
-	b.Log.Logger.Warnf("TRIGGER ---- %+v", b.Trigger)
 }
 
 func validateVarListen(dv string, clients []*Client, channels []*Channel, tasks *Tasks) bool {
@@ -757,6 +758,7 @@ type Trigger struct {
 	Status     int    `json:"status"`
 	TriggerAt  int64  `json:"trigger_at"`
 	Client     string `json:"client"`
+	Action     string `json:"action"`
 }
 
 type Retry struct {

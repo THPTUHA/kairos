@@ -97,8 +97,8 @@ const DashBoardPage = () => {
     const entriesRef = useRef<Entry[]>([])
     const [value, setValue] = useState(0);
     const nav = useNavigate()
-    const [offset, setOffset]  = useState(0)
-    
+    const [offset, setOffset] = useState(0)
+
     useAsync(async () => {
         if (viewType == ViewHistory) {
 
@@ -108,7 +108,7 @@ const DashBoardPage = () => {
             const entries: Entry[] = []
             for (const record of records) {
                 cnt.current++;
-                var msg :any= ""
+                var msg: any = ""
                 try {
                     msg = JSON.parse(record.message)
                     delete msg["workflow_id"]
@@ -153,12 +153,12 @@ const DashBoardPage = () => {
         } else {
             setEntries([])
         }
-    }, [viewType,offset])
+    }, [viewType, offset])
 
     const params = useParams()
 
     useEffect(() => {
-        switch(params.view){
+        switch (params.view) {
             case "timeline":
                 setViewType(ViewTimeLine)
                 break;
@@ -167,12 +167,12 @@ const DashBoardPage = () => {
                 break;
             default:
                 setViewType(ViewRealtime)
-                
+
         }
     }, [params])
 
-    useEffect(()=>{
-        switch(value){
+    useEffect(() => {
+        switch (value) {
             case 1:
                 nav("/dashboard/logs")
                 break
@@ -183,7 +183,7 @@ const DashBoardPage = () => {
                 nav("/dashboard/history")
                 break;
         }
-    },[value])
+    }, [value])
 
     useEffect(() => {
         if (wfCmd && wfCmd.cmd == LogMessageFlow && (viewType == ViewRealtime || viewType == ViewTimeLine)) {
@@ -196,7 +196,7 @@ const DashBoardPage = () => {
                 msg = wfCmd.message
             }
             const record = wfCmd.data
-            const  entry = {
+            const entry = {
                 id: cnt.current,
                 flow_id: record.id,
                 status: record.status,
@@ -242,11 +242,13 @@ const DashBoardPage = () => {
 
     return (
         <>
-            <Radio.Group onChange={onChange} value={viewType}>
-                <Radio value={1}>Logs</Radio>
-                <Radio value={2}>Timeline</Radio>
-                <Radio value={3}>History</Radio>
-            </Radio.Group>
+            <div className="ml-6 flex items-center">
+                <Radio.Group onChange={onChange} value={viewType}>
+                    <Radio value={1}>Logs</Radio>
+                    <Radio value={2}>Timeline</Radio>
+                    <Radio value={3}>History</Radio>
+                </Radio.Group>
+            </div>
             <TrafficViewer
                 entries={entries}
                 viewType={viewType}

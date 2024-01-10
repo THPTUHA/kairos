@@ -77,3 +77,96 @@ g.nodeliver ellipse,
 g.nodeliver circle {
   fill: rgb(247, 231, 11);
 }
+
+:root {
+  --primary: rgb(24, 144, 255);
+  --error: red;
+  --gray: #AAA;
+}
+
+.crontab-input .explanation {
+  text-align: center;
+  margin: 16px 0 8px;
+  font-size: 40px;
+  color: var(--primary);
+}
+
+.crontab-input .explanation span {
+  background: transparent;
+  color: inherit;
+}
+
+.crontab-input .explanation span.active {
+  text-decoration: underline;
+}
+
+.crontab-input .next a {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.crontab-input .next {
+  font-size: 0.9em;
+  opacity: 0.6;
+  margin-bottom: 6px;
+}
+
+.crontab-input .cron-input {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 60px;
+  text-align: center;
+  border-radius: 10px;
+  border: 1px solid var(--primary);
+  outline: none;
+}
+
+.crontab-input .cron-input.error {
+  border: 1px solid var(--error);
+}
+
+.crontab-input .parts {
+  margin-top: 3px;
+}
+
+.crontab-input .parts .part {
+  display: inline-block;
+  width: 100px;
+  text-align: center;
+}
+
+.crontab-input .parts .part.selected {
+  font-weight: bold;
+  color: var(--primary);
+}
+
+.crontab-input .allowed-values {
+  margin-top: 12px;
+}
+
+.crontab-input .allowed-values .value {
+  display: flex;
+  width: 400px;
+  margin: auto;
+}
+
+.crontab-input .allowed-values .value .value,
+.crontab-input .allowed-values .value .key {
+  border-bottom: 1px dashed var(--gray);
+  padding: 4px;
+}
+
+.crontab-input .allowed-values .value .key {
+  flex: 0;
+  flex-basis: 100px;
+  text-align: right;
+  font-weight: bold;
+  padding-right: 20px;
+}
+
+.crontab-input .allowed-values .value .value {
+  flex: 1;
+}
+
+.crontab-input {
+  text-align: center;
+}

@@ -143,9 +143,9 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                                 </Menu>
                             </Sider>
                             <Layout>
-                                <Header className="flex items-center" >
-                                    <Image src={userInfo?.avatar} width={50} height={50} className="rounded"/>
-                                    <div>{userInfo?.username}</div>
+                                <Header className="flex items-center -ml-10" >
+                                    <Image src={userInfo?.avatar} width={40} height={40} className="rounded"/>
+                                    <div className="ml-3">{userInfo?.username}</div>
                                 </Header>
                                 {children}
                             </Layout>

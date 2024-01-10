@@ -1752,6 +1752,25 @@ func DeleteTriggerByID(triggerID string) error {
 	return nil
 }
 
+func GetTriggersByID(id string) (*models.Trigger, error) {
+	var trigger models.Trigger
+
+	query := `SELECT * FROM triggers WHERE id = $1`
+
+	row := Get().QueryRow(query, id)
+
+	if row == nil {
+		return nil, fmt.Errorf("not found")
+	}
+	err := row.Scan(&trigger.ID, &trigger.WorkflowID, &trigger.ObjectID, &trigger.Type, &trigger.Schedule,
+		&trigger.Input, &trigger.Status, &trigger.TriggerAt, &trigger.Client, &trigger.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &trigger, nil
+}
+
 func GetTriggersByCriteria(workflowID, objectID int64, triggerType string) ([]*models.Trigger, error) {
 	triggers := make([]*models.Trigger, 0)
 

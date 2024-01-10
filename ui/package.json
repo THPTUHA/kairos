@@ -20,6 +20,8 @@
     "antd": "^5.11.2",
     "axios": "^1.6.0",
     "classnames": "^2.3.2",
+    "cron-converter": "0.0.12",
+    "cronstrue": "^2.47.0",
     "dotenv": "^16.3.1",
     "highlight.js": "^11.9.0",
     "js-yaml": "^4.1.0",

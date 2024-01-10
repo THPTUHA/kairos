@@ -214,6 +214,9 @@ func (w *Worker) allDelivered() bool {
 
 func (w *Worker) Destroy() bool {
 	w.conf.Logger.Warnf("Starting destroy workflow = %s id = %d ......", w.workflow.Name, w.workflow.ID)
+	w.Sched.StopTask()
+	w.Sched.StopBroker()
+	w.Sched.StopChannel()
 	var wait sync.WaitGroup
 	w.setWfStatus(workflow.Destroying)
 	success := true
@@ -683,6 +686,10 @@ func (w *Worker) handleTrigger(trigger workflow.Trigger) {
 		}
 	} else {
 		if trigger.Type == "task" {
+			if trigger.Action == "delete" {
+				w.Sched.RemoveTask(trigger.ObjectID)
+				return
+			}
 			var task *workflow.Task
 			w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
 				if value.ID == trigger.ObjectID {
@@ -700,6 +707,10 @@ func (w *Worker) handleTrigger(trigger workflow.Trigger) {
 		}
 
 		if trigger.Type == "broker" {
+			if trigger.Action == "delete" {
+				w.Sched.RemoveBroker(trigger.ObjectID)
+				return
+			}
 			var broker *workflow.Broker
 			w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
 				if value.ID == trigger.ObjectID {
@@ -712,14 +723,18 @@ func (w *Worker) handleTrigger(trigger workflow.Trigger) {
 				return
 			}
 
-			w.Sched.AddBroker(w, broker, &trigger)
+			w.Sched.AddBroker(w, *broker, &trigger)
 			w.UpdateTrigger(trigger.ID, TriggerScheduled)
 		}
 
 		if trigger.Type == "channel" {
+			if trigger.Action == "delete" {
+				w.Sched.RemoveChannel(trigger.ObjectID)
+				return
+			}
 			for _, c := range w.workflow.Channels {
 				if c.ID == trigger.ObjectID {
-					w.Sched.AddChannel(w, c, &trigger)
+					w.Sched.AddChannel(w, *c, &trigger)
 					w.UpdateTrigger(trigger.ID, TriggerScheduled)
 					return
 				}
@@ -729,53 +744,66 @@ func (w *Worker) handleTrigger(trigger workflow.Trigger) {
 	}
 }
 
-func (w *Worker) handleTriggerSchedule() {
-	trigger, ok := <-w.triggerCh
-	if !ok {
-		w.Sched.logger.Error("chan trigger closed")
-		return
+func (w *Worker) handleTriggerSchedule(close chan bool) {
+	w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+		value.TriggerCh = w.triggerCh
+		return nil
+	})
+	w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
+		// value.TriggerCh = w.triggerCh
+		return nil
+	})
+	for _, c := range w.workflow.Channels {
+		c.TriggerCh = w.triggerCh
 	}
-	w.conf.Logger.Infof("Trigger object %+v", trigger)
+	for trigger := range w.triggerCh {
+		w.conf.Logger.Infof("Trigger object %+v", trigger)
 
-	if trigger != nil {
-		switch trigger.Type {
-		case "task":
-			var task *workflow.Task
-			w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
-				if value.ID == trigger.ObjectID {
-					task = value
-				}
-				return nil
-			})
-			if task == nil {
-				w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
-				return
-			}
-			w.RunTask(task, trigger.Input)
-			w.UpdateTrigger(trigger.ID, TriggerScheduled)
-		case "broker":
-			var broker *workflow.Broker
-			w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
-				if value.ID == trigger.ObjectID {
-					broker = value
-				}
-				return nil
-			})
-			if broker == nil {
-				w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
-				return
-			}
-			w.RunBroker(broker, trigger.Input, trigger.ID)
-			w.UpdateTrigger(trigger.ID, TriggerScheduled)
-		case "channel":
-			for _, c := range w.workflow.Channels {
-				if c.ID == trigger.ObjectID {
+		if trigger != nil {
+			switch trigger.Type {
+			case "task":
+				var task *workflow.Task
+				w.workflow.Tasks.Range(func(key string, value *workflow.Task) error {
+					if value.ID == trigger.ObjectID {
+						task = value
+					}
+					return nil
+				})
+				if task == nil {
+					w.conf.Logger.Errorf("trigger task id = %d not found", trigger.ObjectID)
+				} else {
+					w.RunTask(task, trigger.Input)
 					w.UpdateTrigger(trigger.ID, TriggerScheduled)
-					return
+				}
+
+			case "broker":
+				var broker *workflow.Broker
+				w.workflow.Brokers.Range(func(key string, value *workflow.Broker) error {
+					if value.ID == trigger.ObjectID {
+						broker = value
+					}
+					return nil
+				})
+				if broker == nil {
+					w.conf.Logger.Errorf("trigger broker id = %d not found", trigger.ObjectID)
+				} else {
+					w.RunBroker(broker, trigger.Input, trigger.ID)
+					w.UpdateTrigger(trigger.ID, TriggerScheduled)
+				}
+			case "channel":
+				for _, c := range w.workflow.Channels {
+					if c.ID == trigger.ObjectID {
+						w.RunChannel(c, trigger.Input, trigger.ID)
+						w.UpdateTrigger(trigger.ID, TriggerScheduled)
+					}
 				}
 			}
 		}
+		w.conf.Logger.Warnf("Finish trigger")
 	}
+
+	<-close
+	w.conf.Logger.Warn("Close trigger")
 }
 
 func (w *Worker) Run() error {
@@ -822,8 +850,11 @@ func (w *Worker) Run() error {
 
 	w.CBQueue = &cbqueue.CBQueue{}
 	w.CBQueue.Cond = sync.NewCond(&w.CBQueue.Mu)
+	closeCh := make(chan bool)
 	go w.CBQueue.Dispatch()
-	go w.handleTriggerSchedule()
+	go w.handleTriggerSchedule(closeCh)
+
+	defer close(closeCh)
 
 	for {
 		select {

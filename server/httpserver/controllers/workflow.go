@@ -612,7 +612,31 @@ func (ctr *Controller) TriggerWorkflow(c *gin.Context) {
 
 func (ctr *Controller) DeleteTriggerWorkflow(c *gin.Context) {
 	tid := c.Query("id")
-	err := storage.DeleteTriggerByID(tid)
+	trigger, err := storage.GetTriggersByID(tid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
+	err = storage.DeleteTriggerByID(tid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+	trigger.Action = "delete"
+	data, err := json.Marshal(trigger)
+	err = ctr.nats.Publish(fmt.Sprintf("%s-%d", messaging.TRIGGER, trigger.WorkflowID), data)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"err": err.Error(),
+		})
+		return
+	}
+
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"err": err.Error(),

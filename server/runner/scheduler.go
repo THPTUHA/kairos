@@ -11,7 +11,6 @@ import (
 	"github.com/THPTUHA/kairos/pkg/extcron"
 	"github.com/THPTUHA/kairos/pkg/workflow"
 	"github.com/robfig/cron/v3"
-	"github.com/rs/zerolog/log"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,7 +31,7 @@ type EntryBroker struct {
 	broker *workflow.Broker
 }
 
-type EntryChannl struct {
+type EntryChannel struct {
 	entry   *cron.Entry
 	channel *workflow.Channel
 }
@@ -96,15 +95,16 @@ func (s *Scheduler) AddTask(worker *Worker, task *workflow.Task, input string) (
 	return tjid, nil
 }
 
-func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, trigger *workflow.Trigger) (cron.EntryID, error) {
+func (s *Scheduler) AddBroker(worker *Worker, broker workflow.Broker, trigger *workflow.Trigger) (cron.EntryID, error) {
 	s.logger.Debug(fmt.Sprintf("schedule broker name = %s, id =%d", broker.Name, broker.ID))
 	if _, ok := s.GetEntryBroker(broker.ID); ok {
-		s.RemoveTask(broker.ID)
+		s.RemoveBroker(broker.ID)
 	}
 
-	schedule := broker.Schedule
+	broker.Trigger = trigger
+	schedule := trigger.Schedule
 	if schedule == "" {
-		worker.RunBroker(broker, trigger.Input, trigger.ID)
+		worker.RunBroker(&broker, trigger.Input, trigger.ID)
 		return -1, nil
 	}
 
@@ -112,7 +112,7 @@ func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, trigger *
 		"broker":   broker.ID,
 		"schedule": broker.Schedule,
 	}).Debug("scheduler: Adding broker to cron")
-	tjid, err := s.BrokerCron.AddJob(schedule, broker)
+	tjid, err := s.BrokerCron.AddJob(schedule, &broker)
 	if err != nil {
 		return -1, err
 	}
@@ -120,44 +120,45 @@ func (s *Scheduler) AddBroker(worker *Worker, broker *workflow.Broker, trigger *
 	return tjid, nil
 }
 
-func (s *Scheduler) AddChannel(worker *Worker, channel *workflow.Channel, trigger *workflow.Trigger) (cron.EntryID, error) {
-	s.logger.Debug(fmt.Sprintf("schedule channel name = %s, id =%d", channel.Name, channel.ID))
-	if _, ok := s.GetEntryBroker(channel.ID); ok {
-		s.RemoveTask(channel.ID)
+func (s *Scheduler) AddChannel(worker *Worker, channel workflow.Channel, trigger *workflow.Trigger) (cron.EntryID, error) {
+	s.logger.Debug(fmt.Sprintf("schedule channel name = %s, id =%d, schedule= %s", channel.Name, channel.ID, trigger.Schedule))
+	if _, ok := s.GetEntryChannel(channel.ID); ok {
+		s.RemoveChannel(channel.ID)
 	}
 
-	schedule := channel.Schedule
-	if schedule == "" {
-		worker.RunChannel(channel, trigger.Input, trigger.ID)
+	channel.Trigger = trigger
+	if trigger.Schedule == "" {
+		worker.RunChannel(&channel, trigger.Input, trigger.ID)
 		return -1, nil
 	}
 
 	s.logger.WithFields(logrus.Fields{
 		"channel":  channel.ID,
-		"schedule": channel.Schedule,
-	}).Debug("scheduler: Adding broker to cron")
-	tjid, err := s.ChannelCron.AddJob(schedule, channel)
+		"schedule": trigger.Schedule,
+	}).Debug("scheduler: Adding channel to cron")
+	tjid, err := s.ChannelCron.AddJob(trigger.Schedule, &channel)
 	if err != nil {
+		s.logger.Error(err)
 		return -1, err
 	}
 	s.ChannelCron.Start()
 	return tjid, nil
 }
 
-func (s *Scheduler) GetEntryChannel(channelID int64) (EntryChannl, bool) {
-	for _, e := range s.Cron.Entries() {
+func (s *Scheduler) GetEntryChannel(channelID int64) (EntryChannel, bool) {
+	for _, e := range s.ChannelCron.Entries() {
 		if c, ok := e.Job.(*workflow.Channel); !ok {
-			s.logger.Errorf("scheduler: Failed to cast broker to *Broker found type %T", e.Job)
+			s.logger.Errorf("scheduler: Failed to cast channel to *Channel found type %T", e.Job)
 		} else {
 			if c.ID == channelID {
-				return EntryChannl{
+				return EntryChannel{
 					entry:   &e,
 					channel: c,
 				}, true
 			}
 		}
 	}
-	return EntryChannl{}, false
+	return EntryChannel{}, false
 }
 
 // func (s *Scheduler) Start(tasks []*workflow.Task) error {
@@ -180,16 +181,29 @@ func (s *Scheduler) GetEntryChannel(channelID int64) (EntryChannl, bool) {
 // 	return nil
 // }
 
-func (s *Scheduler) Stop() context.Context {
+func (s *Scheduler) StopTask() context.Context {
 	ctx := s.Cron.Stop()
-	if s.started {
-		log.Info().Msg("scheduler: Stopping scheduler")
-		s.started = false
+	cronInspect.Do(func(kv expvar.KeyValue) {
+		kv.Value = nil
+	})
+	schedulerStarted.Set(0)
+	return ctx
+}
 
-		cronInspect.Do(func(kv expvar.KeyValue) {
-			kv.Value = nil
-		})
-	}
+func (s *Scheduler) StopBroker() context.Context {
+	ctx := s.BrokerCron.Stop()
+	cronInspect.Do(func(kv expvar.KeyValue) {
+		kv.Value = nil
+	})
+	schedulerStarted.Set(0)
+	return ctx
+}
+
+func (s *Scheduler) StopChannel() context.Context {
+	ctx := s.ChannelCron.Stop()
+	cronInspect.Do(func(kv expvar.KeyValue) {
+		kv.Value = nil
+	})
 	schedulerStarted.Set(0)
 	return ctx
 }
@@ -217,7 +231,7 @@ func (s *Scheduler) GetEntryTask(taskID int64) (EntryTask, bool) {
 }
 
 func (s *Scheduler) GetEntryBroker(brokerID int64) (EntryBroker, bool) {
-	for _, e := range s.Cron.Entries() {
+	for _, e := range s.BrokerCron.Entries() {
 		if j, ok := e.Job.(*workflow.Broker); !ok {
 			s.logger.Errorf("scheduler: Failed to cast broker to *Broker found type %T", e.Job)
 		} else {
@@ -251,5 +265,17 @@ func (s *Scheduler) RemoveBroker(brokerID int64) {
 	if ej, ok := s.GetEntryBroker(brokerID); ok {
 		s.BrokerCron.Remove(ej.entry.ID)
 		cronInspect.Delete(fmt.Sprint(brokerID))
+	}
+}
+
+func (s *Scheduler) RemoveChannel(channelID int64) {
+	s.logger.WithFields(logrus.Fields{
+		"channel": channelID,
+	}).Info("scheduler: Removing channel from cron")
+
+	if ej, ok := s.GetEntryChannel(channelID); ok {
+		fmt.Println("REMOVE CORN CHANNEL")
+		s.ChannelCron.Remove(ej.entry.ID)
+		cronInspect.Delete(fmt.Sprint(channelID))
 	}
 }

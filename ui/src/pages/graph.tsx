@@ -23,6 +23,7 @@ import { MdOutlineAccessTime, MdOutlineSwitchAccessShortcut } from "react-icons/
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom";
 import { useRecoilValue } from "recoil";
 import { Link } from "react-router-dom";
+import CrontabInput from "../components/CrontabInput";
 interface Edge {
     id: string;
     from: string;
@@ -751,7 +752,7 @@ const TriggerForm = ({ object, type, client, wid }: { object: any, type: string,
         const trigger: Trigger = {
             id: 0,
             trigger_at: 0,
-            schedule,
+            schedule: "* " +schedule.trim(),
             input: value,
             object_id: object.id,
             type: type,
@@ -979,20 +980,22 @@ const TriggerForm = ({ object, type, client, wid }: { object: any, type: string,
                 center
             >
                 <div className="flex items-center mx-2 my-2" >
-                    <button className="cursor-pointer bg-blue-500 text-white flex items-center px-2 rounded py-2">
-                        <FaRegClock className="mr-2" onClick={() => { setOpenSchedule(false) }} />  Schedule
+                    <button className="cursor-pointer bg-blue-500 text-white flex items-center px-2 rounded py-1" onClick={() => { setOpenSchedule(false) }}>
+                        <FaRegClock className="mr-2" />  Schedule
                     </button>
                     <div className="ml-2">
-                        {schedule}
+                        {schedule && <div>{schedule}<button className="w-12 py-1 rounded bg-red-500 ml-4" onClick={()=>{
+                            setSchedule("")
+                        }}>Clear</button></div>}
                     </div>
                 </div>
-                <div className="min-w-[600px] h-32">
-                    <Cron
+                <div className="min-w-[600px]">
+                    {/* <Cron
                         setValue={setSchedule}
                         value={schedule}
-                    />
+                    /> */}
+                    <CrontabInput locale={"en"} value={schedule} onChange={(value:any) => setSchedule(value)}/>
                 </div>
-
             </Modal>
 
             <Modal
