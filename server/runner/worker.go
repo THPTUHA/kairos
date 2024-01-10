@@ -1141,7 +1141,6 @@ func (w *Worker) reciveMessage() error {
 }
 
 func (w *Worker) syncData(cType string, userID, clientID int64, status string) {
-	w.conf.Logger.Errorf(cType)
 	if status == "connect" {
 		if cType == workflow.KairosDaemon {
 

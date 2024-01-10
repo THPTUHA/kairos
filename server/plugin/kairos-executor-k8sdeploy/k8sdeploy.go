@@ -10,7 +10,6 @@ import (
 
 	"github.com/THPTUHA/kairos/server/plugin"
 	"github.com/THPTUHA/kairos/server/plugin/proto"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -21,10 +20,11 @@ import (
 )
 
 type K8sDeploy struct {
+	cb plugin.StatusHelper
 }
 
 func (k *K8sDeploy) Execute(args *proto.ExecuteRequest, cb plugin.StatusHelper) (*proto.ExecuteResponse, error) {
-
+	k.cb = cb
 	out, err := k.ExecuteImpl(args)
 	resp := &proto.ExecuteResponse{
 		Output: out,
@@ -60,7 +60,6 @@ func (s *K8sDeploy) ExecuteImpl(args *proto.ExecuteRequest) ([]byte, error) {
 	switch cmd {
 	case "deploy":
 		return s.deploy(clientset, namespace, serviceName)
-		// return []byte("success"), nil
 	case "log":
 		return s.log(clientset, namespace, &PodQuery{
 			Name: serviceName,
@@ -76,10 +75,18 @@ func (s *K8sDeploy) deploy(clientset *kubernetes.Clientset, namespace, serviceNa
 	}
 
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+
 		deployment, err := clientset.AppsV1().Deployments(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
 			return err
 		}
+
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env,
+			corev1.EnvVar{
+				Name:  "RESTARTED_AT",
+				Value: time.Now().Format(time.RFC3339),
+			},
+		)
 
 		_, err = clientset.AppsV1().Deployments(namespace).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 		return err
@@ -108,7 +115,7 @@ type PodQuery struct {
 	Name string `json:"name"`
 }
 
-func (s *K8sDeploy) log(clientset *kubernetes.Clientset, namespace string, podName *PodQuery) ([]byte, error) {
+func (k *K8sDeploy) log(clientset *kubernetes.Clientset, namespace string, podName *PodQuery) ([]byte, error) {
 	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -142,22 +149,34 @@ func (s *K8sDeploy) log(clientset *kubernetes.Clientset, namespace string, podNa
 	return pj, nil
 }
 
-func (s *K8sDeploy) waitForPodReady(clientset *kubernetes.Clientset, namespace, deploymentName string) error {
+func (k *K8sDeploy) waitForPodReady(clientset *kubernetes.Clientset, namespace, deploymentName string) error {
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 
 	return wait.PollImmediate(time.Second, time.Minute*2, func() (bool, error) {
-		deployment, err := deploymentsClient.Get(context.TODO(), deploymentName, metav1.GetOptions{})
+		_, err := deploymentsClient.Get(context.TODO(), deploymentName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 
-		conditions := deployment.Status.Conditions
-		for _, condition := range conditions {
-			if condition.Type == appsv1.DeploymentAvailable && condition.Status == "True" {
-				return true, nil
+		podList, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: fmt.Sprintf("app=%s", deploymentName),
+		})
+		if err != nil {
+			return false, err
+		}
+
+		valid := true
+		for _, pod := range podList.Items {
+			for _, condition := range pod.Status.Conditions {
+				fmt.Printf("CONDITION %+v\n", condition)
+				if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionFalse {
+					cd, _ := json.Marshal(condition)
+					k.cb.Update(cd, true)
+					valid = false
+				}
 			}
 		}
 
-		return false, nil
+		return valid, nil
 	})
 }

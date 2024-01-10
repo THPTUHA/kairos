@@ -12,8 +12,6 @@ import Modal from "react-responsive-modal"
 import { useRecoilState } from "recoil"
 import workflowMonitorAtom from "../recoil/workflowMonitor/atom"
 import { ClientActive } from "../models"
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 
 const locale = {
@@ -75,7 +73,7 @@ const ClientPage = () => {
             width: 20,
             render: (value: number) => {
                 return <>{
-                    value === 1 ? <div>Running</div> : <div>Stop</div>
+                    value === 1 ? <div>Running</div> : <div>Disconnect</div>
                 }</>
             }
         },

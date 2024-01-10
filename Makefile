@@ -15,6 +15,7 @@ compile-proto:
 
 plugin:
 	cd server/plugin/kairos-executor-mail && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
+	cd server/plugin/kairos-executor-k8sdeploy && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 cc:
 	cd server/plugin/kairos-executor-http && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon
 	cd server/plugin/kairos-executor-nats && go build  -o  ${ROOT_DIR}/kairos-local/kairosdeamon

@@ -39,6 +39,7 @@
 
 -- delete from workflow_records;
 -- delete from message_flows;
+-- select * from honors;
 delete from workflows;
 -- \dt
 -- select * from message_flows order by id desc limit 2;

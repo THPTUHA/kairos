@@ -157,3 +157,6 @@ sudo firewall-cmd --reload
 
 
 Cho biết hệ thống của bạn có đặc điểm gì gọi là phân tán.
+
+ ./kairosctl login --name client1 --api_key 419c95ba-d9f8-45f9-b6d5-e98d651b1de6 --secret_key eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI1IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.FioX5hJzYuDsiRzQFcrU4IXGC3yqwxDoW8G6HxGP8oM
+ 

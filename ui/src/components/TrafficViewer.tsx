@@ -1712,6 +1712,9 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
     input = inputs[0]
   }
 
+  if(!input){
+    input = outputs.filter(e => e.receiver_id == id && e.receiver_type == type)[0]
+  }
   let value: any = ""
   if (input && input.message && typeof input.message == "string") {
     try {
