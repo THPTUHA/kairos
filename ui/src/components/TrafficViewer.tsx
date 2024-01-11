@@ -675,7 +675,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
 
   return (
     <div className={`${TrafficViewerStyles.TrafficPage} overflow-hidden`}>
-      <div className={`${TrafficViewerStyles.TrafficPageHeader} bg-red-500`}>
+      <div className={`${TrafficViewerStyles.TrafficPageHeader} bg-red-500 overflow-hidden`}>
         <div className={TrafficViewerStyles.TrafficPageStreamStatus}>
           {/* <img id="pause-icon"
             className={TrafficViewerStyles.playPauseIcon}
@@ -694,8 +694,8 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
         {actionButtons}
       </div>
 
-      {<div className={TrafficViewerStyles.TrafficPageContainer}>
-        <div className={TrafficViewerStyles.TrafficPageListContainer}>
+      {<div className={`${TrafficViewerStyles.TrafficPageContainer} overflow-hidden`}>
+        <div className={`${TrafficViewerStyles.TrafficPageListContainer} overflow-hidden`}>
           <Filters
             entries={entries}
             reopenConnection={reopenConnection}
