@@ -516,7 +516,7 @@ const GraphPage = () => {
                 {/* <div>Type</div> */}
 
             </div>
-            <div ref={modalRef} style={{ width: "100%", height: "100vh" }} className="bg-gray-300">
+            <div ref={modalRef} style={{ width: "100%", height: "100vh" }} className="bg-gray-800">
                 <ForceGraph
                     graph={graphData}
                     options={graphOptions}

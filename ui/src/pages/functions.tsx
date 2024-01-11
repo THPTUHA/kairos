@@ -219,6 +219,7 @@ const FuntionPage = () => {
                 open={showDebug}
                 onClose={() => { setShowDebug(false) }}
                 center
+                styles={{modal:{overflow:"hidden"}}}
             >
                 <DebugTool />
             </Modal>
