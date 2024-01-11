@@ -507,7 +507,7 @@ const GraphPage = () => {
                         <Radio.Group onChange={onSelectWorkflow} value={wfIDs[0]}>
                             {
                                 wfs.value && wfs.value.map(item => (
-                                    <Radio value={item.id} key={item.id}>{item.name}</Radio>
+                                    <Radio value={item.id} key={item.id}><span className="text-white">{item.name}</span></Radio>
                                 ))
                             }
                         </Radio.Group>
