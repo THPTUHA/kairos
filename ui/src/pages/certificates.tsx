@@ -145,7 +145,7 @@ const CertificatePage = () => {
                     }}
                 >
                     <IoIosAdd className="w-6 h-6" />
-                    <span>Create certificates</span>
+                    <span className="text-white">Create certificate</span>
                 </span>
                 {channelSelected > 0 ?
                     <span className="flex items-center">

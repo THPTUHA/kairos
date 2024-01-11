@@ -259,7 +259,7 @@ const WorkflowListPage = () => {
                     }}
                 >
                     <IoIosAdd className="w-6 h-6" />
-                    <span>Create workflow</span>
+                    <span className="text-white">Create workflow</span>
                 </span>
                 {wfSelected > 0 ?
                     <span className="flex items-center">
@@ -282,8 +282,9 @@ const WorkflowListPage = () => {
                 open={showYamlEditor}
                 onClose={onWfYamlClose}
                 center
+                styles={{modal:{width: 800}}}
             >
-                <div className="min-w-[800px]">
+                <div >
                     {
                         workflowFile && onlyRead && <ObjectEditor value={formatFile(workflowFile)} />
                     }

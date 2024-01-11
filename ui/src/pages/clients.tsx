@@ -117,7 +117,7 @@ const ClientPage = () => {
                     }}
                 >
                     <IoIosAdd className="w-6 h-6" />
-                    <span>Create client</span>
+                    <span className="text-white">Create client</span>
                 </span>
                 {clientSelected > 0 ?
                     <span className="flex items-center">

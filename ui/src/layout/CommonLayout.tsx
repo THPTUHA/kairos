@@ -145,10 +145,10 @@ function CommonLayout({ children }: { children: React.ReactElement }) {
                             <Layout>
                                 <Header className="flex items-center -ml-10" >
                                     <Image src={userInfo?.avatar} width={40} height={40} className="rounded"/>
-                                    <div className="ml-3">{userInfo?.username}</div>
+                                    <div className="ml-3 text-white">{userInfo?.username}</div>
                                 </Header>
                                 {children}
-                            </Layout>
+                            </Layout> 
                         </Layout>
             }
         </>

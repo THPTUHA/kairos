@@ -12,7 +12,7 @@ export const UploadButton = <T extends any>(props: { onUpload: (value: T) => voi
     return (
         <label style={{ marginBottom: 2, marginRight: 2 }} className='kairos-button kairos-button--base-o' key='upload-file'>
             <input type='file' onChange={(e: any) => handleFiles(e.target.files)} style={{ display: 'none' }} />
-            <span className="flex items-center">
+            <span className="flex items-center cursor-pointer">
                 <MdFileUpload className="w-4 h-4" />
                 <span>Upload file</span>
             </span>

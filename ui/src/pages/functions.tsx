@@ -157,7 +157,7 @@ const FuntionPage = () => {
                     }}
                 >
                     <IoIosAdd className="w-6 h-6" />
-                    <span>Create function</span>
+                    <span className="text-white">Create function</span>
                 </span>
                 <span className="flex mx-2 items-center bg-blue-500 w-32 justify-center rounded py-1 cursor-pointer"
                     onClick={() => {
@@ -189,8 +189,9 @@ const FuntionPage = () => {
                 open={showModalForm}
                 onClose={() => { setShowModalForm(false) }}
                 center
+                styles={{modal:{width: 800}}}
             >
-                <div className="min-w-[800px]">
+                <div>
                     <CodeEditor
                         value={code}
                         minHeight={300}

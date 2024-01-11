@@ -500,7 +500,7 @@ const GraphPage = () => {
 
     return (
         <div className="relative">
-            <div className="w-1/3  absolute bg-gray-500 rounded px-2 py-2">
+            <div className="w-1/3  absolute bg-gray-500 rounded px-2 py-2 text-white">
                 <div>Workflow</div>
                 {
                     wfs.loading ? <div>Loading</div> : (
@@ -516,7 +516,7 @@ const GraphPage = () => {
                 {/* <div>Type</div> */}
 
             </div>
-            <div ref={modalRef} style={{ width: "100%", height: "100vh" }}>
+            <div ref={modalRef} style={{ width: "100%", height: "100vh" }} className="bg-gray-300">
                 <ForceGraph
                     graph={graphData}
                     options={graphOptions}

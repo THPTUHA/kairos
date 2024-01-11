@@ -103,7 +103,7 @@ const ChannelPage = () => {
                     }}
                 >
                     <IoIosAdd className="w-6 h-6" />
-                    <span>Create channel</span>
+                    <span className="text-white">Create channel</span>
                 </span>
                 {channelSelected > 0 ?
                     <span className="flex items-center">
