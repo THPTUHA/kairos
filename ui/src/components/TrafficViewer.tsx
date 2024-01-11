@@ -1715,6 +1715,9 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
   if(!input){
     input = outputs.filter(e => e.receiver_id == id && e.receiver_type == type)[0]
   }
+
+  console.log({ input })
+
   let value: any = ""
   if (input && input.message && typeof input.message == "string") {
     try {
@@ -1722,7 +1725,7 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
     } catch (error) {
       value = input.message
     }
-    if (value && value.input && typeof value.input == "string") {
+    if (value && value.input && typeof value.input == "string" && (input.sender_type != BrokerPoint && input.sender_type != TaskPoint)) {
       try {
         value = JSON.parse(value.input)
       } catch (error) {
@@ -1739,7 +1742,7 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
     }
   }
 
-  if (input && input.start_input) {
+  if (input && input.start_input && typeof input.start_input == "string" && (input.sender_type != BrokerPoint && input.sender_type != TaskPoint)) {
     try {
       input.start_input = JSON.parse(input.start_input)
       value = input.start_input
@@ -1748,7 +1751,6 @@ const ChannelDetail = ({ outputs, inputs, id, type }: { outputs: MessageFlow[], 
     }
   }
 
-  console.log({ input })
   return (
     <div>
       {
