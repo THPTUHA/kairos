@@ -674,7 +674,7 @@ export const TrafficViewer: React.FC<TrafficViewerProps> = ({
   }
 
   return (
-    <div className={`${TrafficViewerStyles.TrafficPage}`}>
+    <div className={`${TrafficViewerStyles.TrafficPage} overflow-hidden`}>
       <div className={`${TrafficViewerStyles.TrafficPageHeader} bg-red-500`}>
         <div className={TrafficViewerStyles.TrafficPageStreamStatus}>
           {/* <img id="pause-icon"
