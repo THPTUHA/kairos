@@ -534,9 +534,10 @@ const GraphPage = () => {
                 open={object}
                 onClose={() => { setObject(null); setSelectedNodes([]) }}
                 center
+                styles={{modal:{width: 800}}}
             >
                 {
-                    object && <div className="min-w-[800px]">
+                    object && <div >
                         {
                             object.type == "task" ?
                                 <TaskDetail task={object.obj} client={object.client} wid={wfIDs[0]} />
