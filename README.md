@@ -58,19 +58,6 @@ none,scheduled,queue,running,success,shutdown,restarting,failed,skipped,upstream
 ! Architure [https://app.diagrams.net/#G1R8daJ3zLMSx6yj71d1LvGmNoEuXHV-wU]
 ! Tạo db,xây dựng http server cơ chế xác thực.
 
-1. Tiến hành xây dựng pub/sub.
-Xây dựng oauth
-Nghiên cứu
-https://github.com/distribworks/dkron
-=> Chuyển mô hình master-worker sang agent + kv database
-
-- Xác thực bằng google
-- Cố gắng hoàn thành pub/sub.
-- Tạo log debug
-
-Xây dựng song song realtime-messaging server
-https://github.com/centrifugal/centrifugo
-
 Hoàn thành hơn hoàn hảo
 Simple hoàn thành => upgrade
 
@@ -79,84 +66,4 @@ https://www.reddit.com/r/ProgrammingLanguages/comments/n3yrra/advicebest_practic
 https://github.com/alist-org/alist
 https://github.com/mjpclab/go-http-file-server
 https://github.com/appleboy/gorush
-
-
-SET UP DB
-createdb kairos
-grant all privileges on database kairos to kairos;
-
-kairosdeamon:
-nhận task, chạy task local và trả kết quả về cho server.
-
-watcher:
-Lấy task và lập lịch
-Nhận thông tin từ nats để cập nhật trạng thái task.
-
-yum install epel-release
-yum install redis -y
-systemctl start redis.service
-systemctl enable redis
-
-sudo vi /etc/redis.conf
-bind 0.0.0.0
-
-redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 \
-127.0.0.1:7002 127.0.0.1:7003 127.0.0.1:7004 127.0.0.1:7005 \
---cluster-replicas 1
-
-  sudo ufw allow 7000
-  sudo ufw reload
-  sudo firewall-cmd --zone=public --add-port=7000/tcp --permanent
-  sudo firewall-cmd --reload
-
-redis-cli --cluster create 61.28.230.61:7000  135.181.207.194:7001 \
-135.181.207.194:7000  103.173.254.32:7001 103.173.254.32:7000  61.28.230.61:7001 \
---cluster-replicas 1
-
-Dấu , cuối json
-
-protoc  --go_out=.  --go_opt=paths=source_relative \
-			--go-grpc_out=server/deliverer/internal/controlpb \
-			--go-vtproto_out=server/deliverer/internal/controlpb/ --plugin protoc-gen-go-vtproto=${GOPATH}/bin/protoc-gen-go-vtproto \
-			--go-vtproto_opt=features=marshal+unmarshal+size \
-			server/deliverer/internal/controlpb/control.proto
-
-Pubsub:
-  
-kubectl exec -i postgres-5dfbf7c866-4tstv -- psql -U kairos -d kairos < /server/storage/migration/000001_kairos.up.sql
-
-kubectl get pods --all-namespaces | awk '$4=="Evicted" {print "kubectl delete pod --namespace=" $1 " " $2}' | sh
-
-
-/var/lib/pgsql/<version>/data/postgresql.conf
-Sử file postgresql.conf thành listen_addresses = '*'
-và pg_hba.conf thành host    all             all             0.0.0.0/0            md5
-psql -h 61.28.230.61 -U kairos -d kairos -f server/storage/migration/000001_kairos.up.sql
-
-psql -h 103.173.254.32 -U kairos -d kairos -f server/storage/migration/000001_kairos.up.sql
-kubectl create configmap httpserver-config --from-file=httpserver.yaml -n kairos
-kubectl create configmap runner-config --from-file=runner.yaml -n kairos
-kubectl create configmap deliverer-config --from-file=deliverer.yaml -n kairos
-psql -h 61.28.230.61 -U kairos -d kairos -f diagram.sql
-psql -h 103.173.254.32 -U kairos -d kairos -f diagram.sql
-
-helm install my-nginx-ingress ingress-nginx/ingress-nginx 
-
-kubectl delete configmap httpserver-config -n kairos
-kubectl delete configmap runner-config -n kairos
-
-sudo firewall-cmd --zone=public --add-port=5432/tcp --permanent
-sudo firewall-cmd --reload
-sudo setenforce 0
-
-sudo dscacheutil -flushcache
-sudo killall -HUP mDNSResponder
-
-sudo firewall-cmd --permanent --zone=public --add-icmp-block=echo-request
-sudo firewall-cmd --reload
-
-
-Cho biết hệ thống của bạn có đặc điểm gì gọi là phân tán.
-
- ./kairosctl login --name client1 --api_key 419c95ba-d9f8-45f9-b6d5-e98d651b1de6 --secret_key eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiI1IiwidXNlcl9pZCI6IjEiLCJ1c2VyX3R5cGUiOiIyIn0.FioX5hJzYuDsiRzQFcrU4IXGC3yqwxDoW8G6HxGP8oM
  
